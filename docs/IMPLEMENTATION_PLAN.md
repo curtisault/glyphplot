@@ -1038,6 +1038,51 @@ Acceptance:
 <a id="phase-1"></a>
 ### Phase 1 · Core (v0.2.0)
 
+Done 2026-10-18. The core is 10,178 lines of Rust with its tests and the
+generated octant table (`wc -l`), and `mise run check` takes 5.2 s warm
+(`time`). Built as listed, with these differences:
+- Grid and canvases (task 1): the octant table takes 230 masks from BLOCK
+  OCTANT names, 10 from QUADRANT names and 16 from other block elements.
+  Writing over either half of a wide glyph blanks the other half.
+- Theme (task 2): the defaults are provisional until the owner picks by eye.
+  Light `down` (`#b35c00`) is not from the bench, whose blue and orange pair
+  is under 3:1 on a light ground. The scale is cividis at nine stops, largest
+  neighbouring step ΔE76 2.14.
+- Data (task 3):
+  - Stricter than the schema: unequal column lengths, a `sorted` naming no
+    column and an out-of-range category are errors.
+  - `labels-wide` is long form (SPEC §21).
+  - `Data::from_json` is in every build until REQ-DATA-050's `text` feature.
+  - For Phase 2: the line chart needs a rule that takes the first timestamp
+    column as x, since `{"t": […], "close": […]}` matches no channel by name.
+- Scales and formats (task 4):
+  - V8's `Math.log10` is fdlibm's, with the fused multiply-adds its arm64
+    build uses. The platform's log10 differed from Node 26.5.1 on 6,693 of
+    2,889,524 doubles; the port matches them all.
+  - x86-64 V8 differs on 5 doubles beyond 10^±166, which no fixture reaches.
+  - NaN and ±∞ format as the locale's empty `nan` (SPEC §21).
+- Fixtures (task 6): the 23 digests match in wasm32, checked once by hand in
+  Node 26; `web/test/reference.test.mjs` (v0.3.0) will keep them so.
+  `fixtures write` writes 63 MB.
+- References (task 7): 32,264 cases in five files, 0 differing. They
+  regenerate byte for byte. The LTTB reference waits for its port in
+  Phase 2.
+- Properties (task 8): none has failed, so there are no regression files. A
+  time-ticks property was wrong: d3-time gives no tick for one tick over a
+  long span. All pass at `PROPTEST_CASES=4096`.
+- Font (task 9): 25,896 B and 1,361 code points. Iosevka's 27 composite
+  symbols are drawn as whole outlines (+800 B), so no glyph is 0 wide.
+  `build:font -- --check` rebuilds byte for byte from a fresh download in
+  6.6 s.
+- Lint (task 10): `clippy.toml` also disallows `SystemTime::now`
+  (REQ-TZ-010).
+- Layout and text (task 5): reversed domains are laid out low to high.
+  Overlapping labels: the first drawn wins. The legend and axis corners are
+  not painted yet; Phase 2 adds them with the line chart.
+- Left for the line chart: `theme_change_draws_no_frame`, and the contract
+  rules behind COLOR-010, DATA-040, DATA-110, TEXT-010 and the rest marked
+  `partial` in `spec/conformance.md`.
+
 Tasks:
 1. The grid (REQ-GRID-010 to 070) and the sub-cell canvases
    (REQ-CANVAS-010, 030), written for glyphplot: encodings from the Unicode

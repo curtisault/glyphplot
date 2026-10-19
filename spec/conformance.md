@@ -2,7 +2,7 @@
 
 Every requirement, built ([SPEC.md](SPEC.md)) or not yet
 ([ROADMAP.md](ROADMAP.md)), mapped to the test or check that covers it or
-will. v0.1.0 is built and its checks run; the checks of later milestones are
+will. v0.1.0 and v0.2.0 are built and their checks run; the checks of later milestones are
 planned, their Status `—`. The planned names follow
 [discovery/testing.md](../discovery/testing.md) where it gives one; the rest
 are proposals in the same style.
@@ -69,7 +69,7 @@ Several checks may be listed for one requirement, separated by commas.
 | REQ-BUILD-040 | v0.3.0 | `mise run build:wasm:debug`, review (the staged swap) | — |
 | REQ-BUILD-050 | v0.1.0 | review (`[profile.release]` and the wasm-opt flags), `mise run size` | partial |
 | REQ-BUILD-060 | v0.1.0 | `mise run lint` (`scripts/generated.sh`: `git ls-files` holds no generated output) | yes |
-| REQ-BUILD-070 | v0.2.0 | `mise run test:rust`, review (`[profile.contract]`) | — |
+| REQ-BUILD-070 | v0.2.0 | `mise run test:rust`, review (`[profile.contract]`) | yes |
 | REQ-BUILD-080 | v0.3.0 | manual (`mise run dev` rebuilds and reloads) | — |
 | REQ-BUILD-090 | v0.4.0 | `mise run signoff` (logs the time of `check`), manual | — |
 
@@ -80,7 +80,7 @@ Several checks may be listed for one requirement, separated by commas.
 | REQ-LINT-010 | v0.1.0 | `mise run lint` (itself) | yes |
 | REQ-LINT-020 | v0.3.0 | `mise run lint` (`tsc --noEmit`, `elm-format --validate`) | — |
 | REQ-LINT-030 | v0.1.0 | `mise run lint` (rustfmt, `missing_docs`, rustdoc `-D warnings`) | yes |
-| REQ-LINT-040 | v0.2.0 | `mise run lint` (clippy `disallowed-methods`) | — |
+| REQ-LINT-040 | v0.2.0 | `mise run lint` (clippy `disallowed-methods`) | yes |
 
 ### 1.5 Local CI (CI)
 
@@ -95,21 +95,21 @@ Several checks may be listed for one requirement, separated by commas.
 
 | Requirement | Milestone | Planned check | Status |
 |---|---|---|---|
-| REQ-GRID-010 | v0.2.0 | `crates/glyphplot/src/grid.rs tests::cells_are_a_code_point_and_two_indices`, `crates/glyphplot/src/grid.rs tests::constants_are_fixed` | — |
-| REQ-GRID-020 | v0.2.0 | `crates/glyphplot/src/grid.rs tests::resize_blanks_and_reuses`, `crates/glyphplot/src/grid.rs tests::resize_to_zero_panics` | — |
-| REQ-GRID-030 | v0.2.0 | `crates/glyphplot/src/grid.rs tests::new_and_clear_blank_every_cell`, `crates/glyphplot/src/grid.rs tests::fill_keeps_backs` | — |
-| REQ-GRID-040 | v0.2.0 | `crates/glyphplot/src/grid.rs tests::draws_clip_at_the_edges`, `crates/glyphplot/src/grid.rs tests::lines_include_both_ends` | — |
-| REQ-GRID-050 | v0.2.0 | `crates/glyphplot/src/grid.rs tests::set_wide_writes_its_tail`, `crates/glyphplot/src/grid.rs tests::set_wide_at_the_edge_draws_nothing` | — |
-| REQ-GRID-060 | v0.2.0 | `crates/glyphplot/src/grid.rs tests::text_joins_the_rows`, `crates/glyphplot/src/grid.rs tests::text_skips_tails_and_replaces_invalid` | — |
-| REQ-GRID-070 | v0.2.0 | `crates/glyphplot/src/grid.rs tests::slices_are_row_major`, `crates/glyphplot/src/grid.rs tests::getters_panic_off_the_grid` | — |
+| REQ-GRID-010 | v0.2.0 | `crates/glyphplot/src/grid.rs tests::cells_are_a_code_point_and_two_indices`, `crates/glyphplot/src/grid.rs tests::constants_are_fixed` | yes |
+| REQ-GRID-020 | v0.2.0 | `crates/glyphplot/src/grid.rs tests::resize_blanks_and_reuses`, `crates/glyphplot/src/grid.rs tests::resize_to_zero_panics` | yes |
+| REQ-GRID-030 | v0.2.0 | `crates/glyphplot/src/grid.rs tests::new_and_clear_blank_every_cell`, `crates/glyphplot/src/grid.rs tests::fill_keeps_backs` | yes |
+| REQ-GRID-040 | v0.2.0 | `crates/glyphplot/src/grid.rs tests::draws_clip_at_the_edges`, `crates/glyphplot/src/grid.rs tests::lines_include_both_ends` | yes |
+| REQ-GRID-050 | v0.2.0 | `crates/glyphplot/src/grid.rs tests::set_wide_writes_its_tail`, `crates/glyphplot/src/grid.rs tests::set_wide_at_the_edge_draws_nothing` | partial |
+| REQ-GRID-060 | v0.2.0 | `crates/glyphplot/src/grid.rs tests::text_joins_the_rows`, `crates/glyphplot/src/grid.rs tests::text_skips_tails_and_replaces_invalid` | yes |
+| REQ-GRID-070 | v0.2.0 | `crates/glyphplot/src/grid.rs tests::slices_are_row_major`, `crates/glyphplot/src/grid.rs tests::getters_panic_off_the_grid` | yes |
 
 ### 2.2 Sub-cell canvases and cell mapping (CANVAS)
 
 | Requirement | Milestone | Planned check | Status |
 |---|---|---|---|
-| REQ-CANVAS-010 | v0.2.0 | `crates/glyphplot/src/canvas.rs tests::lines_and_circles_clip`, `crates/glyphplot/src/canvas.rs tests::drawing_sets_only_cells_with_dots` | — |
-| REQ-CANVAS-020 | v0.2.0 | `crates/glyphplot/src/cells.rs tests::column_and_x_agree`, `contract::hits_name_what_was_drawn` (rule 19) | — |
-| REQ-CANVAS-030 | v0.2.0 | `crates/glyphplot/src/canvas.rs tests::glyphs_match_their_unicode_names`, `crates/glyphplot/src/canvas.rs tests::an_empty_cell_is_a_space`, `mise run lint` (`scripts/octants.py` regenerates the table byte for byte) | — |
+| REQ-CANVAS-010 | v0.2.0 | `crates/glyphplot/src/canvas.rs tests::lines_and_circles_clip`, `crates/glyphplot/src/canvas.rs tests::drawing_sets_only_cells_with_dots` | yes |
+| REQ-CANVAS-020 | v0.2.0 | `crates/glyphplot/src/cells.rs tests::column_and_x_agree`, `contract::hits_name_what_was_drawn` (rule 19) | partial |
+| REQ-CANVAS-030 | v0.2.0 | `crates/glyphplot/src/canvas.rs tests::glyphs_match_their_unicode_names`, `crates/glyphplot/src/canvas.rs tests::an_empty_cell_is_a_space`, `mise run lint` (`scripts/octants.py` regenerates the table byte for byte) | yes |
 | REQ-CANVAS-040 | v0.3.0 | `crates/glyphplot/src/canvas.rs tests::a_cell_takes_the_highest_series`, `contract::every_chart_keeps_the_contract` (rule 11) | — |
 
 ### 2.3 Charsets (CHAR)
@@ -123,10 +123,10 @@ Several checks may be listed for one requirement, separated by commas.
 
 | Requirement | Milestone | Planned check | Status |
 |---|---|---|---|
-| REQ-COLOR-010 | v0.2.0 | `contract::every_chart_keeps_the_contract` (rule 6) | — |
-| REQ-COLOR-020 | v0.2.0 | `crates/glyphplot/src/theme.rs tests::palette_layout_is_fixed`, `contract::every_chart_keeps_the_contract` (rule 6) | — |
-| REQ-COLOR-030 | v0.2.0 | `crates/glyphplot/src/theme.rs tests::resolve_gives_255_entries`, `crates/glyphplot/src/theme.rs tests::theme_change_draws_no_frame` | — |
-| REQ-COLOR-040 | v0.2.0 | `crates/glyphplot/src/theme.rs tests::scale_ramp_steps_within_delta_e_2_5` | — |
+| REQ-COLOR-010 | v0.2.0 | `contract::every_chart_keeps_the_contract` (rule 6) | partial |
+| REQ-COLOR-020 | v0.2.0 | `crates/glyphplot/src/theme.rs tests::palette_layout_is_fixed`, `contract::every_chart_keeps_the_contract` (rule 6) | partial |
+| REQ-COLOR-030 | v0.2.0 | `crates/glyphplot/src/theme.rs tests::resolve_gives_255_entries`, `crates/glyphplot/src/theme.rs tests::theme_change_draws_no_frame` | partial |
+| REQ-COLOR-040 | v0.2.0 | `crates/glyphplot/src/theme.rs tests::scale_ramp_steps_within_delta_e_2_5` | yes |
 | REQ-COLOR-050 | v0.8.0 | `crates/cli/src/color.rs tests::palette_maps_once_to_256_and_16` | — |
 
 ## 3. Data
@@ -135,19 +135,19 @@ Several checks may be listed for one requirement, separated by commas.
 
 | Requirement | Milestone | Planned check | Status |
 |---|---|---|---|
-| REQ-DATA-010 | v0.2.0 | `web/test/schemas.test.mjs`, `crates/glyphplot/src/data.rs tests::reads_every_column_type` | — |
-| REQ-DATA-020 | v0.2.0 | `crates/glyphplot/src/data.rs tests::ns_timestamps_round_trip` | — |
-| REQ-DATA-030 | v0.2.0 | `crates/glyphplot/src/data.rs tests::every_missing_form_reads_as_missing`, `contract::every_chart_keeps_the_contract` (rule 23) | — |
-| REQ-DATA-040 | v0.2.0 | `contract::every_chart_keeps_the_contract` (rule 26) | — |
+| REQ-DATA-010 | v0.2.0 | `web/test/schemas.test.mjs`, `crates/glyphplot/src/data.rs tests::reads_every_column_type` | partial |
+| REQ-DATA-020 | v0.2.0 | `crates/glyphplot/src/data.rs tests::ns_timestamps_round_trip` | yes |
+| REQ-DATA-030 | v0.2.0 | `crates/glyphplot/src/data.rs tests::every_missing_form_reads_as_missing`, `contract::every_chart_keeps_the_contract` (rule 23) | partial |
+| REQ-DATA-040 | v0.2.0 | `contract::every_chart_keeps_the_contract` (rule 26) | partial |
 | REQ-DATA-050 | v0.3.0 | `mise run size --charts` (symbol check), `web/test/data.test.mjs` | — |
 | REQ-DATA-060 | v0.3.0 | `web/test/data.test.mjs` | — |
 | REQ-DATA-070 | v0.3.0 | `web/test/data.test.mjs`, `web/test/memory.test.mjs` | — |
-| REQ-DATA-080 | v0.2.0 | `crates/glyphplot/src/data.rs tests::channels_resolve_by_encode_role_then_name` | — |
-| REQ-DATA-090 | v0.2.0 | `crates/glyphplot/tests/zones.rs::frames_equal_under_utc_and_tokyo` | — |
+| REQ-DATA-080 | v0.2.0 | `crates/glyphplot/src/data.rs tests::channels_resolve_by_encode_role_then_name` | partial |
+| REQ-DATA-090 | v0.2.0 | `crates/glyphplot/tests/zones.rs::frames_equal_under_utc_and_tokyo` | partial |
 | REQ-DATA-100 | v0.5.0 | `crates/glyphplot/src/format.rs tests::unit_scale_and_offset_change_labels_only` | — |
-| REQ-DATA-110 | v0.2.0 | `contract::every_chart_keeps_the_contract` (rule 28) | — |
+| REQ-DATA-110 | v0.2.0 | `contract::every_chart_keeps_the_contract` (rule 28) | partial |
 | REQ-DATA-120 | v0.3.0 | `web/test/data.test.mjs`, `site/e2e/element.spec.ts` | — |
-| REQ-DATA-130 | v0.2.0 | `contract::replace_is_whole` (rule 15) | — |
+| REQ-DATA-130 | v0.2.0 | `contract::replace_is_whole` (rule 15) | partial |
 | REQ-DATA-140 | v0.6.0 | `crates/glyphplot/src/arrow.rs tests::reads_every_column_type`, `web/test/data.test.mjs`, `mise run size --charts` | — |
 | REQ-DATA-150 | v0.6.0 | `site/e2e/element.spec.ts` | — |
 | REQ-DATA-160 | v0.9.0 | `crates/glyphplot/src/data.rs tests::graph_edges_resolve_and_drop_unknowns` | — |
@@ -182,9 +182,9 @@ Several checks may be listed for one requirement, separated by commas.
 
 | Requirement | Milestone | Planned check | Status |
 |---|---|---|---|
-| REQ-SCALE-010 | v0.2.0 | `crates/glyphplot/src/scale.rs tests::invert_undoes_map` | — |
-| REQ-SCALE-020 | v0.2.0 | `crates/glyphplot/src/scale.rs tests::domain_forms_are_pure`, `contract::every_chart_keeps_the_contract` (rule 8) | — |
-| REQ-SCALE-030 | v0.2.0 | `reference::nice_matches_d3_scale` | — |
+| REQ-SCALE-010 | v0.2.0 | `crates/glyphplot/src/scale.rs tests::invert_undoes_map` | yes |
+| REQ-SCALE-020 | v0.2.0 | `crates/glyphplot/src/scale.rs tests::domain_forms_are_pure`, `contract::every_chart_keeps_the_contract` (rule 8) | partial |
+| REQ-SCALE-030 | v0.2.0 | `reference::nice_matches_d3_scale` | yes |
 | REQ-SCALE-040 | v0.5.0 | `crates/glyphplot/src/scale.rs tests::log_inverts_for_any_base`, `crates/glyphplot/src/scale.rs tests::band_cells_are_equal` | — |
 | REQ-SCALE-050 | v0.5.0 | `crates/glyphplot/src/scale.rs tests::symlog_ticks_are_zero_and_powers_of_ten` | — |
 | REQ-SCALE-060 | v0.5.0 | `crates/glyphplot/src/scale.rs tests::index_time_skips_gaps`, `contract::every_chart_matches_its_snapshots` (`ohlcv-days`) | — |
@@ -195,10 +195,10 @@ Several checks may be listed for one requirement, separated by commas.
 
 | Requirement | Milestone | Planned check | Status |
 |---|---|---|---|
-| REQ-TICK-010 | v0.2.0 | `reference::ticks_match_d3_array`, `web/test/reference.test.mjs` | — |
-| REQ-TICK-020 | v0.2.0 | `reference::time_ticks_match_d3_time` | — |
-| REQ-TICK-030 | v0.2.0 | `crates/glyphplot/src/ticks.rs tests::ticks_are_ordered_inside_and_about_count`, `crates/glyphplot/src/layout.rs tests::labels_never_share_a_cell` | — |
-| REQ-TICK-040 | v0.2.0 | `crates/glyphplot/src/ticks.rs tests::marks_take_the_nearest_cell_and_dot` | — |
+| REQ-TICK-010 | v0.2.0 | `reference::ticks_match_d3_array`, `web/test/reference.test.mjs` | partial |
+| REQ-TICK-020 | v0.2.0 | `reference::time_ticks_match_d3_time` | yes |
+| REQ-TICK-030 | v0.2.0 | `crates/glyphplot/src/ticks.rs tests::ticks_are_ordered_inside_and_about_count`, `crates/glyphplot/src/layout.rs tests::labels_never_share_a_cell` | yes |
+| REQ-TICK-040 | v0.2.0 | `crates/glyphplot/src/ticks.rs tests::marks_take_the_nearest_cell_and_dot` | yes |
 | REQ-TICK-050 | v0.5.0 | `crates/glyphplot/src/ticks.rs tests::snap_rows_puts_every_tick_on_a_row` | — |
 | REQ-TICK-060 | v0.5.0 | `crates/glyphplot/src/ticks.rs tests::log_axes_label_only_powers` | — |
 | REQ-TICK-070 | v0.5.0 | `crates/glyphplot/src/ticks.rs tests::context_row_marks_day_boundaries` | — |
@@ -207,9 +207,9 @@ Several checks may be listed for one requirement, separated by commas.
 
 | Requirement | Milestone | Planned check | Status |
 |---|---|---|---|
-| REQ-FMT-010 | v0.2.0 | `reference::format_matches_d3_format` | — |
-| REQ-FMT-020 | v0.2.0 | `crates/glyphplot/src/format.rs tests::rejects_unknown_specifiers`, `reference::format_matches_d3_format` | — |
-| REQ-FMT-030 | v0.2.0 | `contract::every_chart_keeps_the_contract` (rule 22), `crates/glyphplot/src/format.rs tests::formatted_numbers_parse_back` | — |
+| REQ-FMT-010 | v0.2.0 | `reference::format_matches_d3_format` | yes |
+| REQ-FMT-020 | v0.2.0 | `crates/glyphplot/src/format.rs tests::rejects_unknown_specifiers`, `reference::format_matches_d3_format` | yes |
+| REQ-FMT-030 | v0.2.0 | `contract::every_chart_keeps_the_contract` (rule 22), `crates/glyphplot/src/format.rs tests::formatted_numbers_parse_back` | partial |
 | REQ-FMT-040 | v0.5.0 | `crates/glyphplot/src/format.rs tests::unit_table` | — |
 | REQ-FMT-050 | v0.5.0 | `crates/glyphplot/src/format.rs tests::strftime_subset`, `crates/glyphplot/src/format.rs tests::hour_cycle_follows_the_locale` | — |
 | REQ-FMT-060 | v0.3.0 | `crates/glyphplot/src/format.rs tests::minus_and_group_separators`, `web/test/locale.test.mjs` | — |
@@ -219,15 +219,15 @@ Several checks may be listed for one requirement, separated by commas.
 
 | Requirement | Milestone | Planned check | Status |
 |---|---|---|---|
-| REQ-TZ-010 | v0.2.0 | `crates/glyphplot/src/time.rs tests::default_zone_is_utc`, `mise run lint` (clippy `disallowed-methods`: no clock) | — |
+| REQ-TZ-010 | v0.2.0 | `crates/glyphplot/src/time.rs tests::default_zone_is_utc`, `mise run lint` (clippy `disallowed-methods`: no clock) | yes |
 | REQ-TZ-020 | v0.5.0 | `web/test/locale.test.mjs`, `site/e2e/element.spec.ts` | — |
 | REQ-TZ-030 | v0.5.0 | `reference::local_ticks_match_d3_scale_time` | — |
 | REQ-TZ-040 | v0.8.0 | `crates/cli/tests/cli.rs::frames_match_the_element_in_a_zone` | — |
 | REQ-TZ-050 | v0.5.0 | `site/e2e/element.spec.ts` (the page's zone passed in), `crates/glyphplot/src/time.rs tests::the_core_defaults_to_utc` | — |
 | REQ-I18N-010 | v0.3.0 | `site/e2e/element.spec.ts` | — |
 | REQ-I18N-020 | v0.3.0 | `web/test/locale.test.mjs`, `mise run size --charts` (no locale database) | — |
-| REQ-I18N-030 | v0.2.0 | `crates/glyphplot/src/format.rs tests::default_locale_is_plain` | — |
-| REQ-I18N-040 | v0.2.0 | `crates/glyphplot/src/layout.rs tests::labels_count_unicode_width`, `contract::every_chart_keeps_the_contract` (rule 5, `labels-wide`) | — |
+| REQ-I18N-030 | v0.2.0 | `crates/glyphplot/src/format.rs tests::default_locale_is_plain` | yes |
+| REQ-I18N-040 | v0.2.0 | `crates/glyphplot/src/layout.rs tests::labels_count_unicode_width`, `contract::every_chart_keeps_the_contract` (rule 5, `labels-wide`) | partial |
 | REQ-I18N-050 | v0.3.0 | `web/test/locale.test.mjs`, `site/e2e/element.spec.ts` | — |
 | REQ-I18N-060 | v0.9.0 | `crates/glyphplot/src/text.rs tests::rtl_runs_reorder_by_uax9`, `contract::every_chart_matches_its_snapshots` (RTL locale) | — |
 | REQ-I18N-070 | v0.8.0 | `crates/cli/tests/cli.rs::locale_file_is_read` | — |
@@ -236,15 +236,15 @@ Several checks may be listed for one requirement, separated by commas.
 
 | Requirement | Milestone | Planned check | Status |
 |---|---|---|---|
-| REQ-LAYOUT-010 | v0.2.0 | `crates/glyphplot/src/layout.rs tests::layout_is_pure_and_ordered`, `contract::every_chart_keeps_the_contract` (rule 8) | — |
-| REQ-LAYOUT-020 | v0.2.0 | `crates/glyphplot/src/layout.rs tests::small_sizes_drop_axes_title_and_labels` | — |
-| REQ-LAYOUT-030 | v0.2.0 | `crates/glyphplot/src/layout.rs tests::wide_gutters_drop_the_right_axis_first` | — |
+| REQ-LAYOUT-010 | v0.2.0 | `crates/glyphplot/src/layout.rs tests::layout_is_pure_and_ordered`, `contract::every_chart_keeps_the_contract` (rule 8) | partial |
+| REQ-LAYOUT-020 | v0.2.0 | `crates/glyphplot/src/layout.rs tests::small_sizes_drop_axes_title_and_labels` | yes |
+| REQ-LAYOUT-030 | v0.2.0 | `crates/glyphplot/src/layout.rs tests::wide_gutters_drop_the_right_axis_first` | yes |
 | REQ-LAYOUT-040 | v0.3.0 | `contract::every_chart_keeps_the_contract` (rule 4), `contract::every_size_draws_without_panic` | — |
 | REQ-LAYOUT-050 | v0.5.0 | `crates/glyphplot/src/layout.rs tests::panes_split_by_weight` | — |
 | REQ-LAYOUT-060 | v0.5.0 | `crates/glyphplot/src/layout.rs tests::auto_legend_placement` | — |
 | REQ-LAYOUT-070 | v0.3.0 | `contract::every_chart_keeps_the_contract` (rule 1), `site/e2e/charts.spec.ts` | — |
-| REQ-TEXT-010 | v0.2.0 | `crates/glyphplot/src/layout.rs tests::labels_never_share_a_cell`, `contract::every_chart_keeps_the_contract` (rule 24) | — |
-| REQ-TEXT-020 | v0.2.0 | `crates/glyphplot/src/layout.rs tests::draw_order_is_z_order`, `contract::every_chart_matches_its_snapshots` | — |
+| REQ-TEXT-010 | v0.2.0 | `crates/glyphplot/src/layout.rs tests::labels_never_share_a_cell`, `contract::every_chart_keeps_the_contract` (rule 24) | partial |
+| REQ-TEXT-020 | v0.2.0 | `crates/glyphplot/src/layout.rs tests::draw_order_is_z_order`, `contract::every_chart_matches_its_snapshots` | partial |
 | REQ-AXIS-010 | v0.5.0 | `crates/glyphplot/src/layout.rs tests::left_and_right_axes_bind_their_scales`, `contract::every_chart_matches_its_snapshots` | — |
 | REQ-ANNOT-010 | v0.5.0 | `crates/glyphplot/src/annotate.rs tests::annotations_clip_to_their_pane`, `crates/glyphplot/src/annotate.rs tests::axis_label_hides_overlapped_ticks` | — |
 
@@ -324,7 +324,7 @@ Several checks may be listed for one requirement, separated by commas.
 | REQ-CONTRACT-040 | v0.6.0 | `contract::streaming_equals_replace` (rule 14) | — |
 | REQ-CONTRACT-050 | v0.4.0 | `budgets::every_chart_keeps_its_budgets` (rule 30) | — |
 | REQ-CONTRACT-060 | v0.4.0 | `contract::selftest_rejects_broken_charts` | — |
-| REQ-FIX-010 | v0.2.0 | `crates/glyphplot/src/fixtures.rs tests::generations_are_bitwise_equal`, `web/test/reference.test.mjs` (fixtures in wasm) | — |
+| REQ-FIX-010 | v0.2.0 | `crates/glyphplot/src/fixtures.rs tests::generations_are_bitwise_equal`, `web/test/reference.test.mjs` (fixtures in wasm) | partial |
 | REQ-FIX-020 | v0.5.0 | `crates/glyphplot/tests/data_readme.rs::every_dataset_is_small_and_listed` | — |
 
 ### 6.3 Snapshots, references and properties (SNAP, REF, PROP)
@@ -335,8 +335,8 @@ Several checks may be listed for one requirement, separated by commas.
 | REQ-SNAP-020 | v0.3.0 | `contract::every_chart_matches_its_snapshots`, `crates/glyphplot/src/snapshot.rs tests::colours_write_as_hex_runs` | — |
 | REQ-SNAP-030 | v0.3.0 | `mise run snap`, `contract::every_chart_matches_its_snapshots`, `web/test/snapshot.test.mjs` | — |
 | REQ-SNAP-040 | v0.3.0 | review (commit messages) | — |
-| REQ-REF-010 | v0.2.0 | `reference::ticks_match_d3_array`, `reference::nice_matches_d3_scale`, `reference::time_ticks_match_d3_time`, `reference::format_matches_d3_format`, `reference::lttb_matches_the_reference`, `web/test/reference.test.mjs`, `mise run fixtures` | — |
-| REQ-PROP-010 | v0.2.0 | `crates/glyphplot/src/scale.rs tests::invert_undoes_map`, `crates/glyphplot/src/ticks.rs tests::ticks_are_ordered_inside_and_about_count`, `crates/glyphplot/src/downsample.rs tests::every_point_within_its_column`, `crates/glyphplot/src/downsample.rs tests::merged_equals_whole`, `crates/glyphplot/src/downsample.rs tests::lttb_keeps_ends_and_order`, `crates/glyphplot/src/cells.rs tests::column_and_x_agree`, `crates/glyphplot/src/layout.rs tests::labels_never_share_a_cell` | — |
+| REQ-REF-010 | v0.2.0 | `reference::ticks_match_d3_array`, `reference::nice_matches_d3_scale`, `reference::time_ticks_match_d3_time`, `reference::format_matches_d3_format`, `reference::lttb_matches_the_reference`, `web/test/reference.test.mjs`, `mise run fixtures` | partial |
+| REQ-PROP-010 | v0.2.0 | `crates/glyphplot/src/scale.rs tests::invert_undoes_map`, `crates/glyphplot/src/ticks.rs tests::ticks_are_ordered_inside_and_about_count`, `crates/glyphplot/src/downsample.rs tests::every_point_within_its_column`, `crates/glyphplot/src/downsample.rs tests::merged_equals_whole`, `crates/glyphplot/src/downsample.rs tests::lttb_keeps_ends_and_order`, `crates/glyphplot/src/cells.rs tests::column_and_x_agree`, `crates/glyphplot/src/layout.rs tests::labels_never_share_a_cell` | partial |
 
 ## 7. Charts
 
@@ -449,7 +449,7 @@ Several checks may be listed for one requirement, separated by commas.
 
 | Requirement | Milestone | Planned check | Status |
 |---|---|---|---|
-| REQ-FONT-010 | v0.2.0 | `web/test/font.test.mjs`, `mise run build:font` | — |
+| REQ-FONT-010 | v0.2.0 | `web/test/font.test.mjs`, `mise run build:font` | partial |
 | REQ-FONT-020 | v0.5.0 | `web/test/font.test.mjs` | — |
 | REQ-FONT-030 | v0.3.0 | `site/e2e/element.spec.ts`, manual (fonts) | — |
 
@@ -509,7 +509,7 @@ Several checks may be listed for one requirement, separated by commas.
 | REQ-SIZE-030 | v0.1.0 | `mise run size` (`WASM_GZ_LIMIT`) | yes |
 | REQ-SIZE-040 | v0.1.0 | `mise run size` | yes |
 | REQ-SIZE-050 | v0.4.0 | `mise run size --charts` | — |
-| REQ-SIZE-060 | v0.2.0 | `mise run lint` (`cargo tree -e normal --target wasm32-unknown-unknown` ban list) | — |
+| REQ-SIZE-060 | v0.2.0 | `mise run lint` (`cargo tree -e normal --target wasm32-unknown-unknown` ban list) | yes |
 | REQ-SIZE-070 | v0.10.0 | `mise run size` (pack modules) | — |
 
 ### 12.2 Time (PERF)
@@ -685,6 +685,6 @@ kind of the first check listed.
 
 | Status | Requirements |
 |---|---|
-| yes | 13 |
-| partial | 5 |
-| — | 322 |
+| yes | 37 |
+| partial | 28 |
+| — | 275 |
