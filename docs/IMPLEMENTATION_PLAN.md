@@ -42,7 +42,7 @@ that produced it. The requirements this plan builds are in
 - [Open questions](#open-questions)
 - [Appendix A: measurements](#appendix-a)
 - [Appendix B: datasets](#appendix-b)
-- [Appendix C: what to take from unicel](#appendix-c)
+- [Appendix C: unicel as prior art](#appendix-c)
 
 ---
 
@@ -86,7 +86,7 @@ do not relitigate them.
 | Decision | Choice | Why | ADR |
 |---|---|---|---|
 | Name | `glyphplot`: crate, npm package, tag prefix `<glyph-plot>` | Says what it is. Free on npm and crates.io on 2026-10-18 (surfaces.md checked `crates.io/api/v1/crates/<name>` and `registry.npmjs.org/<name>`: 404). | [001](../spec/adr/001-name-glyphplot.md) |
-| Its own repository | `~/projects/glyphplot`, separate from unicel | Different purpose, users and budgets. The core is vendored ([ADR-100](../spec/adr/100-vendor-unicels-core.md)). | [002](../spec/adr/002-its-own-repository.md) |
+| Its own repository | `~/projects/glyphplot`, separate from unicel | Different purpose, users and budgets. It shares no code with unicel ([ADR-013](../spec/adr/013-independent-of-unicel.md)). | [002](../spec/adr/002-its-own-repository.md) |
 | Architecture | unicel's: pure Rust core, wasm-bindgen with wasm-pack, TypeScript shell with a custom element, CLI, Elm site, mise, GitButler, local signoff | Proven in unicel; the owner knows it. | [003](../spec/adr/003-unicels-architecture.md) |
 | Frame buffer | unicel's grid: `u32` code point and colour indices a cell, typed-array views over wasm memory, `WIDE_TAIL` | No per-frame copying or string building. Colour stays an index ([ADR-102](../spec/adr/102-semantic-palette-of-255.md)). | [004](../spec/adr/004-unicels-frame-buffer.md) |
 | One wasm module per chart type | Yes, a Cargo feature each | A page that shows a line chart does not load a histogram. Families with modes ([ADR-101](../spec/adr/101-chart-families-with-modes.md)). | [005](../spec/adr/005-one-wasm-module-per-chart-type.md) |
@@ -96,6 +96,7 @@ do not relitigate them.
 | Determinism | A frame is a pure function of data, options, view state and `t` | Snapshots, seeks and tests at arbitrary times. Streaming appends do not break it. | [009](../spec/adr/009-deterministic-frames.md) |
 | Spec format | unicel's `spec/` | The owner builds from it with agents; IDs are what commits and tests name. | [010](../spec/adr/010-unicels-spec-format.md) |
 | Licence | MIT | As unicel. | [011](../spec/adr/011-mit-licence.md) |
+| Independent of unicel | Nothing copied, ported, vendored or generated from unicel's repository; no dependency on it | A distinctly separate project; unicel is prior art, cited for design as uPlot is | [013](../spec/adr/013-independent-of-unicel.md) |
 | No AI attribution | Never, in commits, pull requests, notes or releases | As unicel's `AGENTS.md`. | [012](../spec/adr/012-no-ai-attribution.md) |
 
 ## Decisions discovery made
@@ -105,7 +106,7 @@ The ones the owner must settle first are also [open questions](#open-questions).
 
 | Decision | Choice | Why (measured) | ADR |
 |---|---|---|---|
-| Core code | Vendor unicel's grid, canvases, palette ramp, blue noise, glyph fallback, `blocks.ts` and font, with provenance headers | No unicel crate is published (crates.io 404); crates.io refuses git dependencies; vendored grid + braille is 3,043 B gz | [100](../spec/adr/100-vendor-unicels-core.md) |
+| Core code | Rejected by the owner: discovery proposed vendoring unicel's grid, canvases, glyph tables, block shapes and font; glyphplot writes its own (ADR-013) | Vendoring measured 3,043 B gz for grid + braille; crates.io refuses git dependencies | [100](../spec/adr/100-vendor-unicels-core.md) (Rejected) |
 | Module split | One module per family; variants by `mode`; `sparkline` a type of the `line` module | ~45 chart names become ~18 modules, six in the first tier; scales + time cost 3.8 KB gz, so a sparkline module of its own saves little | [101](../spec/adr/101-chart-families-with-modes.md) |
 | Cell colour | `u8` index into a per-chart palette of 255 with a fixed semantic layout | 128 scale steps fall under a visible step (ΔE76 2.26); a cell stays 6 bytes (RGB: 12); themes and terminal downgrades are table swaps | [102](../spec/adr/102-semantic-palette-of-255.md) |
 | Sizing | Cell from the font size (0.6 em by 1.2 em); grid from the box | Square braille dots; text never scaled below legibility | [103](../spec/adr/103-cell-from-font-grid-from-box.md) |
@@ -126,7 +127,7 @@ The ones the owner must settle first are also [open questions](#open-questions).
 | Element | One tag with `type`, plus `define(tag, {type})` aliases | A type change keeps data, view and listeners; a TSX union types it (tsc 5.9.3) | [118](../spec/adr/118-one-tag-with-a-type.md) |
 | Renderer | No (glyph, colour) atlas; `fillText` or a tinted code-point atlas, chosen on the owner's browsers | unicel's atlas: 3.6% hits, 61 ms a frame for a coloured scatter at 80 × 24 | [119](../spec/adr/119-no-glyph-and-colour-atlas.md) |
 | Options | `set_options` keeps the chart (reverses unicel's ADR-025) | A chart holds up to a million rows of the page's data | [120](../spec/adr/120-options-change-keeps-the-chart.md) |
-| Font | Extend unicel's subset with chart text (tier A) | Minus, µ, …, currency missing; +7.2 KB woff2 | [121](../spec/adr/121-extend-the-bundled-font.md) |
+| Font | Its own subset of Iosevka with chart text (tier A) | Minus, µ, …, currency missing; +7.2 KB woff2 | [121](../spec/adr/121-extend-the-bundled-font.md) |
 | Theme | Tokens; CSS custom properties first; a theme object elsewhere | A page's own dark and light rules re-theme charts with no script | [122](../spec/adr/122-theme-tokens-and-custom-properties.md) |
 | Colour defaults | Palettes held to 3:1 and ≥ 15 ΔE00 under four visions; cividis; blue–orange | No well-known palette passes both (Okabe–Ito 10.9; Tableau 10 0.7 for deuteranopes) | [123](../spec/adr/123-colour-defaults-held-to-measured-bars.md) |
 | Panics | `panic = "abort"`; the contract is the guard | As unicel ADR-011; unwinding costs size | [124](../spec/adr/124-abort-on-panic.md) |
@@ -139,7 +140,7 @@ The ones the owner must settle first are also [open questions](#open-questions).
 | Session gaps | An index time scale | No calendar data needed | [131](../spec/adr/131-index-time-scale-for-session-gaps.md) |
 | Semantics | `role="figure"`, a summary on `role="img"`, a slider cursor, a hidden table ≤ 500 rows | 500 rows build in 6 ms, 10,000 in 523 ms | [132](../spec/adr/132-figure-slider-and-hidden-table.md) |
 | Size gate | 200 KB gzipped a module, warning at 100 KB | 4× today's full module; ~0.8 s and 2.9 s to first frame on the two load profiles | [133](../spec/adr/133-a-200-kb-module-gate.md) |
-| CLI | crossterm, after unicel's | 404,800 B against ratatui's 553,968 B; ratatui's `Chart` has no ticks, downsampling or hit tests | [134](../spec/adr/134-cli-on-crossterm.md) |
+| CLI | crossterm, with its own terminal code | 404,800 B against ratatui's 553,968 B; ratatui's `Chart` has no ticks, downsampling or hit tests | [134](../spec/adr/134-cli-on-crossterm.md) |
 | Exports | txt, ansi, svg in Rust from the start | Byte-identical element and CLI output | [135](../spec/adr/135-exports-in-rust.md) |
 | The site's market | Synthetic, labelled; Wikimedia edits a second as a real feed | No exchange's terms allow display to third parties | [136](../spec/adr/136-the-sites-market-demo.md) |
 | Datasets | A manifest with hashes and a licence allow-list | Licences are checked, not remembered | [137](../spec/adr/137-dataset-manifest-and-allow-list.md) |
@@ -620,7 +621,7 @@ where about 2.3 is the smallest step people see (rendering.md §2.2).
 
 On a canvas, the shell draws only the cells whose glyph, ink or back changed
 (REQ-RENDER-030). Block, quadrant, sextant, octant and wedge glyphs are exact
-fills from the vendored `blocks.ts` (REQ-RENDER-020). unicel's atlas keyed by
+fills computed by glyphplot's own `blocks.ts` from each glyph's Unicode definition (REQ-RENDER-020). unicel's atlas keyed by
 (code point, colour) is dropped: a braille scatter coloured by value hit it
 3.6% of the time and took 61 ms a frame at 80 × 24 even with 64 colours
 (ADR-119). Two candidates remain, measured in headless Chrome 155:
@@ -659,15 +660,18 @@ down to 1 × 1 (REQ-LAYOUT-040).
 <a id="font"></a>
 ### Font
 
-The bundled font is unicel's subset of Iosevka Fixed Extended 34.9.0 (SIL
-OFL 1.1), renamed `glyphplot mono`, rebuilt by `mise run build:font` from
-the vendored `scripts/font.py` with more ranges (ADR-121, REQ-FONT-010):
+The bundled font is glyphplot's own subset of Iosevka Fixed Extended 34.9.0
+(SIL OFL 1.1), family `glyphplot mono`, built by `mise run build:font` with
+the repository's own `scripts/font.py` from Iosevka's upstream release, pinned
+by SHA-256; no file or script is taken from unicel (ADR-013, ADR-121,
+REQ-FONT-010). The sizes below were measured in discovery by subsetting the
+same release:
 
 | Tier | Adds | woff2 (measured) | Milestone |
 |---|---|---|---|
-| unicel's | ASCII, `° · •`, arrows, box drawing, blocks, geometric shapes, braille, octants, legacy computing | 18,128 B rebuilt | v0.2.0 |
+| base | ASCII, `° · •`, arrows, box drawing, blocks, geometric shapes, braille, octants, legacy computing | 18,128 B rebuilt | v0.2.0 |
 | A: numbers and units | U+00A0–00BF, `× ÷`, U+2007–200A, U+2010–2015, U+2018–201F, `…`, U+202F, `‰`, `′ ″`, U+2070–209F, currency U+20A0–20C0 (as Iosevka has them), `№ ™`, `−` U+2212, `≈ ≠ ≤ ≥ ∞`, `Δ Σ Ω µ σ`, `✓ ✗ ★ ☆`, U+FFFD | 25,344 B (+7,216) | v0.2.0 |
-| B: Western European letters | U+00C0–00FF, U+0100–017F | 28,180 B (+10,052 over unicel's) | v0.5.0 |
+| B: Western European letters | U+00C0–00FF, U+0100–017F | 28,180 B (+10,052 over the base) | v0.5.0 |
 
 Every glyph is 600 units wide; Iosevka's thin and narrow spaces are 600 too,
 so a formatter's U+2009 or U+202F is one whole cell (REQ-FMT-060). Tier C
@@ -761,8 +765,8 @@ From a11y-theming.md (ADR-122, ADR-123, ADR-132):
 <a id="the-cli"></a>
 ## The CLI
 
-Crate `glyphplot-cli`, binary `glyphplot`, on crossterm after unicel's CLI
-(ADR-134).
+Crate `glyphplot-cli`, binary `glyphplot`, on crossterm with its own terminal
+code (ADR-134).
 
 ```
 glyphplot <type> [--from FILE|-] [--x COL] [--y COL[,COL…]] [--format csv|tsv|json|ndjson|arrow]
@@ -864,37 +868,42 @@ Tasks:
    false`, wasm-bindgen 0.2, features mirroring the core's, `debug`), and
    `crates/cli` (`glyphplot-cli`, a `main` that prints usage and version).
    Add each to `members` in `Cargo.toml` (REQ-PKG-040, REQ-ARCH-040).
-2. Vendor unicel's `grid.rs`, `subcell.rs`, `palette.rs`, `bluenoise.rs`,
-   `glyphs.rs` and the braille and dither helpers into the core, and
-   `web/src/blocks.ts`, `web/fonts/` and `scripts/font.py`, each with a
-   header naming unicel, MIT and the revision (REQ-VENDOR-010). The revision
-   must be one on unicel's remote: on 2026-10-18 unicel's local HEAD
-   `282c3c8` was not pushed (rendering.md §1.1), so push unicel first or name
-   the pushed revision `53af162` and copy from it.
-3. `crates/glyphplot/examples/manifest.rs` (after unicel's): `families`
-   prints the families with charts; `write <dir>` writes `modules.js`,
-   `modules.d.ts`, `budgets.json` (204,800 B default) (REQ-MANIFEST-010
-   lands in Phase 2; Phase 0 needs only `families` and `budgets.json`).
+2. `crates/glyphplot` starts with no charts and no copied code: glyphplot
+   shares nothing with unicel (ADR-013, REQ-INDEP-010). The grid and canvases
+   are Phase 1's.
+3. `crates/glyphplot/examples/manifest.rs`: `families` prints the families
+   with charts; `write <dir>` writes `modules.js`, `modules.d.ts` and
+   `budgets.json` (204,800 B default) (REQ-MANIFEST-010 lands in Phase 2;
+   Phase 0 needs only `families` and `budgets.json`).
 4. `mise.toml` tasks: `install`, `build:wasm`, `lint`, `fmt`, `test`,
-   `test:rust`, `size`, `check`, `signoff` (port `scripts/signoff.sh` from
-   unicel), keeping unicel's comments where they still hold (REQ-BUILD-010 to
-   060, REQ-LINT-010, REQ-LINT-030, REQ-SIZE-010 to 040, REQ-CI-010).
-5. A unit test per vendored file is carried over with it (unicel's
-   `braille_dots_map_to_the_right_bits` and the sextant and octant pins).
+   `test:rust`, `size`, `check`, `signoff` (a `scripts/signoff.sh` of its own)
+   (REQ-BUILD-010 to 060, REQ-LINT-010, REQ-LINT-030, REQ-SIZE-010 to 040,
+   REQ-CI-010).
+5. The independence check in `lint`: fail when a manifest, `mise.toml` or
+   script names `animate-unicode` or a `unicel` crate or package
+   (REQ-INDEP-020).
 
 Acceptance:
 - `mise install && mise run check` exits 0.
-- `mise run size` prints the `line` module (grid and canvases, no chart),
+- `mise run size` prints the `line` module (an empty chart family),
   raw and gzipped, under 204,800 B, and `WASM_GZ_LIMIT=1000 mise run size`
   fails naming it.
-- `cargo metadata --format-version 1 | grep -c '"source":"git+'` prints 0.
+- `cargo metadata --format-version 1 | grep -c '"source":"git+'` prints 0, and
+  `mise run lint` fails on a test edit that adds `../animate-unicode` as a path
+  dependency.
 
 <a id="phase-1"></a>
 ### Phase 1 · Core (v0.2.0)
 
 Tasks:
-1. `Grid::resize`; the cell-mapping module (column and dot of a value, value
-   of a column), used by everything after (REQ-GRID-020, REQ-CANVAS-020).
+1. The grid (REQ-GRID-010 to 070) and the sub-cell canvases
+   (REQ-CANVAS-010, 030), written for glyphplot: encodings from the Unicode
+   Standard, `scripts/octants.py` generating the octant table from Unicode
+   16's `UnicodeData.txt` (downloaded and pinned by SHA-256), unit tests
+   pinning glyphs against their Unicode names; then the cell-mapping module
+   (column and dot of a value, value of a column), used by everything after
+   (REQ-CANVAS-020). Discovery's count of the equivalent code in unicel was
+   about 1,240 lines of Rust.
 2. `palette` and `theme`: the fixed layout, `theme::resolve` with Oklab
    interpolation of the scale stops, the default dark and light themes from
    the candidates in `discovery/bench/a11y-theming/` (REQ-COLOR-010 to 040).
@@ -921,12 +930,14 @@ Tasks:
    harnesses `discovery/bench/scales/fixtures/capture.mjs` and
    `discovery/bench/testing/ref/capture.mjs` are the starting point.
 8. proptest (lean) properties in `#[cfg(test)]` modules (REQ-PROP-010).
-9. `scripts/font.py` with tier A; `mise run build:font`; the font checked in
-   (REQ-FONT-010).
+9. `scripts/font.py`, written for glyphplot: download Iosevka's release
+   once, check its SHA-256, subset with fonttools (pinned) to the base ranges
+   and tier A, rename the family, check every glyph is 600 units and the
+   element's `unicode-range` matches; `mise run build:font`; the font checked
+   in (REQ-FONT-010).
 10. `[profile.contract]`; `clippy.toml` with `f64::clamp` and `f32::clamp`
-    disallowed; the `cargo tree` check of forbidden crates in `lint`;
-    `mise run vendor:check` (REQ-BUILD-070, REQ-LINT-040, REQ-SIZE-060,
-    REQ-VENDOR-020).
+    disallowed; the `cargo tree` check of forbidden crates in `lint`
+    (REQ-BUILD-070, REQ-LINT-040, REQ-SIZE-060).
 
 Acceptance:
 - `mise run test:rust` passes, including `reference::*` with 0 cases
@@ -955,7 +966,7 @@ Tasks:
 4. `crates/wasm`: the `Chart` object of [the boundary](#the-boundary), the
    debug feature and `debug-panic`; the manifest in full (REQ-WASM-*,
    REQ-MANIFEST-*).
-5. `web/`: `wasm.ts` (from unicel's), `chart.ts` with the load queue,
+5. `web/`: `wasm.ts`, `chart.ts` with the load queue,
    `mount.ts` (changed cells, `<pre>` and canvas, block shapes, gestures,
    coalesced input), `theme.ts`, `locale.ts`, `a11y.ts`, `element.ts`;
    package skeleton (REQ-LOAD-*, REQ-EL-*, REQ-MOUNT-*, REQ-JS-010,
@@ -968,7 +979,7 @@ Tasks:
    `a11y.spec.ts`, the smoke set (REQ-TEST-040, REQ-E2E-010 to 040, 070).
 8. Node tests: `player`, `data`, `view`, `events`, `snapshot`, `reference`,
    `memory`, `schemas` (REQ-TEST-020, REQ-DATA-050 to 070, REQ-MEM-*).
-9. `mise run dev` with the watch-and-reload of unicel's `scripts/dev.sh`
+9. `mise run dev` with a watch-and-reload script of its own (`scripts/dev.sh`)
    (REQ-BUILD-040, 080).
 
 Acceptance:
@@ -996,7 +1007,7 @@ Tasks:
    `bench:render` from the discovery harnesses
    (`discovery/bench/budgets/js/`, `discovery/bench/rendering/canvas/`)
    (REQ-BENCH-*, REQ-PERF-060, 080).
-4. `mise run size --charts`, from unicel's `scripts/size-pieces.mjs`
+4. `mise run size --charts`, a script of its own that reads an unstripped build's name section
    (REQ-SIZE-050).
 5. `signoff` runs everything with `PROPTEST_CASES=4096` (REQ-CI-020).
 6. The `debug` overlay (frame and draw time against the budget), as unicel's
@@ -1068,7 +1079,7 @@ Acceptance:
 ### Phase 6 · The site (v0.7.0)
 
 Tasks:
-1. Elm 0.19.1 site with Vite, after unicel's: flags from the manifest, routes
+1. Elm 0.19.1 site with Vite: flags from the manifest, routes
    (`/`, `/<type>`, `/docs/<page>`, `/examples/<name>`), the theme toggle
    (REQ-SITE-010, 060).
 2. A page per chart type; the doc pages; the examples of
@@ -1090,7 +1101,7 @@ Acceptance:
 ### Phase 7 · The CLI (v0.8.0)
 
 Tasks:
-1. `crates/cli` after unicel's (`play.rs`, `paint.rs`): `glyphplot <type>`,
+1. `crates/cli`: `glyphplot <type>`,
    `render`, `demo`, `list`; stdin and `/dev/tty`; `--window`; mouse through
    the core's reducer; `--color`; `--glyphs`; terminal restore on every way
    out (REQ-CLI-*).
@@ -1242,8 +1253,12 @@ REQ-CONTRACT-030).
    not be 0.6 em, so a `<pre>` row can drift for a label in Greek or
    Cyrillic. The canvas clips; tiers A and B cover numbers, units and Western
    European letters.
-10. **Vendored code drifts from unicel.** `vendor:check` shows it; a shared
-    `unicel-core` crate is the fix once both projects publish (ADR-100).
+10. **Independence costs work.** Phases 0 and 1 write what unicel already has
+    (a grid, canvases, glyph tables, block shapes, a font script, about 1,240
+    lines of Rust by discovery's count), and sizes measured on unicel's code
+    are estimates for glyphplot's own until Phase 1 measures them (ADR-013).
+    Glyphs are pinned to Unicode names, so the rewrite is checked against the
+    standard, not against unicel.
 11. **Market data licences.** No exchange feed checked may be shown to third
     parties (Coinbase, Binance, Kraken terms quoted in domains.md); the site
     uses synthetic data and Wikimedia (ADR-136). Adapter code may ship, data
@@ -1266,11 +1281,10 @@ Proposed until the owner answers.
    gzipped. Recommend 200 KB with a warning at 100 KB (ADR-133): four times
    today's full line module, about 0.8 s and 2.9 s to a first frame on the two
    load profiles; 300 KB takes 3.4 s on Lighthouse's slow 4G.
-2. **Depend on a published unicel crate or vendor the core.** Vendor now;
-   unicel publishes nothing first; revisit a shared `unicel-core` when both
-   are on crates.io. A git dependency would block publishing glyphplot
-   (ADR-100). Push unicel's HEAD before vendoring so the header names a
-   public revision.
+2. **Depend on a published unicel crate or vendor the core.** Settled by the
+   owner on 2026-10-18: neither. glyphplot copies, ports and vendors nothing
+   from unicel and depends on nothing in its repository (ADR-013; discovery's
+   ADR-100 is rejected).
 3. **One tag or a tag per chart.** One tag, `<glyph-plot type>`, with
    `define(tag, {type})` aliases for pages that want `<glyph-candles>`
    (ADR-118).
@@ -1589,22 +1603,25 @@ repository; "site" means served by the public site.
 | Wireshark samples, RIPE RIS/Atlas | — | none stated; restricted | never | never | — |
 
 <a id="appendix-c"></a>
-## Appendix C: what to take from unicel
+## Appendix C: unicel as prior art
 
-`../animate-unicode`, MIT, the same owner. Keep the provenance header on
-anything taken.
+`../animate-unicode`. glyphplot takes nothing from it: no code is copied,
+ported, vendored or generated from it, and nothing depends on it (ADR-013).
+It is cited for design, as uPlot and ratatui are. What its design shows, and
+what glyphplot writes for itself:
 
-| Need | Source in unicel | Take |
+| Need | What unicel's design shows | glyphplot writes |
 |---|---|---|
-| Grid, canvases, palette ramp, blue noise, glyph fallback | `crates/unicel/src/{grid,subcell,palette,bluenoise,glyphs}.rs`, braille and dither in `util.rs` | vendor (about 1,240 lines) |
-| One-ink checks | `crates/unicel/src/mono.rs` | adapt into the contract |
-| Pictures | `pixels.rs` | leave: its percentile stretch misstates data values |
-| Block shapes, paint | `web/src/blocks.ts`, `web/src/frame.ts` | vendor `blocks.ts`; adapt `paint` |
-| Loader and manifest | `web/src/wasm.ts`, `crates/unicel/examples/manifest.rs` | port, renamed |
-| Mount | `web/src/mount.ts` | rewrite, keeping its rules (views re-made each frame, font load clears caches, ResizeObserver ignoring 0, IntersectionObserver and visibility gates); not its atlas |
-| Element | `web/src/element.ts` | port the lifecycle (near-screen gate, superseded loads freed, kept children, `:where()` styles) |
-| Contract | `crates/unicel/tests/contract.rs` | the model for `tests/contract.rs`: report every failure, `PIECE=` filter, retime twice |
-| CLI | `crates/cli/src/{main,play,paint}.rs`, `tests/terminal.rs` | port: terminal restore, changed runs, pty tests |
-| Font | `web/fonts/`, `scripts/font.py` | vendor and extend |
-| Signoff | `scripts/signoff.sh`, `mise.toml` | port |
-| Site | `site/` (Elm, Vite, Playwright, axe, cards) | the model for Phase 6 |
+| Grid | A `u32` code point and two `u8` colour indices a cell, read as typed-array views | `grid.rs`, from REQ-GRID-010 to 070 |
+| Canvases and glyph tables | Sub-cell bitmaps encoded as braille, sextants, quadrants, octants | `canvas.rs` from the Unicode Standard; `scripts/octants.py` from `UnicodeData.txt` |
+| Terminal glyph fallback | Redrawing dot glyphs for fonts that lack them | `glyphs.rs`, from REQ-CLI-110 |
+| One-ink checks | Ink share, rows that differ, glyphs in the font | the contract's rule 10 |
+| Block shapes | Filling blocks, quadrants, sextants, octants and wedges as exact shapes on a canvas | `web/src/blocks.ts` from the glyphs' Unicode definitions |
+| Loader and manifest | One module per group, imported on first use, listed in a generated `modules.js` | `web/src/wasm.ts`, `examples/manifest.rs` |
+| Mount | Views re-made each frame, a font load clearing caches, a ResizeObserver that ignores 0, IntersectionObserver and visibility gates | `web/src/mount.ts` (and no (glyph, colour) atlas, ADR-119) |
+| Element | A near-screen gate, superseded loads freed, kept children, `:where()` styles | `web/src/element.ts` |
+| Contract | Every failure reported in one run, a filter by name, retiming twice | `tests/contract.rs`, `tests/budgets.rs` |
+| CLI | Terminal restore on every exit, changed runs only, pty tests | `crates/cli` and `tests/terminal.rs` |
+| Font | A subset of Iosevka with `unicode-range` | `scripts/font.py` from Iosevka's upstream release |
+| Signoff | Local CI posting a commit status | `scripts/signoff.sh` |
+| Site | Elm with Vite, Playwright, axe | `site/` |

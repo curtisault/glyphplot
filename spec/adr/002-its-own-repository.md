@@ -13,9 +13,10 @@ seed and plays.
 ## Decision
 
 glyphplot lives in its own repository, `~/projects/glyphplot`, separate from
-unicel (`~/projects/animate-unicode`). It may depend on a published unicel
-core crate or vendor the grid and sub-cell canvases; discovery decides which
-(`discovery/rendering.md`, [ADR-100](100-vendor-unicels-core.md)).
+unicel (`~/projects/animate-unicode`). It shares no code with unicel and
+depends on nothing in its repository ([ADR-013](013-independent-of-unicel.md),
+which settles what this record first left to discovery and rejects
+[ADR-100](100-vendor-unicels-core.md)).
 
 ## Consequences
 

@@ -21,7 +21,8 @@ another marks the older one `Superseded by ADR-NNN`; a number is never reused.
 | [010](010-unicels-spec-format.md) | unicel's spec format | Accepted | 2026-10-18 |
 | [011](011-mit-licence.md) | MIT licence | Accepted | 2026-10-18 |
 | [012](012-no-ai-attribution.md) | No AI attribution | Accepted | 2026-10-18 |
-| [100](100-vendor-unicels-core.md) | Vendor unicel's core | Proposed | 2026-10-18 |
+| [013](013-independent-of-unicel.md) | Independent of unicel | Accepted | 2026-10-18 |
+| [100](100-vendor-unicels-core.md) | Vendor unicel's core | Rejected by ADR-013 | 2026-10-18 |
 | [101](101-chart-families-with-modes.md) | Chart families with modes | Proposed | 2026-10-18 |
 | [102](102-semantic-palette-of-255.md) | A semantic palette of 255 | Proposed | 2026-10-18 |
 | [103](103-cell-from-font-grid-from-box.md) | The cell from the font, the grid from the box | Proposed | 2026-10-18 |

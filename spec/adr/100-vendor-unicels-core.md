@@ -1,6 +1,10 @@
 # ADR-100: Vendor unicel's core
 
-Status: Proposed (2026-10-18)
+Status: Rejected (2026-10-18), by the owner: [ADR-013](013-independent-of-unicel.md)
+
+The owner chose to keep glyphplot independent of unicel: no code copied,
+ported or vendored, no dependency on its repository. This record stays as the
+discovery proposal it was; nothing in it applies.
 
 ## Context
 

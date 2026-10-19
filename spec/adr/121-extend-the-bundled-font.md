@@ -33,8 +33,11 @@ The options, measured by subsetting Iosevka Fixed Extended 34.9.0 as unicel's
 ## Decision
 
 - The bundled font is a subset of Iosevka Fixed Extended 34.9.0 (SIL OFL 1.1),
-  family `glyphplot mono`, covering unicel's ranges plus tier A, every glyph
-  0.6 em, at most 32 KB, rebuilt only by `mise run build:font`
+  family `glyphplot mono`, covering the base ranges (ASCII, `° · •`, arrows,
+  box drawing, blocks, geometric shapes, braille, octants, legacy computing)
+  plus tier A, every glyph 0.6 em, at most 32 KB, built only by `mise run
+  build:font` with the repository's own script from Iosevka's upstream release
+  (no file or script taken from unicel, [ADR-013](013-independent-of-unicel.md))
   (REQ-FONT-010, v0.2.0).
 - Tier B follows (REQ-FONT-020, v0.5.0). Tier C is rejected.
 - `@font-face` loads it from the package with `font-display: swap`, and every

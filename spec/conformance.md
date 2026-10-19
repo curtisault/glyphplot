@@ -51,12 +51,12 @@ Several checks may be listed for one requirement, separated by commas.
 | REQ-ARCH-070 | v0.1.0 | `mise run lint` (`cargo metadata`: no git source) | — |
 | REQ-ARCH-080 | v0.8.0 | `crates/cli/tests/cli.rs::list_names_every_type_and_pack` | — |
 
-### 1.2 Vendored core (VENDOR)
+### 1.2 Independence (INDEP)
 
 | Requirement | Milestone | Planned check | Status |
 |---|---|---|---|
-| REQ-VENDOR-010 | v0.1.0 | `mise run vendor:check`, review (each vendored file's header) | — |
-| REQ-VENDOR-020 | v0.2.0 | `mise run vendor:check` | — |
+| REQ-INDEP-010 | v0.1.0 | `mise run lint` (no manifest, task or script names `animate-unicode` or a `unicel` crate or package), review (no file copied, ported or generated from unicel) | — |
+| REQ-INDEP-020 | v0.1.0 | `mise run lint` (the independence check, with a test edit that must fail it) | — |
 
 ### 1.3 Tasks (BUILD)
 
@@ -94,15 +94,22 @@ Several checks may be listed for one requirement, separated by commas.
 
 | Requirement | Milestone | Planned check | Status |
 |---|---|---|---|
-| REQ-GRID-010 | v0.2.0 | `crates/glyphplot/src/grid.rs tests::draws_clip_at_the_edges`, `crates/glyphplot/src/grid.rs tests::set_wide_writes_its_tail`, `crates/glyphplot/src/grid.rs tests::text_joins_the_rows` | — |
+| REQ-GRID-010 | v0.2.0 | `crates/glyphplot/src/grid.rs tests::cells_are_a_code_point_and_two_indices`, `crates/glyphplot/src/grid.rs tests::constants_are_fixed` | — |
 | REQ-GRID-020 | v0.2.0 | `crates/glyphplot/src/grid.rs tests::resize_blanks_and_reuses`, `crates/glyphplot/src/grid.rs tests::resize_to_zero_panics` | — |
+| REQ-GRID-030 | v0.2.0 | `crates/glyphplot/src/grid.rs tests::new_and_clear_blank_every_cell`, `crates/glyphplot/src/grid.rs tests::fill_keeps_backs` | — |
+| REQ-GRID-040 | v0.2.0 | `crates/glyphplot/src/grid.rs tests::draws_clip_at_the_edges`, `crates/glyphplot/src/grid.rs tests::lines_include_both_ends` | — |
+| REQ-GRID-050 | v0.2.0 | `crates/glyphplot/src/grid.rs tests::set_wide_writes_its_tail`, `crates/glyphplot/src/grid.rs tests::set_wide_at_the_edge_draws_nothing` | — |
+| REQ-GRID-060 | v0.2.0 | `crates/glyphplot/src/grid.rs tests::text_joins_the_rows`, `crates/glyphplot/src/grid.rs tests::text_skips_tails_and_replaces_invalid` | — |
+| REQ-GRID-070 | v0.2.0 | `crates/glyphplot/src/grid.rs tests::slices_are_row_major`, `crates/glyphplot/src/grid.rs tests::getters_panic_off_the_grid` | — |
 
 ### 2.2 Sub-cell canvases and cell mapping (CANVAS)
 
 | Requirement | Milestone | Planned check | Status |
 |---|---|---|---|
-| REQ-CANVAS-010 | v0.2.0 | `crates/glyphplot/src/subcell.rs tests::canvases_set_the_pinned_code_points` | — |
+| REQ-CANVAS-010 | v0.2.0 | `crates/glyphplot/src/canvas.rs tests::lines_and_circles_clip`, `crates/glyphplot/src/canvas.rs tests::drawing_sets_only_cells_with_dots` | — |
 | REQ-CANVAS-020 | v0.2.0 | `crates/glyphplot/src/cells.rs tests::column_and_x_agree`, `contract::hits_name_what_was_drawn` (rule 19) | — |
+| REQ-CANVAS-030 | v0.2.0 | `crates/glyphplot/src/canvas.rs tests::glyphs_match_their_unicode_names`, `crates/glyphplot/src/canvas.rs tests::an_empty_cell_is_a_space`, `mise run lint` (`scripts/octants.py` regenerates the table byte for byte) | — |
+| REQ-CANVAS-040 | v0.3.0 | `crates/glyphplot/src/canvas.rs tests::a_cell_takes_the_highest_series`, `contract::every_chart_keeps_the_contract` (rule 11) | — |
 
 ### 2.3 Charsets (CHAR)
 
@@ -271,7 +278,7 @@ Several checks may be listed for one requirement, separated by commas.
 | REQ-OVERLAY-010 | v0.3.0 | `budgets::every_chart_keeps_its_budgets` (pointer move), `crates/glyphplot/src/overlay.rs tests::hover_does_not_redraw_the_base` | — |
 | REQ-OVERLAY-020 | v0.3.0 | `crates/glyphplot/src/overlay.rs tests::readout_stays_and_hides_on_escape`, `site/e2e/interaction.spec.ts` | — |
 
-### 5.4 Events out (EVENT)
+### 5.4 Events out and linking (EVENT, LINK)
 
 | Requirement | Milestone | Planned check | Status |
 |---|---|---|---|
@@ -630,15 +637,15 @@ Several checks may be listed for one requirement, separated by commas.
 
 ## Summary
 
-325 requirements.
+332 requirements.
 
 ### By milestone
 
 | Milestone | Requirements |
 |---|---|
-| v0.1.0 | 19 |
-| v0.2.0 | 42 |
-| v0.3.0 | 120 |
+| v0.1.0 | 20 |
+| v0.2.0 | 47 |
+| v0.3.0 | 121 |
 | v0.4.0 | 13 |
 | v0.5.0 | 35 |
 | v0.6.0 | 16 |
@@ -648,7 +655,7 @@ Several checks may be listed for one requirement, separated by commas.
 | v0.10.0 | 14 |
 | v0.11.0 | 5 |
 | v0.12.0 | 9 |
-| **Total** | **325** |
+| **Total** | **332** |
 
 ### By kind of planned check
 
@@ -658,12 +665,12 @@ kind of the first check listed.
 
 | Kind | Any check | First check |
 |---|---|---|
-| Rust | 174 | 169 |
+| Rust | 181 | 176 |
 | Node | 62 | 43 |
 | browser | 70 | 57 |
-| task/lint | 58 | 47 |
+| task/lint | 59 | 47 |
 | manual/review | 33 | 9 |
-| **Total** | — | **325** |
+| **Total** | — | **332** |
 
 ### By status
 
@@ -671,4 +678,4 @@ kind of the first check listed.
 |---|---|
 | yes | 0 |
 | partial | 0 |
-| — | 325 |
+| — | 332 |

@@ -38,4 +38,4 @@ Sizes, from testing.md (Snapshots):
   unambiguous without separators.
 - A layer of mixed colours is up to twice as wide as unicel's.
 - A diff of a colour change reads as two hex digits.
-- unicel's snapshot reader and writer are adapted, not reused.
+- glyphplot writes its own snapshot reader and writer ([ADR-013](013-independent-of-unicel.md)).

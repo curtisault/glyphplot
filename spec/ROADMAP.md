@@ -61,10 +61,12 @@ plan's phases, one each (§20).
 - REQ-ARCH-070: The workspace MUST have no git dependencies. (v0.1.0)
 - REQ-ARCH-080: The CLI MUST link the core natively with every family and every pack, without wasm. (v0.8.0)
 
-### 1.2 Vendored core (VENDOR)
+### 1.2 Independence (INDEP)
 
-- REQ-VENDOR-010: The core MUST hold its own copies of unicel's `grid.rs`, `subcell.rs`, `palette.rs`, `bluenoise.rs`, `glyphs.rs` and the braille and dither helpers of `util.rs`, and the shell its copy of `web/src/blocks.ts`, each beginning with a comment that names unicel, its MIT licence and the source revision. [ADR-100](adr/100-vendor-unicels-core.md) (v0.1.0)
-- REQ-VENDOR-020: `mise run vendor:check` SHOULD print, for each vendored file, whether it differs from unicel at the revision its header names. (v0.2.0)
+- REQ-INDEP-010: No file in the repository MUST be copied, ported or generated from unicel's repository (`../animate-unicode`), and no crate, package, script or task MUST depend on it or read from it; glyphplot's grid, canvases, glyph tables, block shapes, font build, loader, element, CLI and scripts are written for glyphplot. unicel is prior art, cited for design as other libraries are. [ADR-013](adr/013-independent-of-unicel.md) (v0.1.0)
+- REQ-INDEP-020: `mise run lint` MUST fail when any `Cargo.toml`, `package.json`, `mise.toml` or file under `scripts/` names `animate-unicode`, or a `unicel` crate or package, as a dependency, a path or an input. (v0.1.0)
+
+REQ-VENDOR-010 and REQ-VENDOR-020 were withdrawn on 2026-10-18 by ADR-013, before anything was built; their IDs are not reused.
 
 ### 1.3 Tasks (BUILD)
 
@@ -87,7 +89,7 @@ plan's phases, one each (§20).
 
 ### 1.5 Local CI (CI)
 
-- REQ-CI-010: There MUST be no hosted CI workflow; `mise run signoff` is CI, as unicel's ADR-021. (v0.1.0)
+- REQ-CI-010: There MUST be no hosted CI workflow; `mise run signoff` is CI ([ADR-003](adr/003-unicels-architecture.md)). (v0.1.0)
 - REQ-CI-020: `mise run signoff` MUST, for each open pull request (or those named), copy the head commit's tree into `target/ci/tree`, run `npm ci`, `lint`, `test`, `build`, `size`, the whole of `test:site`, `bench:web` and `bench:load` there, with `PROPTEST_CASES=4096`, log to `target/ci/logs/`, and post a `signoff` commit status; it MUST exit 1 when any pull request fails, after checking the rest. (v0.4.0)
 
 ---
@@ -96,13 +98,20 @@ plan's phases, one each (§20).
 
 ### 2.1 Grid (GRID)
 
-- REQ-GRID-010: A `Grid` MUST hold `cols × rows` cells row-major, each a `u32` code point, a `u8` ink index and a `u8` back index, with `BLANK = 0x20`, `WIDE_TAIL = 0` and `NO_BACK = 255`, and MUST keep unicel's REQ-GRID-020 to REQ-GRID-090 (clipping draws, `set_wide`, `blit`, `text()`, buffer access). [ADR-004](adr/004-unicels-frame-buffer.md) (v0.2.0)
+- REQ-GRID-010: A `Grid` MUST hold `cols × rows` cells row-major, each a `u32` code point, a `u8` ink index and a `u8` back index, with the constants `BLANK = 0x20` (a space), `WIDE_TAIL = 0` (the right half of a double-width glyph, never a real code point) and `NO_BACK = 255` (no colour behind a cell). [ADR-004](adr/004-unicels-frame-buffer.md) (v0.2.0)
 - REQ-GRID-020: `Grid::resize(cols, rows)` MUST give a grid of the new size with every cell `BLANK`, colour 0 and `NO_BACK`, reusing its allocation when it is large enough, and MUST panic on a zero width or height. (v0.2.0)
+- REQ-GRID-030: A new grid MUST start every cell `BLANK` in colour 0 with `NO_BACK` and MUST panic on a zero width or height; `clear` MUST reset every cell so, and `fill` MUST set every cell's glyph and ink and leave backs as they are. (v0.2.0)
+- REQ-GRID-040: Every drawing method (put a glyph, write text, fill a rectangle, draw a Bresenham line including both ends, set a back colour) MUST clip: off-grid coordinates are ignored, so marks may overhang the edges. (v0.2.0)
+- REQ-GRID-050: Writing a double-width glyph MUST put it at `x` and `WIDE_TAIL` at `x + 1`, both in the given colour, and only when both cells are on the grid; a debug build MUST assert the glyph is two columns wide. (v0.2.0)
+- REQ-GRID-060: `text()` MUST return `rows` lines joined by `\n`, leaving out `WIDE_TAIL` cells and writing any invalid code point as U+FFFD. (v0.2.0)
+- REQ-GRID-070: The grid MUST expose its code points, inks and backs as row-major slices for the boundary and for hot loops, and its indexed getters MUST panic off the grid. (v0.2.0)
 
 ### 2.2 Sub-cell canvases and cell mapping (CANVAS)
 
-- REQ-CANVAS-010: The core MUST provide unicel's `Dots` (braille), `Sextants`, `Quadrants` and `Octants` canvases and colour canvases with unicel's REQ-CANVAS-001 to REQ-CANVAS-090 behaviour, unit-tested on the same pinned code points. (v0.2.0)
+- REQ-CANVAS-010: The core MUST provide sub-cell canvases at 2 × 4 dots a cell (braille, octants), 2 × 3 (sextants) and 2 × 2 (quadrants), with dots set, cleared and read, Bresenham lines and midpoint circles in dot coordinates, all clipping; drawing a canvas onto the grid MUST set only cells that have dots, so canvases layer over text and each other. (v0.2.0)
 - REQ-CANVAS-020: The core MUST have one module of cell mappings (data value to column and dot, column and dot to data value) that frames, hit tests, readouts, reducers and the contract all call; a property test MUST show that the x at a column's left edge maps back into that column for 1 to 2,000 points over 40 to 640 columns. (v0.2.0)
+- REQ-CANVAS-030: Glyphs MUST follow the Unicode Standard: braille by its dot numbering (left column dots 1, 2, 3, 7, right 4, 5, 6, 8; bits 0x01, 0x02, 0x04, 0x40 and 0x08, 0x10, 0x20, 0x80 over U+2800); sextants by the BLOCK SEXTANT names of U+1FB00–1FB3B with the four masks they omit drawn as space, `▌`, `▐` and `█`; quadrants by U+2596–259F and `▀ ▄ ▌ ▐ █`; octants by a 256-entry table that `scripts/octants.py` generates from Unicode 16's `UnicodeData.txt` by character name. A cell with no dots MUST be a space. Unit tests MUST pin code points against their Unicode names. (v0.2.0)
+- REQ-CANVAS-040: A colour canvas cell MUST take the colour of the series highest in z-order among its lit dots (REQ-CHART-060). (v0.3.0)
 
 ### 2.3 Charsets (CHAR)
 
@@ -276,7 +285,7 @@ plan's phases, one each (§20).
 - REQ-CHART-040: The `Chart` trait MUST have exactly the methods of the plan's [`Chart` trait](../docs/IMPLEMENTATION_PLAN.md#the-chart-contract) (`set_data`, `append`, `set_options`, `view`, `set_view`, `input`, `frame`, `hit`, `table`), and `frame` MUST take its size from the grid it is given. (v0.3.0)
 - REQ-CHART-050: `Env` MUST carry `paper`, `mono`, the locale pack and the zone table, and nothing else from the host. (v0.3.0)
 - REQ-CHART-060: When two series draw into one cell, the cell MUST take the colour of the series highest in z-order: the later in the series list, unless the view raises a hovered or selected series. (v0.3.0)
-- REQ-OPT-010: Options MUST behave as unicel's REQ-OPT-001 to REQ-OPT-030: a JSON object layered on `META.options`; typed getters falling back on a missing key or wrong type; every key a chart reads MUST have a default in `META.options`. (v0.3.0)
+- REQ-OPT-010: Options MUST be a JSON object layered on the defaults in `META.options`: a key present in the overrides wins and every other default fills in; an empty string or JSON that is not an object MUST count as no options, and only invalid JSON MUST fail; typed getters MUST fall back to the default on a missing key or a wrong type, a list with one wrong element falling back whole; every key a chart reads MUST have a default in `META.options`, and the options MUST record each key read so the contract can check it. (v0.3.0)
 - REQ-OPT-020: `set_options` MUST change a live chart's options and keep its data and view; only a change of chart type makes a new chart. [ADR-120](adr/120-options-change-keeps-the-chart.md) (v0.3.0)
 - REQ-REG-010: Each family's `mod.rs` MUST hold a hand-written `REGISTRY`, and `charts/mod.rs` a `FAMILIES` list behind each family's feature; `registry::make(type, options_json)` MUST return a fresh chart or fail with `there is no chart named "<type>"` or `options are not a JSON object: <message>`. [ADR-125](adr/125-hand-written-registry.md) (v0.3.0)
 - REQ-REG-020: No chart type MUST be named `render`, `demo` or `list` (the registry test checks). (v0.3.0)
@@ -386,7 +395,7 @@ element's `type` names.
 - REQ-EL-080: Without `cols` and `rows`, the cell MUST be `round(0.6 × font-size × devicePixelRatio)` device pixels wide and exactly twice that tall, `cols × rows` the whole cells that fit the content box, and the remainder split evenly as padding. [ADR-103](adr/103-cell-from-font-grid-from-box.md) (v0.3.0)
 - REQ-EL-090: A change of the element's box MUST lay the chart out again within one animation frame, keeping its view in data units; a box of width 0 MUST be ignored. (v0.3.0)
 - REQ-EL-100: An element with no height of its own MUST take its height from `rows`, default 12. (v0.3.0)
-- REQ-EL-110: With `cols` and `rows`, the grid MUST be that size, and `fit` (`width`, `contain`) MUST scale it as unicel's REQ-FIT-001 to REQ-FIT-006 do. (v0.5.0)
+- REQ-EL-110: With `cols` and `rows`, the grid MUST be that size, and `fit` MUST scale its drawing: `width` to the element's content width W (a cell W / cols wide), `contain` to the largest box inside W × H that keeps the cell's 1:2 aspect, centred, acting as `width` when H is 0; any other value MUST act as no fit. (v0.5.0)
 - REQ-EL-120: The element MUST fire `plot-ready` once a chart, after its first frame, and resolve `ready` then; a failed load or first frame MUST fire `plot-error` with the message and keep the element's children. (v0.3.0)
 - REQ-EL-130: The element MUST use light DOM; whatever it holds before its chart's first frame (a server-rendered still) MUST stay until the drawn element replaces it. (v0.3.0)
 - REQ-EL-140: Disconnecting MUST stop drawing and free the chart; a load superseded by a later change or by removal MUST free what it made and draw nothing. (v0.3.0)
@@ -409,7 +418,7 @@ element's `type` names.
 
 ### 9.4 Font (FONT)
 
-- REQ-FONT-010: The bundled font MUST be a subset of Iosevka Fixed Extended 34.9.0 (SIL OFL 1.1), family `glyphplot mono`, covering unicel's ranges plus tier A (the plan's [font](../docs/IMPLEMENTATION_PLAN.md#font) tier A: U+00A0–00BF, U+00D7, U+00F7, U+2007–200A, U+2010–2015, U+2018–201F, U+2026, U+202F, U+2030, U+2032–2033, U+2070–209F, the currency signs, U+2116, U+2122, U+2212, U+221E, U+2248, U+2260, U+2264–2265, Δ Σ Ω μ σ, U+2713, U+2717, U+2605–2606, U+FFFD), every glyph 0.6 em, at most 32 KB, rebuilt only by `mise run build:font`. [ADR-121](adr/121-extend-the-bundled-font.md) (v0.2.0)
+- REQ-FONT-010: The bundled font MUST be a subset of Iosevka Fixed Extended 34.9.0 (SIL OFL 1.1), family `glyphplot mono`, covering U+0020–007E, U+00B0, U+00B7, U+2022, U+2190–21FF, U+2500–25FF, U+2800–28FF, U+1CD00–1CDE5, U+1CEA0–1CEAF and U+1FB00–1FBFF (as Iosevka has them) plus tier A (the plan's [font](../docs/IMPLEMENTATION_PLAN.md#font) tier A: U+00A0–00BF, U+00D7, U+00F7, U+2007–200A, U+2010–2015, U+2018–201F, U+2026, U+202F, U+2030, U+2032–2033, U+2070–209F, the currency signs, U+2116, U+2122, U+2212, U+221E, U+2248, U+2260, U+2264–2265, Δ Σ Ω μ σ, U+2713, U+2717, U+2605–2606, U+FFFD), every glyph 0.6 em, at most 32 KB, built only by `mise run build:font` with the repository's own `scripts/font.py` from Iosevka's upstream release, pinned by SHA-256. [ADR-121](adr/121-extend-the-bundled-font.md) (v0.2.0)
 - REQ-FONT-020: The font SHOULD also cover U+00C0–00FF and U+0100–017F (tier B). (v0.5.0)
 - REQ-FONT-030: `@font-face` MUST load the font from `new URL("../fonts/glyphplot-mono.woff2", import.meta.url)` with `font-display: swap`, and every surface (the `<pre>`, the canvas, the SVG export) MUST put `"glyphplot mono"` first in its font stack. (v0.3.0)
 
@@ -461,7 +470,7 @@ element's `type` names.
 
 Every budget lives in one place, the chart's `META.budget` (with the family
 default), and reaches `mise run size`, the contract and the benches through
-`web/pkg/budgets.json`, as unicel's `Category::budget()` does.
+`web/pkg/budgets.json`.
 
 ### 12.1 Size (SIZE)
 
@@ -517,7 +526,7 @@ default), and reaches `mise run size`, the contract and the benches through
 
 - REQ-CLI-010: The CLI (crate `glyphplot-cli`, binary `glyphplot`) MUST accept `glyphplot <type>`, `render <type>`, `demo <type>`, `list`, `-h` and `-V` with the flags of the plan's [CLI](../docs/IMPLEMENTATION_PLAN.md#the-cli), and reject an unknown flag, a second type and a missing or out-of-range number as usage errors. [ADR-134](adr/134-cli-on-crossterm.md) (v0.8.0)
 - REQ-CLI-020: The CLI MUST exit 0, 2 or 130 as the plan's [CLI](../docs/IMPLEMENTATION_PLAN.md#the-cli) exit table says, with every error on stderr as `glyphplot: <message>`; a data error MUST name the line and column. (v0.8.0)
-- REQ-CLI-030: An unknown type MUST be an error naming up to eight suggestions, as unicel's REQ-CLI-010. (v0.8.0)
+- REQ-CLI-030: An unknown type MUST be an error naming up to eight suggestions: types containing the input first, then types within an edit distance (a swap of neighbours counting one) of a third of the input's length, at least 1. (v0.8.0)
 - REQ-CLI-040: With stdin not a terminal and no `--from`, or `--from -`, the CLI MUST read data from stdin and keys and mouse from the controlling terminal (`/dev/tty`). (v0.8.0)
 - REQ-CLI-050: Rows arriving on stdin while playing MUST be appended at most once a frame, and `--window N` MUST keep only the last N rows. (v0.8.0)
 - REQ-CLI-060: With stdout not a terminal, the CLI MUST read to the end of input and print one frame as text with no escapes; a closed stdout MUST end it with exit 0 and nothing on stderr. (v0.8.0)
@@ -525,7 +534,7 @@ default), and reaches `mise run size`, the contract and the benches through
 - REQ-CLI-080: `--color auto` MUST be `none` when `NO_COLOR` is set and not empty, `truecolor` when `COLORTERM` is `truecolor` or `24bit`, `256` when `TERM` contains `256color`, else `16`. (v0.8.0)
 - REQ-CLI-090: The CLI MUST restore the terminal (alternate screen, cursor, wrapping, raw mode, mouse capture) on every way out: the end, a key, Ctrl+C, SIGTERM, SIGHUP and a panic. (v0.8.0)
 - REQ-CLI-100: `glyphplot demo <type>` MUST say, on the chart's first row or above it, that the data is generated. (v0.8.0)
-- REQ-CLI-110: The CLI MUST take `--glyphs` (`braille` by default, `octants`, `sextants`, `quadrants`, `ascii`) and convert every frame with the vendored `glyphs::convert`, live and piped. (v0.8.0)
+- REQ-CLI-110: The CLI MUST take `--glyphs` (`braille` by default, `octants`, `sextants`, `quadrants`, `ascii`) and convert every frame with the core's `glyphs::convert`, live and piped, keeping each cell's colour: `braille` redraws octants and sextants as braille dots, `sextants` redraws octants, `quadrants` redraws every dot glyph, `ascii` shades dot glyphs by dots lit (` .:-=+*#%@`) and draws box drawing as `-|+`, and `octants` changes nothing. (v0.8.0)
 - REQ-CLI-120: Each frame MUST write only changed runs of cells. (v0.8.0)
 - REQ-TERM-010: `crates/cli/tests/terminal.rs` MUST check, in a pseudo-terminal, the piped plain frame, SGR mouse pan and zoom, a SIGWINCH redraw at the new size, stdin streaming, and the terminal restored after a key, Ctrl+C and SIGTERM. (v0.8.0)
 
@@ -605,9 +614,9 @@ command verifies; real-browser checks are the owner's (REQ-TEST-030).
 
 | Version | Phase | Areas it ships | Acceptance (plan) |
 |---|---|---|---|
-| v0.1.0 | 0 · Toolchain green | ARCH-010, 040, 060, 070; VENDOR-010; BUILD-010–030, 050, 060; LINT-010, 030; CI-010; SIZE-010–040; TEST-010; PKG-040 | `mise run check` exits 0 on an empty family; `mise run size` prints the empty module |
-| v0.2.0 | 1 · Core | GRID, CANVAS, COLOR-010–040, DATA-010–040, 080–090, 110, 130, SCALE-010–030, TICK-010–040, FMT-010–030, TZ-010, I18N-030–040, LAYOUT-010–030, TEXT, FIX-010, REF-010, PROP-010, FONT-010, VENDOR-020, BUILD-070, LINT-040, SIZE-060 | `mise run test:rust`: reference fixtures 0 differ; properties pass; `fixtures` regenerates bitwise |
-| v0.3.0 | 2 · Line end to end | the `line` type; VIEW-010–050; INPUT; HIT-010–020; OVERLAY; EVENT-010–030; KEY; TOUCH; CHART; OPT; REG; CONTRACT-010–020; SNAP; WASM; MANIFEST; LOAD; EL (most); MOUNT; JS; RENDER-010–030, 050; FONT-030; THEME-010–050, 070; MONO-010, 040; A11Y-010–070; PERF-010–020; MEM; DATA-050–070, 120; STREAM-060; SAMPLE-010–030; I18N-010–020, 050; FMT-060; LAYOUT-040, 070; CHAR; TEST-020–040; E2E-010–040, 070; BUILD-040, 080; LINT-020; ARCH-020–050 | `mise run check`; `mise run test:site` (interaction, element, resize, axe) |
+| v0.1.0 | 0 · Toolchain green | ARCH-010, 040, 060, 070; INDEP-010–020; BUILD-010–030, 050, 060; LINT-010, 030; CI-010; SIZE-010–040; TEST-010; PKG-040 | `mise run check` exits 0 on an empty family; `mise run size` prints the empty module |
+| v0.2.0 | 1 · Core | GRID, CANVAS, COLOR-010–040, DATA-010–040, 080–090, 110, 130, SCALE-010–030, TICK-010–040, FMT-010–030, TZ-010, I18N-030–040, LAYOUT-010–030, TEXT, FIX-010, REF-010, PROP-010, FONT-010, BUILD-070, LINT-040, SIZE-060 | `mise run test:rust`: reference fixtures 0 differ; properties pass; `fixtures` regenerates bitwise |
+| v0.3.0 | 2 · Line end to end | the `line` type; VIEW-010–050; INPUT; HIT-010–020; OVERLAY; EVENT-010–030; KEY; TOUCH; CHART; OPT; REG; CONTRACT-010–020; SNAP; WASM; MANIFEST; LOAD; EL (most); MOUNT; JS; RENDER-010–030, 050; FONT-030; THEME-010–050, 070; MONO-010, 040; A11Y-010–070; PERF-010–020; MEM; DATA-050–070, 120; STREAM-060; SAMPLE-010–030; I18N-010–020, 050; FMT-060; CANVAS-040; LAYOUT-040, 070; CHAR; TEST-020–040; E2E-010–040, 070; BUILD-040, 080; LINT-020; ARCH-020–050 | `mise run check`; `mise run test:site` (interaction, element, resize, axe) |
 | v0.4.0 | 3 · Contract and budgets | CONTRACT-030, 050, 060; PERF-030–060, 080; SIZE-050; BENCH; CI-020; BUILD-090 | `cargo test --profile contract --test contract --test budgets`; `mise run bench`; `mise run signoff` on the branch |
 | v0.5.0 | 4 · Candles, bar, sparkline | CANDLE-010–050; BAR-010–020; SPARK-010; SCALE-040–060; TICK-050–070; FMT-040–050; TZ-020–030; LAYOUT-050–060; AXIS; ANNOT; LINK; EL-030, 050, 110; EVENT-010 (`plot-brush`, `plot-legend`); SAMPLE-040, 060; DATA-100; THEME-060; MONO-020–030; RENDER-040; FONT-020; FIX-020 | contract and snapshots for the three types; the owner's candlestick on the checklist page |
 | v0.6.0 | 5 · Streaming | STREAM-010–050, 070; VIEW-060; CANDLE-060; CONTRACT-040; DATA-140–150; A11Y-080–100; PERF-070; E2E-050; EVENT-010 (`plot-data`) | `streaming.spec.ts`; `bench:web` streaming row; the owner's one-line test on a phone |

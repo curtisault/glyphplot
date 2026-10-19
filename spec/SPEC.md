@@ -138,7 +138,8 @@ one is marked superseded. A number says how it was measured, or is marked
 ### 1.2 Non-goals
 
 - A React wrapper (typings instead), charts computed in a worker, charts that
-  generate their own data outside a labelled demo mode, hosted CI. The plan
+  generate their own data outside a labelled demo mode, hosted CI, and any
+  code shared with unicel (ADR-013). The plan
   and the ADRs say why.
 
 ### 1.3 State of delivery
@@ -181,7 +182,7 @@ Nothing is built.
 
 Nothing is built.
 
-### 3.5 Vendored code
+### 3.5 Independence from unicel
 
 Nothing is built.
 
@@ -442,6 +443,7 @@ when the owner accepts it.
 | [ADR-010](adr/010-unicels-spec-format.md) | unicel's spec format | 2026-10-18 |
 | [ADR-011](adr/011-mit-licence.md) | MIT licence | 2026-10-18 |
 | [ADR-012](adr/012-no-ai-attribution.md) | No AI attribution | 2026-10-18 |
+| [ADR-013](adr/013-independent-of-unicel.md) | Independent of unicel | 2026-10-18 |
 
 ---
 

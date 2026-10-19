@@ -27,8 +27,10 @@ glyphplot takes unicel's architecture whole:
 
 ## Consequences
 
-- unicel's code is the reference for every layer: the Player, the manifest,
-  the loader, the atlas renderer, the contract test, the signoff script.
+- unicel's design is prior art for every layer (the Player, the manifest,
+  the loader, the renderer, the contract test, the signoff script); its code
+  is never copied, ported or depended on ([ADR-013](013-independent-of-unicel.md)).
+  glyphplot writes each layer itself.
 - The decisions unicel made inside that architecture (abort on panic, a
   hand-written registry, the bundled subset font) are not inherited
   automatically; each is re-decided for glyphplot as a Proposed ADR from 100.

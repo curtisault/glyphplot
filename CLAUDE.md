@@ -23,7 +23,7 @@ Charts are written in Rust, compiled to WebAssembly one module per chart type,
 played in the browser by a `<glyph-plot>` custom element over a small
 TypeScript shell, and in the terminal by a CLI. Every chart draws data the page
 or the terminal gives it. It is the sibling of unicel (`../animate-unicode`)
-and takes its architecture whole (ADR-003).
+and follows its architecture (ADR-003), sharing no code with it (ADR-013).
 
 **Status: nothing is built.** Discovery, the plan and the spec are written; the
 next session builds Phase 0.
@@ -38,6 +38,15 @@ next session builds Phase 0.
 | `crates/cli` | The terminal (from its phase) |
 | `web/` | The TypeScript shell and the `<glyph-plot>` element; the npm package (from Phase 3) |
 | `site/` | The Elm site (from its phase) |
+
+## Independent of unicel
+
+- glyphplot is a separate project from unicel (`../animate-unicode`). Never
+  copy, port, vendor or generate anything from unicel's repository, and never
+  depend on it or read from it in a build, script or task (ADR-013,
+  REQ-INDEP-010). Write glyphplot's own code, from the Unicode Standard,
+  upstream releases and its own design.
+- unicel may be read and cited as prior art for design, as any library may.
 
 ## Commands
 

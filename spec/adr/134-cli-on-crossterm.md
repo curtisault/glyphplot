@@ -8,7 +8,7 @@ The CLI plays charts in the terminal with mouse and keys, reads data from
 files and pipes, and prints frames when piped. unicel's CLI is built on
 crossterm. `discovery/surfaces.md` (decision 3) weighed:
 
-- **(a) crossterm**, after unicel's CLI, drawing glyphplot's own grid.
+- **(a) crossterm**, drawing glyphplot's own grid with its own terminal code (unicel's CLI, also on crossterm, is prior art).
 - **(b) ratatui's `Chart` widget.** It takes data as `&[(f64, f64)]` pairs,
   generates no ticks, draws every segment and has no hit testing
   (`ratatui-widgets/src/chart.rs`, code read).
@@ -27,14 +27,15 @@ each; crates by `cargo tree -e normal`):
 
 `discovery/charts.md` timed ratatui's `Chart` at 325.2 ms min, 347.1 ms median
 for 1M points of noise at 320 × 120, against 3.54 / 4.18 ms for a reduction
-per dot column (native release, 3 × 5 runs). unicel's CLI already restores the
-terminal on every exit, writes changed runs only, falls back across glyph sets
-and has pty tests.
+per dot column (native release, 3 × 5 runs). unicel's CLI shows the behaviour to
+match (restoring the terminal on every exit, writing changed runs only,
+falling back across glyph sets, pty tests); glyphplot writes it anew
+([ADR-013](013-independent-of-unicel.md)).
 
 ## Decision
 
 - The CLI is crate `glyphplot-cli`, binary `glyphplot`, built on crossterm
-  after unicel's CLI, with `glyphplot <type>`, `render`, `demo` and `list`
+  with its own terminal code, with `glyphplot <type>`, `render`, `demo` and `list`
   (REQ-CLI-010).
 - The crates are `glyphplot`, `glyphplot-cli`, `glyphplot-wasm`
   (`publish = false`) and the packs `glyphplot-<domain>` (REQ-PKG-040).

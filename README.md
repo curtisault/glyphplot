@@ -22,8 +22,9 @@ yet, and nothing is published. Discovery, the implementation plan and the
 specification are written; the next session builds Phase 0.
 
 glyphplot is the sibling of [unicel](../animate-unicode) (animated Unicode
-art) and takes its architecture whole; unicel follows
-[ascii.rest](https://ascii.rest) (MIT, @bas3line).
+art) and follows its architecture, but it is a separate, independent
+project: it shares no code with unicel and depends on nothing in its
+repository.
 
 ## Where things are
 
