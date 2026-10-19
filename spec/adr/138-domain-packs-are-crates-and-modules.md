@@ -6,7 +6,7 @@ Status: Proposed (2026-10-18)
 
 Domains need adapters and arithmetic that charts do not: counter rates,
 histogram quantiles, OHLCV aggregation, indicators, planet positions. The
-brief forbids a pack from bloating a chart module, and the CLI needs the same
+owner forbids a pack from bloating a chart module, and the CLI needs the same
 code as the browser. `discovery/domains.md` weighed:
 
 - **(a) Cargo features of the chart modules.**

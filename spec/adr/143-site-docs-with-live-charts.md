@@ -4,7 +4,7 @@ Status: Accepted (2026-10-18), by the owner (open question 6 of the plan)
 
 ## Context
 
-The brief's open question 6: the Elm site as a gallery of examples, as
+Open question 6 of the plan, which the owner put: the Elm site as a gallery of examples, as
 unicel's is, documentation with live charts, or both. unicel's site is a
 gallery of 207 art pieces, each played alone. A chart library's reader comes
 to put a chart on a page with their own data, and needs the data contract, the

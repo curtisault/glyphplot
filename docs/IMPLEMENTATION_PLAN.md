@@ -141,7 +141,7 @@ accepts them, and ADR-100 is rejected (ADR-013).
 | Property tests | proptest, lean | Seeded replay; 4.7 s clean dev build | [130](../spec/adr/130-proptest.md) |
 | Session gaps | An index time scale | No calendar data needed | [131](../spec/adr/131-index-time-scale-for-session-gaps.md) |
 | Semantics | `role="figure"`, a summary on `role="img"`, a slider cursor, a hidden table ≤ 500 rows | 500 rows build in 6 ms, 10,000 in 523 ms | [132](../spec/adr/132-figure-slider-and-hidden-table.md) |
-| Size gate | 350 KB gzipped a module, warning at 175 KB (the owner's number) | Almost 7× today's full module; about 0.9 s to a first frame on the brief's 4G (interpolated) | [133](../spec/adr/133-a-350-kb-module-gate.md) |
+| Size gate | 350 KB gzipped a module, warning at 175 KB (the owner's number) | Almost 7× today's full module; about 0.9 s to a first frame on the 170 ms 4G profile (interpolated) | [133](../spec/adr/133-a-350-kb-module-gate.md) |
 | CLI | crossterm, with its own terminal code | 404,800 B against ratatui's 553,968 B; ratatui's `Chart` has no ticks, downsampling or hit tests | [134](../spec/adr/134-cli-on-crossterm.md) |
 | Exports | txt, ansi, svg in Rust from the start | Byte-identical element and CLI output | [135](../spec/adr/135-exports-in-rust.md) |
 | The site's market | Synthetic, labelled; Wikimedia edits a second as a real feed | No exchange's terms allow display to third parties | [136](../spec/adr/136-the-sites-market-demo.md) |
@@ -365,7 +365,7 @@ testing.md, with the milestone each rule lands in.
 The contract reports every failure in one run, prints a per-chart table with
 `--nocapture`, and takes `CHART=<type>[,…]` (REQ-CONTRACT-020). A
 `contract-selftest` feature registers three broken charts the contract must
-reject (REQ-CONTRACT-060). The milestone column follows the brief's order:
+reject (REQ-CONTRACT-060). The milestone column follows the owner's phase order:
 the line chart ships with the rules a first chart needs, and Phase 3
 completes the matrix. testing.md estimates rules 3–29 at about 1 s a chart
 on one thread and rule 30 at about 2 s **(unverified: no chart exists)**.
@@ -967,7 +967,8 @@ and its acceptance: commands an agent runs headless, then the manual checks
 it hands the owner. When a phase is done, write "Done <date>" under its
 heading with what differed from the tasks, as unicel's plan does.
 
-The brief's order is kept with one change discovery argued for: the contract's
+The owner's phase order (`discovery/README.md`, "The briefs") is kept with
+one change discovery argued for: the contract's
 first rules (shape, no panic, charset, colours, first frame, determinism,
 out of order, snapshots) ship with the line chart in Phase 2, because
 testing.md's matrix is what keeps a first chart honest; Phase 3 completes the
@@ -1405,7 +1406,7 @@ The related ADRs are Accepted.
 
 1. **The size threshold a module.** 350 KB gzipped, building for fast
    connections and performant sites; a warning at 175 KB; first frame gated
-   at 1.0 s on the brief's 4G only, slow 4G reported (ADR-133, REQ-SIZE-010,
+   at 1.0 s on the 170 ms 4G profile only, slow 4G reported (ADR-133, REQ-SIZE-010,
    REQ-PERF-080).
 2. **Depend on a published unicel crate or vendor the core.** Neither:
    glyphplot copies, ports and vendors nothing from unicel and depends on
@@ -1598,7 +1599,7 @@ pages (33.8 MB).
 Headless Chromium 156, cache disabled, median of 7 cold loads, ms from
 navigation start to the end of the first 80 × 24 frame of 1,000 points.
 
-| Module | Transfer B | Brief 4G (170 ms, 9 Mbps) | Lighthouse slow 4G (562.5 ms, 1.44 Mbps, CPU 4×) | No throttling |
+| Module | Transfer B | 4G (170 ms, 9 Mbps) | Lighthouse slow 4G (562.5 ms, 1.44 Mbps, CPU 4×) | No throttling |
 |---|---|---|---|---|
 | step 1 (12.4 KB) | 15,805 | 596 / 600 | 1,867 / 1,876 | 50 / 55 |
 | step 6 (52.6 KB) | 57,102 | 632 / 635 | 2,073 / 2,082 | 53 / 54 |
@@ -1607,7 +1608,7 @@ navigation start to the end of the first 80 × 24 frame of 1,000 points.
 | step 6 padded to 1,000 KB | 1,028,813 | 1,479 / 1,482 | 7,229 / 7,238 | 51 / 55 |
 | step 6 with preload hints | 57,102 | 441 / 443 | 1,484 / 1,500 | 31 / 32 |
 
-Each further 100 KB costs about 87 ms on the brief's profile and 530 ms on
+Each further 100 KB costs about 87 ms on the 170 ms 4G profile and 530 ms on
 Lighthouse's; compile, instantiate and the first frame take 2–4 ms after the
 wasm arrives (7–15 ms at CPU 4×).
 

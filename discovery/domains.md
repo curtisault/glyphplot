@@ -1,6 +1,6 @@
 # Domain packs
 
-Discovery agent 7 of 10. Topic: PROMPT.md, "### 7. Domain packs". Written 2026-10-18.
+Discovery agent 7 of 10. Topic: `README.md`, "The briefs", topic 7. Written 2026-10-18.
 
 ## Summary
 
@@ -14,7 +14,7 @@ Discovery agent 7 of 10. Topic: PROMPT.md, "### 7. Domain packs". Written 2026-1
 
 ## Scope and method
 
-- Read: PROMPT.md; unicel's `spec/ROADMAP.md` §6.2 (the data shapes, REQ-DATA-004); `crates/unicel/src/pieces/data/{candlesticks,bar_chart,sparkline}.rs`; the headers of every piece in `crates/unicel/src/pieces/space/`.
+- Read: the brief (`README.md`, "The briefs", topic 7); unicel's `spec/ROADMAP.md` §6.2 (the data shapes, REQ-DATA-004); `crates/unicel/src/pieces/data/{candlesticks,bar_chart,sparkline}.rs`; the headers of every piece in `crates/unicel/src/pieces/space/`.
 - Read the terms of each data source on its publisher's own page, quoted below with the date the page states. Checked CORS headers with `curl -H "Origin: https://example.org"`, because a live example on the site can only read a feed that sends `access-control-allow-origin`.
 - Downloaded a sample of each candidate dataset into the session scratchpad, not the repo. Recorded its size, row count and SHA-256 (`shasum -a 256`). The repo stores no data.
 - Built throwaway probes under `discovery/bench/domains/` (README there): a Keplerian-elements check against Horizons, and a `no_std` wasm module for planet positions and indicators, measured for size and speed. Machine: Apple M5 Pro, Rust 1.97, Node 26.5.1.
@@ -397,7 +397,7 @@ Datasets:
 
 ## Sources
 
-- PROMPT.md, "### 7. Domain packs" and "Decisions already made".
+- The brief (`README.md`, "The briefs", topic 7) and the owner's decisions (`spec/adr/001` to `012`).
 - `../animate-unicode/spec/ROADMAP.md` §6.2, REQ-DATA-004 (unicel's data shapes).
 - `../animate-unicode/crates/unicel/src/pieces/data/candlesticks.rs` (seeded market, Mulberry32, after ascii.rest), `sparkline.rs`, `bar_chart.rs`.
 - `../animate-unicode/crates/unicel/src/pieces/space/solar_system.rs` (Kepler's equation by Newton's method, line 70), `saptarishi.rs`, and the other space pieces' headers.

@@ -12,7 +12,7 @@
 
 ## Scope and method
 
-Read: the owner's brief (`PROMPT.md`, §10). From unicel (`../animate-unicode`): `spec/SPEC.md` §3.4, §7, §8, §10.6, §10.10 and the REQ-MONO-* requirements; `spec/ROADMAP.md` §7; ADRs 016, 026, 118, 119 and 121; `crates/unicel/src/{palette,pixels,meta,mono}.rs`; `web/src/{element,mount}.ts`; `site/e2e/a11y.spec.ts`; `site/src/site.css`; the palettes of `crates/unicel/src/pieces/data/{candlesticks,bar_chart,sparkline}.rs`. Web sources are listed under Sources and were read on 2026-10-18.
+Read: the owner's brief (`README.md`, "The briefs", topic 10). From unicel (`../animate-unicode`): `spec/SPEC.md` §3.4, §7, §8, §10.6, §10.10 and the REQ-MONO-* requirements; `spec/ROADMAP.md` §7; ADRs 016, 026, 118, 119 and 121; `crates/unicel/src/{palette,pixels,meta,mono}.rs`; `web/src/{element,mount}.ts`; `site/e2e/a11y.spec.ts`; `site/src/site.css`; the palettes of `crates/unicel/src/pieces/data/{candlesticks,bar_chart,sparkline}.rs`. Web sources are listed under Sources and were read on 2026-10-18.
 
 Built: the bench at `discovery/bench/a11y-theming/`, which is throwaway, with its README. It has Python scripts for contrast and colour-vision-deficiency (CVD) separation, a Rust tool for cell widths, a wasm build that weighs ICU4X, a Node script for `Intl`, and a Playwright run for the cost of a hidden table.
 

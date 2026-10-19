@@ -6,7 +6,7 @@ Status: Accepted (2026-10-18), by the owner (open question 7 of the plan)
 
 ADR-005 makes each chart type its own Cargo feature and wasm module, and lets
 a chart that is another chart with a mode share its module.
-`discovery/charts.md` counts about 45 chart names in the brief's list, many
+`discovery/charts.md` counts about 45 chart names in the owner's list (`discovery/README.md`, "The briefs", topic 1), many
 differing only in their marks (step and line, histogram and bar, OHLC and
 candle). Its options are a module a chart name (about 45 modules), a module a
 family with modes inside (about 18, six at the first tier), or a few large

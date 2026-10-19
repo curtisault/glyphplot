@@ -39,7 +39,7 @@
 
 ## Scope and method
 
-What I read: `PROMPT.md`; unicel's `spec/SPEC.md` §3, §6, §7 and §8;
+What I read: the brief (`README.md`, "The briefs", topic 4); unicel's `spec/SPEC.md` §3, §6, §7 and §8;
 ADRs 003, 004, 014, 016, 026, 027, 118, 120 and 121;
 `crates/unicel/src/{grid,subcell,palette,pixels,meta,util,bluenoise,glyphs,mono,lib}.rs`;
 `crates/unicel/Cargo.toml`, `crates/wasm/{Cargo.toml,src/lib.rs}`,
@@ -664,7 +664,7 @@ micro). Recommendation: A in v0.1.0, B in v0.2.0.
 
 ## Sources
 
-- `PROMPT.md` §4, and the decisions table.
+- The brief (`README.md`, "The briefs", topic 4) and the owner's decisions (`spec/adr/001` to `012`).
 - unicel: `spec/SPEC.md` §3.1–3.5 (REQ-GRID, REQ-CANVAS, REQ-PAL, REQ-PIX),
   §6 (REQ-WASM), §7 (REQ-EL, REQ-FIT, REQ-MONO-004), §8 (REQ-MOUNT-050–110,
   REQ-PAINT-001, REQ-BLOCKS-001, REQ-FONT-001–030), §1.3; ADRs 003, 004,

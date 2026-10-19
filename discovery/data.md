@@ -30,7 +30,7 @@ gzip.
 
 ## Scope and method
 
-This report covers the topic's bullets in PROMPT.md §2: how a page and the
+This report covers the bullets of its brief (README.md, "The briefs", topic 2): how a page and the
 CLI give a chart its data, the data contract and its types, the domain shapes
 including celestial, downsampling, and the recommended API on each surface.
 
@@ -755,7 +755,7 @@ minimum of minimums, then the median of medians. Commands are those in
 
 ## Requirements to propose
 
-Milestones assume the phase order in PROMPT.md: v0.1.0 is the core and the
+Milestones assume the owner's phase order (README.md, "The briefs"): v0.1.0 is the core and the
 line chart end to end through the element, v0.2.0 adds candlestick, bar,
 sparkline and streaming, v0.3.0 the site and the CLI, and v0.4.0 the next tier
 and the domain packs. The synthesis renumbers if the phases differ.
@@ -922,7 +922,7 @@ running the release module.
 
 ## Open questions for the owner
 
-1. **Does the library compute celestial positions?** (PROMPT open question 5.)
+1. **Does the library compute celestial positions?** (the owner's open question 5, README.md, "The briefs".)
    Options: compute in the sky chart; expect them as data; expect them and
    ship an astronomy pack that computes planets from JPL's Keplerian
    elements. Recommendation: the third. It is dot-accurate at any terminal

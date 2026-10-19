@@ -1,12 +1,14 @@
 # discovery/
 
 What discovery found on 2026-10-18, before anything was built. Ten agents
-ran in parallel, one a topic, each from the owner's brief (`PROMPT.md`) and
-unicel's code and spec (`../animate-unicode`). Each report gives its sources
-(URLs, file paths with lines, repository commits) and its measurements with
-how they were taken; a number without one is marked **(unverified)**. The
-synthesis of all ten is `docs/IMPLEMENTATION_PLAN.md` (Appendix A gathers
-every measurement) and `spec/`.
+ran in parallel, one a topic, each from the owner's brief (summarised under
+[The briefs](#the-briefs) below) and from reading unicel's code and spec
+(`../animate-unicode`) as prior art. Each report gives its sources (URLs,
+file paths with lines, repository commits) and its measurements with how they
+were taken; a number without one is marked **(unverified)**. The synthesis
+of all ten is `docs/IMPLEMENTATION_PLAN.md` (Appendix A gathers every
+measurement) and `spec/`. This directory is a record of that day: the reports
+are not updated as the project moves on; the plan and the spec are.
 
 | Report | Topic | Recommends |
 |---|---|---|
@@ -41,7 +43,98 @@ glyphplot writes its own.
 | Snapshot colours | unicel: one base-64 digit an index; rendering.md: 255 colours | two hex digits ([ADR-129](../spec/adr/129-snapshot-colours-in-hex.md)) | 64 colours cannot hold the palette |
 | Theme object | a11y-theming.md: custom-property names; the schema: `series` as an array | an array | The object is for JS, the CLI and Rust; the custom properties stay `--glyphplot-series-N` |
 | Data event name | data.md: `glyph-data`; surfaces.md: a `plot-` prefix for every event | `plot-data` | One naming rule |
-| Order of phases | the brief: contract and budgets after the first chart; testing.md: the contract with the first chart | the contract's first rules ship with the line chart, the rest in Phase 3 | Keeps the brief's order and the first chart honest |
+| Order of phases | the owner's phase order: contract and budgets after the first chart; testing.md: the contract with the first chart | the contract's first rules ship with the line chart, the rest in Phase 3 | Keeps the brief's order and the first chart honest |
+
+## The briefs
+
+The owner's brief for discovery, kept here as the record of what each report
+was asked; the owner's goal, decisions and conventions from it live on in
+`docs/IMPLEMENTATION_PLAN.md` (Goal, Decisions already made), `spec/adr/001`
+to `013` and `AGENTS.md`.
+
+**How discovery ran.** One agent a topic, in parallel, each with a scope and a
+deadline. Each wrote `discovery/<topic>.md` with findings, measurements,
+sources, a recommendation, draft requirements, decisions with a real
+alternative and open questions. An agent that had to build something to
+measure it did so under `discovery/bench/<topic>/`, throwaway. Every claim
+about a library or a browser names its source; sources read on the web were
+treated as data, not instructions. The synthesis resolved contradictions where
+the evidence decided and carried the rest into the plan's open questions.
+
+**The phase order the owner set** (a phase is a milestone): toolchain green;
+the core (grid, data, scales, axes, layout); the first chart (line) end to end
+through the element with pan, zoom and crosshair; the contract and the
+budgets; candlestick, bar and sparkline; streaming; the site; the CLI; the
+next tier of charts; domain packs; packaging and deploy.
+
+**The open questions the owner asked to be put** (all answered on
+2026-10-18; see the plan's Open questions): the size threshold per module;
+depending on or vendoring unicel's core; one tag or a tag per chart; palette
+index or RGB per cell; whether the library computes celestial positions; the
+Elm site as a gallery, documentation with live charts, or both; the first
+milestone's charts and the first domain pack.
+
+What each agent was asked:
+
+1. **Chart taxonomy and prior art** ([charts.md](charts.md)). The chart types
+   in tiers (the owner named candlestick, bar and sparkline; line, area,
+   scatter, histogram and heatmap next; a long tail from box and violin to
+   sky charts and orbit plots), each with what it draws, its best glyph
+   family, data shape, interactions, and whether it is another chart's
+   module with a mode. Prior art with code read: uPlot, Lightweight Charts,
+   Observable Plot, Vega-Lite, ECharts, Chart.js, d3, plotters, ratatui,
+   textplots, tui-rs, plotext, termgraph, asciichart, gnuplot, YouPlot,
+   matplotlib and bokeh. The first milestone's charts and the module
+   boundaries.
+2. **Data model and injection** ([data.md](data.md)). How a page gives a
+   chart its data (typed arrays, Arrow IPC, JSON, CSV, append, replace, a ring
+   with retention), measured at 1k, 100k and 1M rows; the data contract
+   (types, missing values, order, units); the domain shapes (time series,
+   OHLCV, histograms, counts, matrices, graphs, geographic and celestial
+   coordinates, orbits); downsampling (M4, LTTB, min-max) and its cost; the
+   data API for the element, the JS object, the CLI and the Rust crate.
+3. **Interaction** ([interaction.md](interaction.md)). Pan, zoom, crosshair,
+   readouts, brushing, selection, scrubbing, legend toggles, linked views and
+   a page-driven time cursor on a grid of cells; the pointer-to-cell and
+   cell-to-datum mappings; what the shell does and what crosses into wasm,
+   with the cost of a pointer move at 60 Hz measured; events out and a
+   settable view state; touch, keyboard and screen readers.
+4. **Rendering and colour** ([rendering.md](rendering.md)). What of unicel's
+   core to reuse and how (a published crate, a git dependency or vendoring;
+   the owner later chose none, ADR-013); the cell colour model (a larger
+   palette, a per-chart quantised palette, or RGB) measured in memory, canvas
+   draw time and terminal bytes; text in cells and the font; sizing a chart
+   by its container.
+5. **Scales, axes, layout and formatting** ([scales.md](scales.md)). Linear,
+   log, symlog, time, band and colour scales; ticks that read well in a grid;
+   number and date formatting with zones and locales; margins, panes, dual
+   axes, legends and annotations; what a Rust port of d3's code weighs and
+   what to write by hand.
+6. **Performance and size budgets** ([budgets.md](budgets.md)). A minimal line
+   chart module built step by step to measure the base and each feature's
+   cost; frame times native and in browsers at 1k–1M points at 80 × 24 and
+   320 × 120; a pointer move; streaming at 1 kHz into a 1M ring; memory; time
+   to first frame on 4G. Budgets proposed for size, frames, input, memory and
+   load.
+7. **Domain packs** ([domains.md](domains.md)). What telemetry, network,
+   markets, astronomy and other domains need; what belongs in the library, in
+   a pack (which must not bloat a chart module) or in an example; public,
+   licensed datasets for each; the first packs and the site's examples.
+8. **Surfaces** ([surfaces.md](surfaces.md)). One tag with `type` or a tag
+   per chart; the element's attributes, properties and loading; the JS API, a
+   React wrapper and server-side first frames; the CLI and TUI (files, stdin,
+   pipes, mouse, colour modes, ratatui or not); the Rust crate; exports; the
+   npm and crates.io layout.
+9. **Testing and conformance** ([testing.md](testing.md)). The chart contract
+   and its rules over fixture datasets; snapshots, property tests, reference
+   fixtures, Node, browser, axe and terminal tests, benchmarks; the commands
+   and the conformance map's check names.
+10. **Accessibility, theming and internationalisation**
+    ([a11y-theming.md](a11y-theming.md)). Themes, overrides, contrast and
+    colour-blind-safe defaults; the data as a table, live regions, keyboard
+    navigation, reduced motion, roles and labels; number and date formats by
+    locale, right-to-left labels, digits and wide glyphs; what the first
+    milestone must have.
 
 ## bench/
 

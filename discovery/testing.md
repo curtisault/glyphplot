@@ -1,6 +1,6 @@
 # Testing and conformance
 
-Discovery agent 9 of 10, 2026-10-18. Brief: `PROMPT.md`, "### 9. Testing and conformance".
+Discovery agent 9 of 10, 2026-10-18. Brief: `README.md`, "The briefs", topic 9.
 
 ## Summary
 
@@ -17,7 +17,7 @@ Discovery agent 9 of 10, 2026-10-18. Brief: `PROMPT.md`, "### 9. Testing and con
 
 Read in `../animate-unicode`: `crates/unicel/tests/contract.rs` (all 534 lines), the snapshot tree `crates/unicel/tests/snapshots/` (207 files, 7.5 MB, `du -sh`), `crates/unicel/tests/fixtures/`, `crates/unicel/src/mono.rs`, `crates/unicel/examples/bench.rs`, `web/test/load.mjs`, `web/test/snapshot.test.mjs`, the test names in `web/test/player.test.mjs`, `site/e2e/a11y.spec.ts`, `site/e2e/pieces.spec.ts`, the test names in `site/e2e/shell.spec.ts`, `site/playwright.config.ts`, `crates/cli/tests/terminal.rs` (the harness and its five tests), `scripts/signoff.sh`, `scripts/snap.sh`, `mise.toml`, `spec/SPEC.md` §4.4, §11 and §12, `spec/conformance.md` (its preamble, summary table, gaps and the §4.4 rows), ADR-021, ADR-110 and ADR-111, and the plan's piece-contract table (`docs/IMPLEMENTATION_PLAN.md:171-205`).
 
-Read in this repository: `PROMPT.md`. The other discovery reports, where this report's rules depend on theirs: `budgets.md` (the budget table), `interaction.md` (the view state and the input reducer), `charts.md` (module families, REQ-CHART-040 and REQ-CHART-070), `rendering.md` (the 255-entry palette, minimum sizes, REQ-LAYOUT-030), `data.md` (the ring), `scales.md` (REQ-TICK-010) and `domains.md` (licensed datasets).
+Read in this repository: the brief (`README.md`, "The briefs"). The other discovery reports, where this report's rules depend on theirs: `budgets.md` (the budget table), `interaction.md` (the view state and the input reducer), `charts.md` (module families, REQ-CHART-040 and REQ-CHART-070), `rendering.md` (the 255-entry palette, minimum sizes, REQ-LAYOUT-030), `data.md` (the ring), `scales.md` (REQ-TICK-010) and `domains.md` (licensed datasets).
 
 Built under `discovery/bench/testing/` (throwaway; its `README.md` reruns everything):
 

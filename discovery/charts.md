@@ -25,7 +25,7 @@ row-quantised prices do not.
 
 ## Scope and method
 
-- Read the owner's brief (`PROMPT.md`), unicel's three data pieces
+- Read the owner's brief (`README.md`, "The briefs", topic 1), unicel's three data pieces
   (`../animate-unicode/crates/unicel/src/pieces/data/{candlesticks,bar_chart,sparkline}.rs`),
   its sub-cell canvases (`crates/unicel/src/subcell.rs`), grid
   (`crates/unicel/src/grid.rs`), piece contract (`crates/unicel/src/piece.rs`)

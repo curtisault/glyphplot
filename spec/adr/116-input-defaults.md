@@ -5,7 +5,7 @@ Status: Accepted (2026-10-18), by the owner (open question 11 of the plan)
 ## Context
 
 The owner's test is a reader scrubbing a live candlestick with a finger
-(PROMPT.md). Libraries disagree on defaults, read in code by
+(`docs/IMPLEMENTATION_PLAN.md`, Goal). Libraries disagree on defaults, read in code by
 `discovery/interaction.md`:
 
 - **Mouse drag**: pans in Lightweight Charts; selects a range and zooms to it

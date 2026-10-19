@@ -4,7 +4,7 @@ Status: Accepted (2026-10-18), by the owner (open question 5 of the plan)
 
 ## Context
 
-The brief's open question 5: does the library compute celestial positions or
+Open question 5 of the plan, which the owner put: does the library compute celestial positions or
 expect them? Stars come from catalogues as data; planets can be computed.
 `discovery/data.md` and `discovery/domains.md` weighed:
 

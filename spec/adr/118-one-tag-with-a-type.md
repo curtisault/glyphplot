@@ -4,7 +4,7 @@ Status: Accepted (2026-10-18), by the owner (open question 3 of the plan)
 
 ## Context
 
-The brief's open question 3: `<glyph-plot type="candles">` or a tag per chart
+Open question 3 of the plan, which the owner put: `<glyph-plot type="candles">` or a tag per chart
 such as `<glyph-candles>`. `discovery/surfaces.md` weighed:
 
 - **(a) One tag with a `type` attribute**, plus `define` aliases, as unicel's

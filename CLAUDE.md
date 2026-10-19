@@ -77,6 +77,10 @@ lands, `mise install` is the only one that does anything.
   the manual checks over as a list.
 - **Numbers:** a measurement says how it was taken; anything else is marked
   **(unverified)**.
+- **Writing:** plain sentences, each a fact or a rule; measurements with how
+  they were taken; sources named (a URL, a file path, a measurement); no
+  filler. Requirement IDs cited from the plan into the roadmap and back, and
+  every `REQ-*` testable as written.
 
 ## Version control
 

@@ -5,7 +5,7 @@ Status: Accepted (2026-10-18), by the owner (open question 13 of the plan)
 ## Context
 
 The owner's one-line test is a live candlestick chart of a market feed in a
-`<glyph-plot>` tag (PROMPT.md). The site is public, so a feed's terms decide
+`<glyph-plot>` tag (`docs/IMPLEMENTATION_PLAN.md`, Goal). The site is public, so a feed's terms decide
 whether it may be shown. `discovery/domains.md` (Market data licences) read
 each publisher's terms on its own page:
 

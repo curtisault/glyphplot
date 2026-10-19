@@ -1,6 +1,6 @@
 # Performance and size budgets
 
-Discovery agent 6 of 10, 2026-10-18. Brief: `PROMPT.md`, "### 6. Performance and size budgets".
+Discovery agent 6 of 10, 2026-10-18. Brief: `README.md`, "The briefs", topic 6.
 
 ## Summary
 

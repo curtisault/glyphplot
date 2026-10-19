@@ -19,7 +19,7 @@ First frame, from budgets.md (Load; headless Chromium 156, median of 7 cold
 loads, from navigation start; modules padded with a custom section to reach
 each size):
 
-| Module, gzip | Brief 4G: 170 ms, 9 Mbps | Lighthouse slow 4G: 562.5 ms, 1.44 Mbps, CPU 4× |
+| Module, gzip | 4G: 170 ms, 9 Mbps | Lighthouse slow 4G: 562.5 ms, 1.44 Mbps, CPU 4× |
 |---|---|---|
 | 52.6 KB | 635 ms | 2,082 ms |
 | 150 KB | 722 ms | 2,616 ms |
@@ -28,7 +28,7 @@ each size):
 
 Each further 100 KB cost about 87 ms and 530 ms on the two profiles. Discovery
 proposed 200 KB, which met a 3.0 s budget on Lighthouse's slow 4G as well as
-1.0 s on the brief's profile. The options were 150 KB (unicel's), 200 KB,
+1.0 s on the 170 ms 4G profile. The options were 150 KB (unicel's), 200 KB,
 300 KB, or a total a page, which cannot be checked at build time because the
 page chooses its charts.
 
@@ -42,7 +42,7 @@ performant sites.
   (REQ-SIZE-010).
 - It warns for each module past half its budget, 179,200 B by default
   (REQ-SIZE-040); `WASM_GZ_LIMIT` overrides every limit (REQ-SIZE-030).
-- A page holding one chart draws its first frame within 1.0 s on the brief's
+- A page holding one chart draws its first frame within 1.0 s on the 170 ms
   4G profile (REQ-PERF-080). A 350 KB module interpolates to about 0.9 s there
   (857 ms at 300 KB plus about 44 ms) **(unverified: interpolated)**.
 - Lighthouse's slow 4G is measured and reported by `bench:load`, not gated: a
