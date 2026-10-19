@@ -10,28 +10,36 @@
 //! missing for buffers to fill.
 //!
 //! The element parses JSON in the shell with `JSON.parse` (REQ-DATA-120), and
-//! no chart module may hold a JSON data parser (REQ-DATA-050, v0.3.0); this
-//! reader serves the CLI, native users and the tests.
+//! no chart module may hold a JSON data parser (REQ-DATA-050): reading
+//! values from JSON ([`Data::from_json`], a descriptor's `values`) is behind
+//! the `text` feature, which the CLI, native users and the tests turn on and
+//! the wasm chart modules leave off. Without it a descriptor is read without
+//! values ([`Data::from_descriptor`]), its columns filled from typed arrays
+//! ([`Data::from_buffers`]).
 
+#[cfg(feature = "text")]
 use std::collections::BTreeMap;
 use std::fmt;
 use std::marker::PhantomData;
 
-use serde::de::{self, Deserializer, MapAccess, SeqAccess, Visitor};
+#[cfg(feature = "text")]
+use serde::de::SeqAccess;
+use serde::de::{self, Deserializer, MapAccess, Visitor};
 use serde::Deserialize;
 
-use super::rfc3339;
-use super::{
-    Column, ColumnType, Data, DataError, Frame, Matrix, Role, Stamp, Table, TimeUnit, Values, MAX_CATEGORIES, MAX_COLUMNS, MISSING_CODE, SHORTHAND_TABLE,
-};
+#[cfg(feature = "text")]
+use super::{rfc3339, Stamp, SHORTHAND_TABLE};
+use super::{Column, ColumnType, Data, DataError, Frame, Matrix, Role, Table, TimeUnit, Values, MAX_CATEGORIES, MAX_COLUMNS, MISSING_CODE};
 
 /// The most characters in a `string` value (data.schema.json).
+#[cfg(feature = "text")]
 const MAX_STRING: usize = 256;
 
 /// The most characters in a `unit` (data.schema.json).
 const MAX_UNIT: usize = 32;
 
 /// One JSON value of a column, as JSON wrote it: integers stay integers.
+#[cfg(feature = "text")]
 #[derive(Clone, Debug, PartialEq)]
 pub enum Cell {
     /// `null`: missing.
@@ -48,6 +56,7 @@ pub enum Cell {
     Str(String),
 }
 
+#[cfg(feature = "text")]
 impl<'de> Deserialize<'de> for Cell {
     fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Cell, D::Error> {
         struct V;
@@ -87,6 +96,36 @@ impl<'de> Deserialize<'de> for Cell {
         d.deserialize_any(V)
     }
 }
+
+/// Values in a descriptor where the build reads none: a descriptor naming
+/// `values` is refused, as column values cross the boundary as typed arrays
+/// (REQ-DATA-050).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct NoValues;
+
+impl<'de> Deserialize<'de> for NoValues {
+    fn deserialize<D: Deserializer<'de>>(_: D) -> Result<NoValues, D::Error> {
+        Err(de::Error::custom("this build reads no `values` from JSON: column values cross as typed arrays (REQ-DATA-050)"))
+    }
+}
+
+/// A column's values as a descriptor carries them: JSON cells with the
+/// `text` feature.
+#[cfg(feature = "text")]
+pub type Cells = Vec<Cell>;
+/// A column's values as a descriptor carries them: none without the `text`
+/// feature.
+#[cfg(not(feature = "text"))]
+pub type Cells = NoValues;
+
+/// A matrix's values as a descriptor carries them: JSON numbers and nulls
+/// with the `text` feature.
+#[cfg(feature = "text")]
+pub type MatrixCells = Vec<Option<f64>>;
+/// A matrix's values as a descriptor carries them: none without the `text`
+/// feature.
+#[cfg(not(feature = "text"))]
+pub type MatrixCells = NoValues;
 
 /// A JSON object read as its entries in document order.
 struct Ordered<T>(Vec<(String, T)>);
@@ -151,7 +190,7 @@ pub struct ColumnDesc {
     /// A category column's labels.
     pub categories: Option<Vec<String>>,
     /// The values, absent when they arrive as a buffer.
-    pub values: Option<Vec<Cell>>,
+    pub values: Option<Cells>,
 }
 
 /// A matrix as data.schema.json describes it.
@@ -163,7 +202,7 @@ pub struct MatrixDesc {
     /// Columns.
     pub cols: u64,
     /// `rows × cols` values row by row, null missing; absent when they arrive as a buffer.
-    pub values: Option<Vec<Option<f64>>>,
+    pub values: Option<MatrixCells>,
     /// A label a row.
     pub row_labels: Option<Vec<String>>,
     /// A label a column.
@@ -219,12 +258,14 @@ impl<'de> Deserialize<'de> for Encode {
 }
 
 /// The three forms the JSON may take.
+#[cfg(feature = "text")]
 enum Top {
     Full { tables: Option<Ordered<TableDesc>>, matrices: Option<Ordered<MatrixDesc>>, extra: Option<String> },
     Columns(Vec<(String, Vec<Cell>)>),
     Rows(Vec<Ordered<Cell>>),
 }
 
+#[cfg(feature = "text")]
 impl<'de> Deserialize<'de> for Top {
     fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Top, D::Error> {
         struct V;
@@ -272,6 +313,7 @@ impl<'de> Deserialize<'de> for Top {
     }
 }
 
+#[cfg(feature = "text")]
 impl Data {
     /// Data from its JSON: the full form, the columns shorthand or the rows
     /// shorthand of data.schema.json, each table named [`SHORTHAND_TABLE`] in
@@ -330,6 +372,7 @@ impl Data {
     }
 }
 
+#[cfg(feature = "text")]
 /// One table from shorthand columns, types inferred as data.schema.json
 /// says: numbers f64, RFC 3339 strings timestamps (ms, UTC), other strings
 /// categories, booleans bool; all null is f64.
@@ -382,6 +425,7 @@ fn filled<T: Clone>(n: usize, v: T) -> Result<Vec<T>, DataError> {
     Ok(out)
 }
 
+#[cfg(feature = "text")]
 fn nums(column: &str, cells: &[Cell]) -> Result<Vec<f64>, DataError> {
     cells
         .iter()
@@ -396,6 +440,7 @@ fn nums(column: &str, cells: &[Cell]) -> Result<Vec<f64>, DataError> {
         .collect()
 }
 
+#[cfg(feature = "text")]
 fn bools(column: &str, cells: &[Cell]) -> Result<Vec<f64>, DataError> {
     cells
         .iter()
@@ -408,6 +453,7 @@ fn bools(column: &str, cells: &[Cell]) -> Result<Vec<f64>, DataError> {
         .collect()
 }
 
+#[cfg(feature = "text")]
 fn strings(column: &str, cells: &[Cell]) -> Result<Vec<String>, DataError> {
     cells
         .iter()
@@ -421,6 +467,7 @@ fn strings(column: &str, cells: &[Cell]) -> Result<Vec<String>, DataError> {
         .collect()
 }
 
+#[cfg(feature = "text")]
 fn codes(column: &str, cells: &[Cell], n: usize) -> Result<Vec<u32>, DataError> {
     let code = |row: usize, v: u64| {
         if v < n as u64 {
@@ -443,6 +490,7 @@ fn codes(column: &str, cells: &[Cell], n: usize) -> Result<Vec<u32>, DataError> 
         .collect()
 }
 
+#[cfg(feature = "text")]
 /// Timestamps before they are held: integers exact, strings parsed exactly
 /// into the unit (milliseconds directly for `s` and `ms`).
 fn stamps(column: &str, unit: TimeUnit, cells: &[Cell]) -> Result<Vec<Stamp>, DataError> {
@@ -468,6 +516,93 @@ fn stamps(column: &str, unit: TimeUnit, cells: &[Cell]) -> Result<Vec<Stamp>, Da
         .collect()
 }
 
+/// The full form's top level, as a descriptor without values reads it.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Descriptor {
+    version: Option<u64>,
+    tables: Ordered<TableDesc>,
+    matrices: Option<Ordered<MatrixDesc>>,
+}
+
+impl Data {
+    /// Data from a descriptor in data.schema.json's full form whose columns
+    /// carry no `values`: each column `length` missing values, for typed
+    /// arrays to fill (REQ-DATA-050). In every build; without the `text`
+    /// feature a descriptor that carries `values` is refused.
+    pub fn from_descriptor(json: &str) -> Result<Data, DataError> {
+        let d: Descriptor = serde_json::from_str(json).map_err(|e| DataError::Json(e.to_string()))?;
+        if d.version.is_some_and(|v| v != 1) {
+            return Err(DataError::Json("this reader takes version 1".into()));
+        }
+        if d.tables.0.is_empty() {
+            return Err(DataError::Json("`tables` needs at least one table".into()));
+        }
+        let mut data = Data::new();
+        for (name, desc) in &d.tables.0 {
+            data.push_table(name, Table::from_desc(name, desc)?)?;
+        }
+        for (name, desc) in d.matrices.map(|m| m.0).unwrap_or_default() {
+            data.push_matrix(&name, Matrix::from_desc(&desc)?)?;
+        }
+        Ok(data)
+    }
+
+    /// Data from a descriptor without values ([`Data::from_descriptor`]) and
+    /// one typed array a column, in the descriptor's order across its tables
+    /// then its matrices, as the wasm boundary's `reserve_column`, `set_column`
+    /// and `commit` deliver them (REQ-DATA-050). A `None` leaves its column
+    /// missing. Numbers are held as given: a timestamp in epoch ms for `s`
+    /// and `ms` columns and in its unit from 0 for `us` and `ns`, a duration
+    /// in ms, a category as its code (NaN or past its labels is missing, as
+    /// a fraction is), a boolean as 0 or 1. A string column takes no array,
+    /// and an array of the wrong length is an error.
+    pub fn from_buffers(descriptor: &str, buffers: Vec<Option<Vec<f64>>>) -> Result<Data, DataError> {
+        let data = Data::from_descriptor(descriptor)?;
+        let mut buffers = buffers.into_iter();
+        let mut out = Data::new();
+        for (name, table) in data.tables {
+            let len = table.len();
+            let mut columns = Vec::with_capacity(table.columns.len());
+            for mut c in table.columns {
+                if let Some(values) = buffers.next().flatten() {
+                    if values.len() != len {
+                        return Err(DataError::Length { table: name.clone(), column: c.name.clone(), expected: len, found: values.len() });
+                    }
+                    c.values = match c.kind {
+                        ColumnType::String => return Err(DataError::Kind { table: name.clone(), column: c.name.clone(), kind: c.kind }),
+                        ColumnType::Category => {
+                            let n = c.categories.len() as f64;
+                            Values::Codes(values.iter().map(|&v| if v >= 0.0 && v < n && v == v.trunc() { v as u32 } else { MISSING_CODE }).collect())
+                        }
+                        ColumnType::F32 => Values::Num(values.into_iter().map(|v| v as f32 as f64).collect()),
+                        _ => Values::Num(values),
+                    };
+                }
+                columns.push(c);
+            }
+            let mut t = Table::named(&name, columns, Some(len))?;
+            t.sorted = table.sorted;
+            t.frame = table.frame;
+            t.epoch = table.epoch;
+            out.push_table(&name, t)?;
+        }
+        for (name, m) in data.matrices {
+            let m = match buffers.next().flatten() {
+                Some(values) => {
+                    let mut f = Matrix::new(m.rows(), m.cols(), values)?.labelled(m.row_labels.clone(), m.col_labels.clone())?;
+                    f.unit = m.unit.clone();
+                    f.symmetric = m.symmetric;
+                    f
+                }
+                None => m,
+            };
+            out.push_matrix(&name, m)?;
+        }
+        Ok(out)
+    }
+}
+
 impl Column {
     /// A column from its description; a column without values is `len`
     /// missing values, for a buffer to fill.
@@ -488,22 +623,32 @@ impl Column {
             _ => Vec::new(),
         };
         let unit = d.time_unit.unwrap_or_default();
+        #[cfg_attr(not(feature = "text"), allow(unused_mut))]
         let mut origin = 0;
         let values = match (&d.values, d.kind) {
             (None, ColumnType::Category) => Values::Codes(filled(len, MISSING_CODE)?),
             (None, ColumnType::String) => Values::Text(filled(len, String::new())?),
             (None, _) => Values::Num(filled(len, f64::NAN)?),
+            #[cfg(feature = "text")]
             (Some(cells), ColumnType::F64 | ColumnType::I64 | ColumnType::U32) => Values::Num(nums(name, cells)?),
+            #[cfg(feature = "text")]
             (Some(cells), ColumnType::F32) => Values::Num(nums(name, cells)?.into_iter().map(|v| v as f32 as f64).collect()),
+            #[cfg(feature = "text")]
             (Some(cells), ColumnType::Bool) => Values::Num(bools(name, cells)?),
+            #[cfg(feature = "text")]
             (Some(cells), ColumnType::Duration) => Values::Num(nums(name, cells)?.into_iter().map(|v| unit.to_ms(v)).collect()),
+            #[cfg(feature = "text")]
             (Some(cells), ColumnType::Timestamp) => {
                 let (o, held) = super::hold_stamps(unit, &stamps(name, unit, cells)?);
                 origin = o;
                 Values::Num(held)
             }
+            #[cfg(feature = "text")]
             (Some(cells), ColumnType::Category) => Values::Codes(codes(name, cells, categories.len())?),
+            #[cfg(feature = "text")]
             (Some(cells), ColumnType::String) => Values::Text(strings(name, cells)?),
+            #[cfg(not(feature = "text"))]
+            (Some(NoValues), _) => return Err(DataError::Json("column values cross as typed arrays (REQ-DATA-050)".into())),
         };
         Ok(Column {
             name: name.to_string(),
@@ -521,6 +666,18 @@ impl Column {
     }
 }
 
+/// How many values a column's description carries.
+#[cfg(feature = "text")]
+fn values_len(c: &ColumnDesc) -> Option<usize> {
+    c.values.as_ref().map(Vec::len)
+}
+
+/// How many values a column's description carries: none without `text`.
+#[cfg(not(feature = "text"))]
+fn values_len(_: &ColumnDesc) -> Option<usize> {
+    None
+}
+
 impl Table {
     /// A table from its description, `name` naming it in errors: 1 to 256
     /// columns of one length, `length` when no column carries values.
@@ -529,9 +686,7 @@ impl Table {
             return Err(DataError::Columns { table: name.to_string(), count: d.columns.len() });
         }
         let declared = d.length.map(|n| usize::try_from(n).map_err(|_| DataError::TooLarge { rows: usize::MAX })).transpose()?;
-        let len = declared
-            .or_else(|| d.columns.iter().find_map(|c| c.values.as_ref().map(Vec::len)))
-            .ok_or_else(|| DataError::NoLength { table: name.to_string() })?;
+        let len = declared.or_else(|| d.columns.iter().find_map(values_len)).ok_or_else(|| DataError::NoLength { table: name.to_string() })?;
         let columns = d.columns.iter().map(|c| Column::from_desc(c, len)).collect::<Result<Vec<_>, _>>()?;
         let mut table = Table::named(name, columns, Some(len))?;
         if let Some(s) = &d.sorted {
@@ -554,7 +709,10 @@ impl Matrix {
         let (rows, cols) = (size(d.rows)?, size(d.cols)?);
         let n = rows.checked_mul(cols).ok_or(DataError::TooLarge { rows: usize::MAX })?;
         let values = match &d.values {
+            #[cfg(feature = "text")]
             Some(v) => v.iter().map(|x| x.unwrap_or(f64::NAN)).collect(),
+            #[cfg(not(feature = "text"))]
+            Some(NoValues) => return Err(DataError::Json("matrix values cross as typed arrays (REQ-DATA-050)".into())),
             None => filled(n, f64::NAN)?,
         };
         if d.unit.as_ref().is_some_and(|u| u.chars().count() > MAX_UNIT) {
@@ -567,7 +725,7 @@ impl Matrix {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "text"))]
 mod tests {
     use super::*;
 
@@ -634,5 +792,40 @@ mod tests {
         assert_eq!(e.get("y").map(<[String]>::len), Some(2));
         assert_eq!(e.get("open"), None);
         assert!(serde_json::from_str::<Encode>(r#"{"x":1}"#).is_err());
+    }
+}
+
+#[cfg(test)]
+mod buffer_tests {
+    use super::*;
+
+    /// REQ-DATA-050: a descriptor without values and typed arrays make the
+    /// data, in every build; a descriptor with values is refused without
+    /// `text`.
+    #[test]
+    fn descriptor_and_buffers_make_data() {
+        let desc = r#"{"tables":{"p":{"length":3,"sorted":"t","columns":[
+            {"name":"t","type":"timestamp","role":"x"},
+            {"name":"close","type":"f64","unit":"USD"},
+            {"name":"sym","type":"category","categories":["A","B"]},
+            {"name":"note","type":"string"}]}},
+            "matrices":{"m":{"rows":1,"cols":2}}}"#;
+        let empty = Data::from_descriptor(desc).unwrap();
+        let t = empty.table("p").unwrap();
+        assert_eq!(t.len(), 3);
+        assert!(t.by_name("close").unwrap().is_missing(2));
+        let d =
+            Data::from_buffers(desc, vec![Some(vec![1.0, 2.0, 3.0]), Some(vec![9.5, f64::NAN, 7.0]), Some(vec![1.0, 0.0, 5.0]), None, Some(vec![4.0, 2.0])])
+                .unwrap();
+        let t = d.table("p").unwrap();
+        assert_eq!(t.by_name("t").unwrap().nums().unwrap(), &[1.0, 2.0, 3.0]);
+        assert_eq!(t.by_name("close").unwrap().get(0), 9.5);
+        assert_eq!((t.by_name("sym").unwrap().label(0), t.by_name("sym").unwrap().label(2)), (Some("B"), None), "past its labels is missing");
+        assert_eq!(t.sorted.as_deref(), Some("t"));
+        assert_eq!(d.matrix("m").unwrap().get(0, 1), 2.0);
+        assert!(Data::from_buffers(desc, vec![Some(vec![1.0])]).is_err(), "the wrong length");
+        assert!(Data::from_buffers(desc, vec![None, None, None, Some(vec![0.0, 0.0, 0.0])]).is_err(), "a string column takes no array");
+        let with_values = r#"{"tables":{"p":{"columns":[{"name":"x","type":"f64","values":[1,2]}]}}}"#;
+        assert_eq!(Data::from_descriptor(with_values).is_ok(), cfg!(feature = "text"));
     }
 }

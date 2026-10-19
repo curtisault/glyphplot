@@ -76,6 +76,50 @@ impl Default for Locale {
     }
 }
 
+/// A separator as drawn: U+2009, U+202F and U+00A0, which fonts draw at
+/// different widths, become one plain space cell (REQ-FMT-060).
+fn plain_spaces(s: &str) -> String {
+    s.chars().map(|c| if matches!(c, '\u{2009}' | '\u{202F}' | '\u{00A0}') { ' ' } else { c }).collect()
+}
+
+/// `N` strings from a list, or `None` when it holds another number of them.
+fn exactly<const N: usize>(v: &[String]) -> Option<[String; N]> {
+    v.to_vec().try_into().ok()
+}
+
+impl Locale {
+    /// The locale a pack (`spec/schemas/locale.schema.json`) gives
+    /// (REQ-I18N-020): its separators, with U+2009, U+202F and U+00A0 drawn
+    /// as one plain space cell; its minus, `-` in the default pack and U+2212
+    /// when the pack says so (REQ-FMT-060); its digits (ASCII ones as none);
+    /// the suffix of its percent pattern; and its month, weekday and period
+    /// names. A list of the wrong length keeps the default's.
+    pub fn from_pack(pack: &crate::locale::LocalePack) -> Locale {
+        let base = Locale::default();
+        let ascii = pack.numerals.iter().enumerate().all(|(d, n)| n.len() == 1 && n.as_bytes()[0] == b'0' + d as u8);
+        let numerals = if ascii { None } else { exactly::<10>(&pack.numerals) };
+        let percent = plain_spaces(&pack.percent.replacen('#', "", 1));
+        let time = TimeLocale {
+            periods: pack.periods.clone(),
+            days: exactly(&pack.days).unwrap_or(base.time.days.clone()),
+            days_short: exactly(&pack.days_short).unwrap_or(base.time.days_short.clone()),
+            months: exactly(&pack.months).unwrap_or(base.time.months.clone()),
+            months_short: exactly(&pack.months_short).unwrap_or(base.time.months_short.clone()),
+        };
+        Locale {
+            decimal: plain_spaces(&pack.decimal),
+            group: plain_spaces(&pack.group),
+            grouping: pack.grouping.iter().map(|&g| g.max(1) as usize).collect(),
+            currency: [plain_spaces(&pack.currency[0]), plain_spaces(&pack.currency[1])],
+            numerals,
+            percent,
+            minus: pack.minus.clone(),
+            nan: base.nan,
+            time,
+        }
+    }
+}
+
 /// A specifier that is not in the subset, with the option it came from
 /// (REQ-FMT-020).
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -619,5 +663,24 @@ mod tests {
         assert_eq!(fmt.format(200000.0), "200,000");
         let fmt = tick_format(0.0, 0.05, 5.0, &Specifier::parse("f", "%").unwrap(), &l);
         assert_eq!(fmt.format(0.01), "1%");
+    }
+
+    /// REQ-FMT-060, REQ-I18N-030: the default pack writes `-`, a pack may
+    /// write U+2212, and a thin, narrow or no-break space between groups is
+    /// one plain space cell.
+    #[test]
+    fn minus_and_group_separators() {
+        use crate::locale::LocalePack;
+        let spec = Specifier::parse("format", ",.1f").unwrap();
+        let plain = NumberFormat::new(&spec, &Locale::from_pack(&LocalePack::default()));
+        assert_eq!(plain.format(-12345.67), "-12,345.7");
+        assert_eq!(Locale::from_pack(&LocalePack::default()), Locale { time: Locale::default().time, ..Locale::default() });
+        for sep in ["\u{2009}", "\u{202F}", "\u{00A0}"] {
+            let pack = LocalePack { minus: "\u{2212}".into(), group: sep.into(), decimal: ",".into(), ..LocalePack::default() };
+            let f = NumberFormat::new(&spec, &Locale::from_pack(&pack));
+            assert_eq!(f.format(-12345.67), "\u{2212}12 345,7", "group {sep:?}");
+        }
+        let pct = LocalePack { percent: "#\u{00A0}%".into(), ..LocalePack::default() };
+        assert_eq!(NumberFormat::new(&Specifier::parse("f", ".0%").unwrap(), &Locale::from_pack(&pct)).format(0.5), "50 %");
     }
 }

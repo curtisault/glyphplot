@@ -1,6 +1,16 @@
 //! The chart families, one folder and one Cargo feature each
-//! (REQ-ARCH-040). A chart uses the core and its own family's folder, never
-//! another family's: its wasm module would not contain the other.
+//! (REQ-ARCH-040, REQ-CHART-010). A chart uses the core and its own family's
+//! folder, never another family's: its wasm module would not contain the
+//! other.
+
+use crate::registry::Family;
 
 #[cfg(feature = "line")]
 pub mod line;
+
+/// Every family compiled in, in registry order, each behind its feature
+/// (REQ-REG-010).
+pub const FAMILIES: &[Family] = &[
+    #[cfg(feature = "line")]
+    line::FAMILY,
+];

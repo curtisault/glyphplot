@@ -21,6 +21,7 @@
 //! cleared validity bit, REQ-DATA-140).
 
 pub mod desc;
+#[cfg(feature = "text")]
 pub(crate) mod rfc3339;
 
 use std::fmt;
@@ -604,6 +605,7 @@ impl Column {
 }
 
 /// A timestamp before it is held: exact in its unit, approximate, or missing.
+#[cfg_attr(not(feature = "text"), allow(dead_code))]
 #[derive(Clone, Copy, Debug)]
 enum Stamp {
     Exact(i64),
@@ -674,7 +676,7 @@ impl Table {
 
     /// As [`Table::from_columns`], naming the table in errors and taking the
     /// declared `length`, if any.
-    fn named(table: &str, columns: Vec<Column>, length: Option<usize>) -> Result<Table, DataError> {
+    pub(crate) fn named(table: &str, columns: Vec<Column>, length: Option<usize>) -> Result<Table, DataError> {
         if columns.len() > MAX_COLUMNS {
             return Err(DataError::Columns { table: table.to_string(), count: columns.len() });
         }
@@ -804,7 +806,7 @@ impl Table {
 
     /// The table with its rows in the order `order` gives; `order` must be a
     /// permutation of the rows.
-    fn permuted(&self, order: &[usize]) -> Table {
+    pub(crate) fn permuted(&self, order: &[usize]) -> Table {
         let columns = self.columns.iter().map(|c| Column { values: c.values.permuted(order), ..c.clone() }).collect();
         Table { len: self.len, columns, sorted: self.sorted.clone(), frame: self.frame, epoch: self.epoch.clone() }
     }
@@ -956,6 +958,12 @@ impl Data {
     /// The matrix named `name`.
     pub fn matrix(&self, name: &str) -> Option<&Matrix> {
         self.matrices.iter().find(|(n, _)| n == name).map(|(_, m)| m)
+    }
+
+    /// The tables, by value, in order: how a chart takes its table without a
+    /// copy (REQ-MEM-020).
+    pub fn into_tables(self) -> Vec<(String, Table)> {
+        self.tables
     }
 
     /// The first table, the one a chart of one table draws.
@@ -1291,6 +1299,9 @@ pub enum DataError {
         /// The count found.
         found: usize,
     },
+    /// Appended rows that do not fit the data held: other columns, or a
+    /// column type append does not take yet.
+    Append(String),
     /// The data is not of a shape the chart takes (REQ-DATA-110).
     Shape {
         /// The shapes the chart takes.
@@ -1321,6 +1332,7 @@ impl fmt::Display for DataError {
             DataError::TooLong { column, what, max } => write!(f, "column `{column}`: {what} longer than {max}"),
             DataError::Sorted { table, column } => write!(f, "table `{table}` is `sorted` by `{column}`, which it does not have"),
             DataError::Matrix { expected, found } => write!(f, "matrix: expected {expected} values or labels, found {found}"),
+            DataError::Append(m) => write!(f, "append: {m}"),
             DataError::Shape { expected } => {
                 let names: Vec<&str> = expected.iter().map(|s| s.name()).collect();
                 match names.len() {
@@ -1334,7 +1346,7 @@ impl fmt::Display for DataError {
 
 impl std::error::Error for DataError {}
 
-#[cfg(test)]
+#[cfg(all(test, feature = "text"))]
 mod tests {
     use super::*;
 

@@ -233,6 +233,90 @@ impl Canvas {
     }
 }
 
+/// A canvas whose cells each carry an ink: the canvas a chart draws its
+/// series on, one after another in z-order (REQ-CANVAS-040, REQ-CHART-060).
+/// Setting a dot also sets its cell's ink, so a cell takes the ink of the
+/// last series that lit a dot in it: drawn in z-order, the series highest in
+/// z-order among its lit dots.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ColorCanvas {
+    dots: Canvas,
+    inks: Vec<u8>,
+}
+
+impl ColorCanvas {
+    /// An empty canvas of `cols × rows` cells drawing with `glyphs`.
+    pub fn new(glyphs: Glyphs, cols: usize, rows: usize) -> ColorCanvas {
+        ColorCanvas { dots: Canvas::new(glyphs, cols, rows), inks: vec![0; cols.saturating_mul(rows)] }
+    }
+
+    /// Makes the canvas `cols × rows` cells with no dots, reusing the
+    /// allocations when they are large enough.
+    pub fn resize(&mut self, cols: usize, rows: usize) {
+        self.dots.resize(cols, rows);
+        self.inks.clear();
+        self.inks.resize(cols.saturating_mul(rows), 0);
+    }
+
+    /// The dots, without their inks.
+    pub fn dots(&self) -> &Canvas {
+        &self.dots
+    }
+
+    /// The width in dots.
+    pub fn width(&self) -> usize {
+        self.dots.width()
+    }
+
+    /// The height in dots.
+    pub fn height(&self) -> usize {
+        self.dots.height()
+    }
+
+    /// The ink of the cell at column `col`, row `row`: the ink of the last
+    /// dot set in it. Panics off the canvas.
+    pub fn ink(&self, col: usize, row: usize) -> u8 {
+        assert!(col < self.dots.cols && row < self.dots.rows, "({col}, {row}) is off the {} × {} canvas", self.dots.cols, self.dots.rows);
+        self.inks[row * self.dots.cols + col]
+    }
+
+    /// Sets the dot at `(x, y)` and gives its cell `ink`, ignored off the
+    /// canvas (REQ-CANVAS-040).
+    pub fn set(&mut self, x: i64, y: i64, ink: u8) {
+        if let Some((i, bit)) = self.dots.locate(x, y) {
+            self.dots.masks[i] |= bit;
+            self.inks[i] = ink;
+        }
+    }
+
+    /// Sets, in `ink`, the dots of a Bresenham line from `(x0, y0)` to
+    /// `(x1, y1)`, both ends included, whose x `keep` accepts (a dash
+    /// pattern), clipping (REQ-CANVAS-010).
+    pub fn line(&mut self, x0: i64, y0: i64, x1: i64, y1: i64, ink: u8, keep: impl Fn(i64) -> bool) {
+        let (w, h) = (self.width() as i64, self.height() as i64);
+        line_points(x0, y0, x1, y1, w, h, |x, y| {
+            if keep(x) {
+                self.set(x, y, ink);
+            }
+        });
+    }
+
+    /// Draws the canvas onto `grid` with its top left cell at `(x, y)`, each
+    /// cell with dots in its own ink, clipping; cells with no dots are left
+    /// as they are (REQ-CANVAS-010).
+    pub fn draw(&self, grid: &mut Grid, x: i32, y: i32) {
+        let cols = self.dots.cols.max(1);
+        for (i, &mask) in self.dots.masks.iter().enumerate() {
+            if mask != 0 {
+                let (gx, gy) = (i64::from(x) + (i % cols) as i64, i64::from(y) + (i / cols) as i64);
+                if let (Ok(gx), Ok(gy)) = (i32::try_from(gx), i32::try_from(gy)) {
+                    grid.set(gx, gy, self.dots.glyphs.glyph(mask), self.inks[i]);
+                }
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -469,5 +553,25 @@ mod tests {
         canvas.set(9, 19);
         canvas.clear();
         assert!(!canvas.get(9, 19));
+    }
+
+    /// REQ-CANVAS-040, REQ-CHART-060: two series in one cell; the cell keeps
+    /// both series' dots and takes the ink of the one drawn later, whichever
+    /// dot it lit.
+    #[test]
+    fn a_cell_takes_the_highest_series() {
+        let mut c = ColorCanvas::new(Glyphs::Braille, 2, 1);
+        c.set(0, 0, 8);
+        c.set(1, 3, 9);
+        c.set(2, 0, 9);
+        c.set(3, 0, 8);
+        assert_eq!((c.ink(0, 0), c.ink(1, 0)), (9, 8));
+        let mut g = Grid::new(2, 1);
+        c.draw(&mut g, 0, 0);
+        assert_eq!(g.glyph(0, 0), Glyphs::Braille.glyph(0b1000_0001));
+        assert_eq!((g.ink(0, 0), g.ink(1, 0)), (9, 8));
+        let mut d = ColorCanvas::new(Glyphs::Braille, 2, 1);
+        d.line(0, 0, 3, 0, 10, |x| x % 2 == 0);
+        assert!(d.dots().get(0, 0) && !d.dots().get(1, 0) && d.dots().get(2, 0) && !d.dots().get(3, 0));
     }
 }

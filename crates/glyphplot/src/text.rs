@@ -33,7 +33,7 @@ use unicode_width::UnicodeWidthChar;
 
 use crate::canvas::Glyphs as DotGlyphs;
 use crate::grid::{Grid, BLANK};
-use crate::layout::{PlacedAxis, Rect, Side, X_DOTS, Y_DOTS};
+use crate::layout::{Layout, PlacedAxis, Rect, Side, X_DOTS, Y_DOTS};
 use crate::palette::{INK, MUTED, RULE};
 
 /// `─`, the x axis line.
@@ -46,6 +46,10 @@ const TICK_DOWN: u32 = 0x252C;
 const TICK_LEFT: u32 = 0x2524;
 /// `├`, a tick mark on a right axis.
 const TICK_RIGHT: u32 = 0x251C;
+/// `└`, where a left axis meets the x axis.
+const CORNER_LEFT: u32 = 0x2514;
+/// `┘`, where a right axis meets the x axis.
+const CORNER_RIGHT: u32 = 0x2518;
 /// `…`, the end of a shortened label.
 const ELLIPSIS: char = '\u{2026}';
 /// The zero-width joiner, which joins the next scalar to its grapheme.
@@ -244,6 +248,17 @@ impl<'g> Frame<'g, stage::Data> {
     }
 }
 
+impl<'g> Frame<'g, stage::Crosshair> {
+    /// A frame on a `grid` that already holds a frame's base (data, axes and
+    /// labels), resumed at the crosshair stage without clearing it, so the
+    /// overlay is drawn over a cached base (REQ-OVERLAY-010, REQ-TEXT-020).
+    /// The base's labels are not recorded: only the readout, which may cover
+    /// a label, is drawn after this stage.
+    pub fn overlay(grid: &'g mut Grid, ground: u8) -> Frame<'g, stage::Crosshair> {
+        Frame { grid, ground, labels: Vec::new(), stage: PhantomData }
+    }
+}
+
 impl<'g, S: Stage> Frame<'g, S> {
     /// The layer this frame is drawing.
     pub fn layer(&self) -> Layer {
@@ -271,7 +286,7 @@ impl<'g, S: Stage> Frame<'g, S> {
 
     /// Whether a label holds the cell at `(x, y)`; false off the grid.
     pub fn is_label(&self, x: usize, y: usize) -> bool {
-        x < self.grid.cols() && y < self.grid.rows() && self.labels[y * self.grid.cols() + x]
+        x < self.grid.cols() && y < self.grid.rows() && self.labels.get(y * self.grid.cols() + x).copied().unwrap_or(false)
     }
 
     /// Clears the `w` cells from `(x, y)` to the ground, then draws `text`
@@ -389,6 +404,25 @@ impl Frame<'_, stage::Axes> {
                     self.grid.set(at(col), at(r.y + t.cell), mark, MUTED);
                 }
             }
+        }
+    }
+}
+
+impl Frame<'_, stage::Axes> {
+    /// Joins the x axis's line to the y axes' lines in `MUTED`: `└` where a
+    /// left axis meets it and `┘` where a right axis does.
+    pub fn corners(&mut self, layout: &Layout) {
+        let Some(x) = &layout.x_axis else { return };
+        let r = x.rect;
+        if r.w == 0 || r.h == 0 {
+            return;
+        }
+        let pane = layout.panes.last();
+        if pane.and_then(|p| p.left.as_ref()).is_some_and(|a| a.rect.w > 0) && r.x > 0 {
+            self.grid.set(at(r.x - 1), at(r.y), CORNER_LEFT, MUTED);
+        }
+        if pane.and_then(|p| p.right.as_ref()).is_some_and(|a| a.rect.w > 0) {
+            self.grid.set(at(r.x + r.w), at(r.y), CORNER_RIGHT, MUTED);
         }
     }
 }

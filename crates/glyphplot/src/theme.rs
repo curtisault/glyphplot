@@ -435,6 +435,29 @@ pub fn resolve_json(json: &str) -> Result<Palette, ThemeError> {
     Theme::from_json(json).map(|theme| resolve(&theme))
 }
 
+/// The least contrast a series colour keeps against the ground
+/// (REQ-THEME-070, ADR-123).
+pub const SERIES_CONTRAST: f64 = 3.0;
+
+/// What a debug build logs about a theme (REQ-THEME-070): one warning for
+/// each series colour the theme sets under 3:1 against its resolved ground,
+/// naming the token and the ratio, as `series-2 #e8e8e8 is 1.21:1 against the
+/// ground #f5f6f7; a series colour needs 3:1`. The colour is still used; the
+/// shell logs each line once.
+pub fn warnings(theme: &Theme) -> Vec<String> {
+    let ground = theme.token(palette::GROUND, theme.base().defaults());
+    let two = crate::format::Specifier::parse("ratio", ".2f").map(|s| crate::format::NumberFormat::new(&s, &crate::format::Locale::default()));
+    let mut out = Vec::new();
+    for (i, &c) in theme.series.as_deref().unwrap_or(&[]).iter().enumerate() {
+        let ratio = oklab::contrast(c, ground);
+        if ratio < SERIES_CONTRAST {
+            let ratio = two.as_ref().map_or_else(|_| String::from("under 3"), |f| f.format(ratio));
+            out.push(format!("series-{} {c} is {ratio}:1 against the ground {ground}; a series colour needs 3:1", i + 1));
+        }
+    }
+    out
+}
+
 /// The 128 steps of a scale: `stops` evenly spaced, low end first, and
 /// interpolated in Oklab, step 0 the first stop and step 127 the last
 /// (REQ-COLOR-040). One stop gives a flat ramp; none gives black.
@@ -935,5 +958,17 @@ mod tests {
             let resolved = resolve_json(&json).unwrap();
             proptest::prop_assert_eq!(resolved.get(token as u8), Some(c(rgb).rgba()));
         }
+    }
+
+    /// REQ-THEME-070: a page-set series colour under 3:1 against the ground
+    /// warns, naming the token and the ratio, and is still used.
+    #[test]
+    fn low_contrast_series_warn() {
+        let theme = Theme::from_json(r##"{"ground":"#ffffff","series":["#000000","#eeeeee"]}"##).unwrap();
+        let w = warnings(&theme);
+        assert_eq!(w.len(), 1, "{w:?}");
+        assert!(w[0].starts_with("series-2 #eeeeee is 1.16:1 against the ground #ffffff"), "{}", w[0]);
+        assert_eq!(resolve(&theme).get(palette::series(1)), Some([0xee, 0xee, 0xee, 255]));
+        assert!(warnings(&Theme::default()).is_empty(), "the defaults set no series");
     }
 }
