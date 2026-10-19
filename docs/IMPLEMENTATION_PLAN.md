@@ -62,9 +62,9 @@ takes its architecture whole. What differs:
    it shows.
 3. **Interactive**: pan, zoom, crosshair, readouts, brushing, keyboard and
    touch, scrubbing, events out to the page.
-4. **A generous size threshold**, measured and set (200 KB gzipped a module
-   proposed; a complete line chart measured 17.4 KB without serde and
-   49.3 KB with it).
+4. **A generous size threshold**: 350 KB gzipped a module, set by the owner
+   for fast connections and performant sites (a complete line chart measured
+   17.4 KB without serde and 49.3 KB with it).
 5. **Rich and fast**: scales, ticks, number and date formatting, legends,
    annotations, panes, themes, one ink and paper, a frame budget that holds at
    a million points (measured 2.1–2.4 ms natively, 3.2–3.7 ms in Chromium).
@@ -92,7 +92,7 @@ do not relitigate them.
 | One wasm module per chart type | Yes, a Cargo feature each | A page that shows a line chart does not load a histogram. Families with modes ([ADR-101](../spec/adr/101-chart-families-with-modes.md)). | [005](../spec/adr/005-one-wasm-module-per-chart-type.md) |
 | Data is injected | Every chart draws the page's or terminal's data; a demo mode says so | The whole point. | [006](../spec/adr/006-data-is-injected.md) |
 | Interactive | From the first chart | The contract and budgets include input. | [007](../spec/adr/007-interactive-from-the-first-chart.md) |
-| Size threshold | One a module, generous | Discovery proposes 200 KB gzipped ([ADR-133](../spec/adr/133-a-200-kb-module-gate.md)); the owner sets it. | [008](../spec/adr/008-a-generous-size-threshold.md) |
+| Size threshold | One a module, generous | The owner set 350 KB gzipped ([ADR-133](../spec/adr/133-a-350-kb-module-gate.md)). | [008](../spec/adr/008-a-generous-size-threshold.md) |
 | Determinism | A frame is a pure function of data, options, view state and `t` | Snapshots, seeks and tests at arbitrary times. Streaming appends do not break it. | [009](../spec/adr/009-deterministic-frames.md) |
 | Spec format | unicel's `spec/` | The owner builds from it with agents; IDs are what commits and tests name. | [010](../spec/adr/010-unicels-spec-format.md) |
 | Licence | MIT | As unicel. | [011](../spec/adr/011-mit-licence.md) |
@@ -101,8 +101,10 @@ do not relitigate them.
 
 ## Decisions discovery made
 
-Each has a real alternative and is a Proposed ADR until the owner accepts it.
-The ones the owner must settle first are also [open questions](#open-questions).
+Each has a real alternative. Those behind the [open questions](#open-questions)
+were accepted by the owner on 2026-10-18 (101, 102, 103, 112, 116, 118, 119,
+121, 123, 126, 133, 136, 140, 141, 143); the rest stay Proposed until the owner
+accepts them, and ADR-100 is rejected (ADR-013).
 
 | Decision | Choice | Why (measured) | ADR |
 |---|---|---|---|
@@ -139,7 +141,7 @@ The ones the owner must settle first are also [open questions](#open-questions).
 | Property tests | proptest, lean | Seeded replay; 4.7 s clean dev build | [130](../spec/adr/130-proptest.md) |
 | Session gaps | An index time scale | No calendar data needed | [131](../spec/adr/131-index-time-scale-for-session-gaps.md) |
 | Semantics | `role="figure"`, a summary on `role="img"`, a slider cursor, a hidden table ≤ 500 rows | 500 rows build in 6 ms, 10,000 in 523 ms | [132](../spec/adr/132-figure-slider-and-hidden-table.md) |
-| Size gate | 200 KB gzipped a module, warning at 100 KB | 4× today's full module; ~0.8 s and 2.9 s to first frame on the two load profiles | [133](../spec/adr/133-a-200-kb-module-gate.md) |
+| Size gate | 350 KB gzipped a module, warning at 175 KB (the owner's number) | Almost 7× today's full module; about 0.9 s to a first frame on the brief's 4G (interpolated) | [133](../spec/adr/133-a-350-kb-module-gate.md) |
 | CLI | crossterm, with its own terminal code | 404,800 B against ratatui's 553,968 B; ratatui's `Chart` has no ticks, downsampling or hit tests | [134](../spec/adr/134-cli-on-crossterm.md) |
 | Exports | txt, ansi, svg in Rust from the start | Byte-identical element and CLI output | [135](../spec/adr/135-exports-in-rust.md) |
 | The site's market | Synthetic, labelled; Wikimedia edits a second as a real feed | No exchange's terms allow display to third parties | [136](../spec/adr/136-the-sites-market-demo.md) |
@@ -147,9 +149,9 @@ The ones the owner must settle first are also [open questions](#open-questions).
 | Domain packs | Rust crates, their own wasm modules | Indicators 1.5 KB gz, planets 6.5 KB gz; one implementation for web and terminal | [138](../spec/adr/138-domain-packs-are-crates-and-modules.md) |
 | Indicators | In the markets pack, incremental | The RSI and MACD panes are not candlestick charts | [139](../spec/adr/139-indicators-in-the-markets-pack.md) |
 | Celestial positions | Charts take positions; the astronomy pack computes planets from JPL elements | Within 35″ (Mars) and 123″ (Jupiter) of Horizons, a dot is 2,025″; VSOP87A is 688 KB gz | [140](../spec/adr/140-celestial-positions-in-a-pack.md) |
-| serde_json | In every module for options, meta, the descriptor and the view | +33 KB gz; revisit at the 100 KB warning | [141](../spec/adr/141-serde-json-in-chart-modules.md) |
+| serde_json | In every module for options, meta, the descriptor and the view | +33 KB gz; revisit at the 175 KB warning | [141](../spec/adr/141-serde-json-in-chart-modules.md) |
 | Thread | The main thread | Frames 2–4 ms at 1M points in Chromium | [142](../spec/adr/142-main-thread-not-a-worker.md) |
-| The site's shape | Documentation with live charts; the examples page is the gallery | A chart library is learnt, not browsed | [143](../spec/adr/143-site-docs-with-live-charts.md) |
+| The site's shape | Documentation with live charts; the examples page is a large gallery (90 examples planned, coverage checked) | A chart library is learnt, and its uses are shown | [143](../spec/adr/143-site-docs-with-live-charts.md) |
 
 ## What the repository holds
 
@@ -797,34 +799,146 @@ plain frame and exits.
 <a id="site-examples"></a>
 ## The site
 
-Elm 0.19.1 with Vite, as unicel's, but documentation with live charts rather
-than a gallery alone (ADR-143): a page per chart type (the chart live, a
-control per option, its attributes, an event log, snippets that work), doc
-pages (getting started, the data contract, view and events, theming,
-accessibility, the CLI), and an examples page that is the gallery
-(REQ-SITE-010 to 040). `site/test.html`, the plain-HTML checklist page,
-exists from v0.3.0 for the browser tests (REQ-TEST-040).
+Elm 0.19.1 with Vite: documentation with live charts, and an examples page
+that is the gallery (ADR-143). The owner wants a great many examples, to
+show everything glyphplot can be used for:
 
-The examples, in order (domains.md):
+- **A page per chart type**: the chart live, a control per option, its
+  attributes, an event log, snippets that work (REQ-SITE-020).
+- **Doc pages**: getting started, the data contract, view and events,
+  theming, accessibility, performance, the CLI, each with live charts in it
+  (REQ-SITE-030).
+- **The gallery**: every example a card with a live chart (a first frame
+  rendered as text at build time until it comes near the screen), filterable
+  by chart type, mode, domain, feature and milestone; each example its own
+  page with the chart full size and its source, copyable (REQ-SITE-040,
+  REQ-SITE-120).
+- **Coverage, checked**: `site/examples/manifest.json` lists each example's
+  types, modes, domain, features, datasets and milestone; `mise run
+  examples:check` fails when a built chart type has fewer than three
+  examples, a built mode or feature below has none, an example names a dataset the
+  datasets manifest lacks, or an example has no page (REQ-SITE-080). At least
+  50 examples at v0.7.0 and 85 at v0.12.0 (REQ-SITE-090); every milestone after
+  the site adds examples of what it ships (REQ-SITE-100).
+- **Honest data**: generated data says "simulated" and its seed on the card
+  and the page (REQ-SITE-110); live feeds name their source and licence and
+  show a message when down (REQ-SITE-050); every dataset is in the manifest
+  ([Appendix B](#appendix-b)).
 
-1. **Live candles (simulated)**: a seeded synthetic market labelled
-   "simulated market", volume, SMA 20 and Bollinger 20/2, RSI below,
-   scrubbed by finger (the owner's test).
-2. **Live candles (real)**: Wikimedia EventStreams edits a second, one candle
-   a minute (server-sent events, CORS open).
-3. **Service latency**: NAB CloudWatch series and synthetic histograms;
-   p50/p90/p99 on a log y, a latency heatmap, an SLO band, an anomaly window.
-4. **Earthquakes now**: USGS live GeoJSON as a scatter of longitude and
-   latitude and a magnitude histogram.
-5. **Yield curve**: the Treasury's daily par curve as a heatmap and a curve
-   scrubbed through time.
-6. **Oil since 1986**: EIA's daily WTI as a line and weekly candles.
-7. **Tonight's sky**, **the solar system**, **a transit** (v0.12.0).
-8. **Network throughput**: synthetic, a mirrored area and top talkers.
+`site/test.html`, the plain-HTML checklist page, exists from v0.3.0 for the
+browser tests (REQ-TEST-040).
 
-Every live third-party example names its source and licence and shows a
-message when the feed is down (REQ-SITE-050). Datasets follow the manifest
-rules ([Appendix B](#appendix-b)).
+### Features the gallery must cover
+
+Each needs at least one example once built: streaming; pause; follow the live
+end; late and duplicate rows; retention; linking; brushing to drive another
+chart; the view in a URL; the event log; panes; dual y axes; annotations
+(lines, bands, labels, markers); log, symlog and index time scales; time
+zones; locales; one ink; paper; CSS custom-property themes; a theme object;
+sizing and resize; a million points; data from CSV, JSON and Arrow `src`;
+typed arrays through the JS API; plain HTML with no build; React 19 JSX;
+keyboard-only use; touch scrubbing; the screen-reader table; reduced motion;
+exports (v0.8.0); the terminal (v0.8.0); server-rendered first frames
+(v0.8.0); domain packs (v0.10.0).
+
+### The catalogue
+
+The examples planned, by milestone. "Synthetic" is a seeded generator in
+`site/src/data/`, labelled on the page; every other source is in
+[Appendix B](#appendix-b). The list is a floor, not a ceiling.
+
+| # | Example | What it shows | Type, mode | Data | From |
+|---|---|---|---|---|---|
+| 1 | Live candles, simulated market | the owner's test: volume pane, scrubbed by finger | candles, candle | synthetic, streaming | v0.7.0 |
+| 2 | Live candles of Wikimedia edits | a real feed, one candle a minute | candles, candle | Wikimedia EventStreams | v0.7.0 |
+| 3 | Hello, line | the smallest page: one tag, a columns shorthand | line, line | synthetic | v0.7.0 |
+| 4 | A million points | pan and zoom over 1M rows; M4 per dot column | line, line | synthetic | v0.7.0 |
+| 5 | Gaps in telemetry | missing values break the line; `spanGaps` toggled | line, line | NAB | v0.7.0 |
+| 6 | A thermostat | step before, after and middle side by side | line, step | synthetic | v0.7.0 |
+| 7 | CPU under the curve | area to a baseline | line, area | NAB | v0.7.0 |
+| 8 | Oil since 1986 | decades of daily prices, the negative day, a date context row | line, line | EIA WTI | v0.7.0 |
+| 9 | The ten-year yield since 1962 | a long series zoomed across decades | line, line | Federal Reserve H.15 | v0.7.0 |
+| 10 | The euro against the dollar | a currency formatter and readout | line, line | Federal Reserve H.10 | v0.7.0 |
+| 11 | Latency percentiles | p50, p90, p99 on a log y axis, a duration formatter | line, line | synthetic | v0.7.0 |
+| 12 | Net flow | positive and negative values on a symlog axis | line, line | synthetic | v0.7.0 |
+| 13 | Deploys on a request rate | vertical annotations with labels | line, line | synthetic | v0.7.0 |
+| 14 | An SLO band | a target line and a shaded error budget | line, area | synthetic | v0.7.0 |
+| 15 | Two units, two axes | temperature left, humidity right | line, line | synthetic | v0.7.0 |
+| 16 | One series, three zones | the same data in UTC, New York and Tokyo | line, line | synthetic | v0.7.0 |
+| 17 | Locales | one chart in en-US, de-DE, fr-FR, ar-EG and ja-JP | line, line | synthetic | v0.7.0 |
+| 18 | A tide gauge | water level against the prediction | line, line | NOAA CO-OPS | v0.7.0 |
+| 19 | An ECG strip | 360 Hz, scrubbed with a finger | line, line | MIT-BIH | v0.7.0 |
+| 20 | Keyboard only | stepping datum by datum, Shift+Enter brushing | line, line | synthetic | v0.7.0 |
+| 21 | For a screen reader | the slider, the summary and the table, shown | line, line | synthetic | v0.7.0 |
+| 22 | One ink | four series told apart by dashes in a `<pre>` | line, line | synthetic | v0.7.0 |
+| 23 | On paper | dark on light, for print | line, area | synthetic | v0.7.0 |
+| 24 | Themes from CSS | custom properties and the page's own `data-theme` | line, line | synthetic | v0.7.0 |
+| 25 | A brand theme | a theme object set from script | bar, bar | synthetic | v0.7.0 |
+| 26 | From 4 × 1 to full screen | the same chart in boxes of every size, resized live | line, line | synthetic | v0.7.0 |
+| 27 | A view in the URL | pan, reload, the same view | line, line | synthetic | v0.7.0 |
+| 28 | Linked charts | two charts of different widths sharing x and the cursor | line, line | synthetic | v0.7.0 |
+| 29 | Brush to zoom another | an overview and a detail | line, area | EIA WTI | v0.7.0 |
+| 30 | Every event | a live log of the `plot-*` events | line, line | synthetic | v0.7.0 |
+| 31 | From a CSV file | `src` pointing at a CSV | line, line | NAB | v0.7.0 |
+| 32 | From Arrow | a million rows through `src` | line, line | synthetic | v0.7.0 |
+| 33 | Typed arrays, no element | the JS API drawing into a canvas | line, line | synthetic | v0.7.0 |
+| 34 | Plain HTML, no build | one script tag and one element | line, line | synthetic | v0.7.0 |
+| 35 | React 19 | the tag in JSX with `onplot-hover` | candles, hollow | synthetic | v0.7.0 |
+| 36 | Reduced motion | the same chart with and without `motion` | line, line | synthetic | v0.7.0 |
+| 37 | Sparklines in a table | twenty services: latest, minimum, maximum | sparkline, line | synthetic | v0.7.0 |
+| 38 | A sparkline in a sentence | an inline area beside text | sparkline, area | synthetic | v0.7.0 |
+| 39 | Up and down days | daily changes as columns | sparkline, column | EIA WTI | v0.7.0 |
+| 40 | Fifty live sparklines | one module loaded for fifty tags | sparkline, line | synthetic, streaming | v0.7.0 |
+| 41 | Oil in weekly candles | candles aggregated from daily closes | candles, candle | EIA WTI | v0.7.0 |
+| 42 | Hollow candles in one ink | rising hollow, falling solid, no colour | candles, hollow | synthetic | v0.7.0 |
+| 43 | OHLC bars | open and close as ticks | candles, ohlc | synthetic | v0.7.0 |
+| 44 | From years to minutes | zooming through calendar intervals | candles, candle | synthetic, 1M ticks | v0.7.0 |
+| 45 | Session gaps | the index time scale beside a plain time scale | candles, candle | synthetic | v0.7.0 |
+| 46 | The last price | a magnet crosshair and a last-price line | candles, candle | synthetic | v0.7.0 |
+| 47 | Top talkers | horizontal bars re-ranked as traffic moves | bar, bar | synthetic, streaming | v0.7.0 |
+| 48 | Budget against actual | grouped bars by quarter | bar, bar | synthetic | v0.7.0 |
+| 49 | An energy mix | stacked bars | bar, bar | synthetic | v0.7.0 |
+| 50 | Geomagnetic storms | the K-index coloured by storm level | bar, bar | NOAA SWPC | v0.7.0 |
+| 51 | Earthquakes a day | a month of daily counts | bar, bar | USGS | v0.7.0 |
+| 52 | A loan, paid down | principal and interest stacked by year | bar, bar | synthetic (computed) | v0.7.0 |
+| 53 | A burn-down | remaining budget as bars with a target line | bar, bar | synthetic | v0.7.0 |
+| 54 | 1 kHz telemetry | following the live end, Space to pause | line, line | synthetic, streaming | v0.7.0 |
+| 55 | Late and duplicate rows | what `plot-data` counts | line, line | synthetic, streaming | v0.7.0 |
+| 56 | The last hour | retention by age | line, area | synthetic, streaming | v0.7.0 |
+| 57 | Network throughput | in above the axis, out below, live | line, area | synthetic, streaming | v0.7.0 |
+| 58 | A service dashboard | rate, p99 and errors in linked panes | line, bar | synthetic, NAB | v0.7.0 |
+| 59 | Today's yield curve | yield by maturity | line, line | U.S. Treasury | v0.7.0 |
+| 60 | The yield curve through the year | scrubbing the date redraws the curve | line, line | U.S. Treasury | v0.7.0 |
+| 61 | Exports | text, ANSI, SVG and PNG of the view you zoomed to | line, line | synthetic | v0.8.0 |
+| 62 | In a terminal | `tail -f feed.csv \| glyphplot line`, shown as recorded frames | line, line | synthetic | v0.8.0 |
+| 63 | A server-rendered first frame | an SVG still replaced by the live chart | candles, candle | synthetic | v0.8.0 |
+| 64 | Glyph fallbacks | one chart in braille, octants, sextants, quadrants and ASCII | line, area | synthetic | v0.8.0 |
+| 65 | Earthquakes on a map | longitude and latitude, sized by magnitude, coloured by depth | scatter, bubble | USGS | v0.9.0 |
+| 66 | Gutenberg–Richter | log counts by magnitude | bar, histogram | USGS | v0.9.0 |
+| 67 | A million points scattered | hover finds the nearest | scatter, point | synthetic | v0.9.0 |
+| 68 | Rate against latency | two measures of a service, one dot a minute | scatter, point | synthetic | v0.9.0 |
+| 69 | A latency heatmap | time by log-spaced buckets | heatmap, matrix | synthetic | v0.9.0 |
+| 70 | The yield curve as a heatmap | maturity by date | heatmap, matrix | U.S. Treasury | v0.9.0 |
+| 71 | A year of days | a calendar heatmap | heatmap, calendar | synthetic | v0.9.0 |
+| 72 | Changes, diverging | a heatmap of signed changes | heatmap, matrix | Federal Reserve H.10 | v0.9.0 |
+| 73 | An envelope | a band between minimum and maximum | line, band | NOAA CO-OPS | v0.9.0 |
+| 74 | Warmer and colder | a baseline mode around a mean | line, baseline | synthetic | v0.9.0 |
+| 75 | Share of traffic | stacked area in percent | line, area | synthetic | v0.9.0 |
+| 76 | Heikin-Ashi | averaged candles | candles, heikin-ashi | synthetic | v0.9.0 |
+| 77 | Right to left | Hebrew and Arabic series names | line, line | synthetic | v0.9.0 |
+| 78 | Indicators | SMA, EMA and Bollinger on price; RSI and MACD in panes | candles, line, bar | synthetic (markets pack) | v0.10.0 |
+| 79 | Trades into candles | live trades aggregated by the pack | candles, candle | synthetic (markets pack) | v0.10.0 |
+| 80 | Order-book depth | bids and asks as stepped areas | line, step | synthetic (markets pack) | v0.10.0 |
+| 81 | From Prometheus | a `query_range` response with counter resets, as rates | line, line | synthetic (telemetry pack) | v0.10.0 |
+| 82 | Quantiles from buckets | p99 from histogram buckets | line, line | synthetic (telemetry pack) | v0.10.0 |
+| 83 | An OTLP histogram | exponential buckets as a heatmap | heatmap, matrix | synthetic (telemetry pack) | v0.10.0 |
+| 84 | Tonight's sky | stars, constellation lines and planets for the reader's place (asked, never sent) | sky, equatorial | HYG, d3-celestial, JPL elements | v0.12.0 |
+| 85 | Through the night | the horizon view scrubbed by the hour | sky, horizon | HYG, JPL elements | v0.12.0 |
+| 86 | Orion up close | a region in stereographic projection, stars by magnitude | sky, equatorial | HYG, d3-celestial | v0.12.0 |
+| 87 | The solar system | orbits scrubbed through time | orbit | JPL elements | v0.12.0 |
+| 88 | The inner planets | Mercury to Mars over two years | orbit | JPL elements | v0.12.0 |
+| 89 | Eccentric orbits | orbits given as elements by the page | orbit | synthetic | v0.12.0 |
+| 90 | A transit | a TESS light curve, raw and phase-folded | line, line | NASA/MAST TESS | v0.12.0 |
 
 ## Domain packs
 
@@ -873,7 +987,7 @@ Tasks:
    are Phase 1's.
 3. `crates/glyphplot/examples/manifest.rs`: `families` prints the families
    with charts; `write <dir>` writes `modules.js`, `modules.d.ts` and
-   `budgets.json` (204,800 B default) (REQ-MANIFEST-010 lands in Phase 2;
+   `budgets.json` (358,400 B default) (REQ-MANIFEST-010 lands in Phase 2;
    Phase 0 needs only `families` and `budgets.json`).
 4. `mise.toml` tasks: `install`, `build:wasm`, `lint`, `fmt`, `test`,
    `test:rust`, `size`, `check`, `signoff` (a `scripts/signoff.sh` of its own)
@@ -886,7 +1000,7 @@ Tasks:
 Acceptance:
 - `mise install && mise run check` exits 0.
 - `mise run size` prints the `line` module (an empty chart family),
-  raw and gzipped, under 204,800 B, and `WASM_GZ_LIMIT=1000 mise run size`
+  raw and gzipped, under 358,400 B, and `WASM_GZ_LIMIT=1000 mise run size`
   fails naming it.
 - `cargo metadata --format-version 1 | grep -c '"source":"git+'` prints 0, and
   `mise run lint` fails on a test edit that adds `../animate-unicode` as a path
@@ -988,7 +1102,7 @@ Acceptance:
 - `mise run test:site` passes interaction, element, resize and axe.
 - `node --test web/test/memory.test.mjs`: 1M points within 16 B a point + 1
   MiB; free and remake grows nothing.
-- `mise run size`: the `line` module under 204,800 B (about 50 KB expected
+- `mise run size`: the `line` module under 358,400 B (about 50 KB expected
   from budgets.md's step 4, **(unverified)** for the real chart).
 - Owner: `test.html` in Chrome and Safari on a desktop and on a phone: hover,
   drag, pinch, scrub, keys, VoiceOver on the slider and the table; the
@@ -1082,18 +1196,25 @@ Tasks:
 1. Elm 0.19.1 site with Vite: flags from the manifest, routes
    (`/`, `/<type>`, `/docs/<page>`, `/examples/<name>`), the theme toggle
    (REQ-SITE-010, 060).
-2. A page per chart type; the doc pages; the examples of
-   [the site](#site-examples) 1–6 and 8 (REQ-SITE-020 to 050).
-3. `datasets/manifest.json` and `mise run datasets:check`; HYG fetched at
+2. A page per chart type and the doc pages (REQ-SITE-020, 030).
+3. The gallery and the catalogue's examples 1–60 with their pages, seeded
+   generators in `site/src/data/` labelled "simulated" with their seed,
+   build-time text first frames for the cards, `site/examples/manifest.json`
+   and `mise run examples:check` (REQ-SITE-040, 050, 080, 090, 110, 120).
+4. `datasets/manifest.json` and `mise run datasets:check`; HYG fetched at
    build time, never committed (REQ-DATASET-*).
-4. "Show data", forced colours, print (REQ-A11Y-110, REQ-THEME-100).
-5. `charts.spec.ts` (every type's page, no console error); axe on the index,
-   a chart page and an example (REQ-E2E-060, REQ-SITE-070).
-6. Install snippets that work before publishing (REQ-PKG-060).
+5. "Show data", forced colours, print (REQ-A11Y-110, REQ-THEME-100).
+6. `charts.spec.ts` (every type's page and every example's page, no console
+   error); axe on the index, a chart page, the gallery and an example
+   (REQ-E2E-060, REQ-SITE-070).
+7. Install snippets that work before publishing (REQ-PKG-060).
 
 Acceptance:
 - `mise run build:site`, `mise run test:site` (all), `mise run
-  datasets:check` exit 0.
+  datasets:check` and `mise run examples:check` exit 0; the gallery holds at
+  least 50 examples.
+- The gallery in headless Chromium fetches no wasm before a scroll, and each
+  family's module once however many cards use it.
 - Owner: the site in both themes on a desktop and a phone; each live example
   against its feed.
 
@@ -1116,6 +1237,7 @@ Acceptance:
 - `cargo test -p glyphplot-cli` passes (pty tests on macOS).
 - `node --test web/test/exports.test.mjs`: element exports byte-identical to
   `glyphplot render`.
+- `mise run examples:check` with the catalogue's v0.8.0 examples (REQ-SITE-100).
 - Owner: `glyphplot candles --from feed.csv` and `tail -f feed.csv |
   glyphplot line` in iTerm2 or Ghostty, with the mouse.
 
@@ -1130,6 +1252,7 @@ REQ-CANDLE-070, REQ-SCALE-070, REQ-SAMPLE-050, REQ-HIT-030, REQ-THEME-080,
 REQ-MONO-050, REQ-I18N-060, REQ-DATA-160).
 
 Acceptance: the contract and snapshots for every new type and mode;
+`mise run examples:check` with the catalogue's v0.9.0 examples;
 `mise run size` with five modules under budget; `mise run bench` with the
 scatter rows; owner: a coloured scatter and a heatmap on the site.
 
@@ -1142,7 +1265,8 @@ module and linked into the CLI, with presets, fixtures from the probes in
 REQ-SIZE-070). The site's first example moves from the TypeScript feed to the
 markets pack.
 
-Acceptance: `cargo test -p glyphplot-markets -p glyphplot-telemetry`; `mise
+Acceptance: `mise run examples:check` with the catalogue's v0.10.0 examples;
+`cargo test -p glyphplot-markets -p glyphplot-telemetry`; `mise
 run size` lists both pack modules under 32 KB; the pack-to-chart snapshot
 tests pass.
 
@@ -1166,7 +1290,8 @@ scale, RA and Dec formatters, Julian-date timestamps; the site's sky,
 solar-system and transit examples (REQ-ASTRO-*, REQ-SKY-*, REQ-SCALE-080,
 REQ-FMT-070, REQ-DATA-170).
 
-Acceptance: the contract for `sky` and `orbit`; the pack's Horizons fixtures
+Acceptance: `mise run examples:check` with at least 85 examples; the
+contract for `sky` and `orbit`; the pack's Horizons fixtures
 within 3′; `icrs` to `altaz` within 0.1° for the ten fixture stars.
 
 ## Testing strategy
@@ -1203,7 +1328,7 @@ number (as unicel's `Category::budget()`).
 
 | Budget | Value | Measured | Held by |
 |---|---|---|---|
-| Module size, gzip -9 | 200 KB a chart module (204,800 B), warning at 100 KB; 32 KB a pack | line: 17.4 KB without serde, 49.3 KB with; + candles 51.4 KB; + M4 52.6 KB | `mise run size` (REQ-SIZE-010, 040, 070) |
+| Module size, gzip -9 | 350 KB a chart module (358,400 B), warning at 175 KB; 32 KB a pack | line: 17.4 KB without serde, 49.3 KB with; + candles 51.4 KB; + M4 52.6 KB | `mise run size` (REQ-SIZE-010, 040, 070) |
 | Frame, native, ≤ 100k visible points | 1 ms average, 8 ms worst | ≤ 0.81 / ≤ 1.03 ms | `tests/budgets.rs` (REQ-PERF-040) |
 | Frame, native, ≤ 1M visible points | 4 ms average, 16 ms worst | 2.1–2.4 / 2.5–3.4 ms with M4 | `tests/budgets.rs` (REQ-PERF-030) |
 | Frame, Chromium, ≤ 1M visible points | 8 ms average, 16 ms worst | 3.2–3.7 / 3.7–4.2 ms; WebKit 3.8–4.3 / 4.5–5.0 | `bench:web` at signoff (REQ-PERF-060) |
@@ -1211,7 +1336,7 @@ number (as unicel's `Category::budget()`).
 | Streaming 1 kHz into a full 1M ring, 60 Hz | ≤ 500 ms of CPU a second in Chromium | 236 ms/s with M4 | `bench:web` (REQ-PERF-070) |
 | Memory a chart | 16 B a point of capacity (two columns) + 1 MiB | 17.7 MB at 1M zero-copy | `memory.test.mjs` (REQ-MEM-010) |
 | Memory on replace or free | no growth | pages unchanged after free (522) | `memory.test.mjs` (REQ-MEM-030) |
-| First frame, one chart | 1.0 s on 170 ms / 9 Mbps; 3.0 s on Lighthouse slow 4G | 635 ms and 2,082 ms (443 and 1,500 with preload hints) | `bench:load` at signoff (REQ-PERF-080) |
+| First frame, one chart | 1.0 s on 170 ms / 9 Mbps; Lighthouse slow 4G reported, not gated | 635 ms and 2,082 ms (443 and 1,500 with preload hints) | `bench:load` at signoff (REQ-PERF-080) |
 | Font | ≤ 32 KB woff2 | tier A 25,344 B | `build:font` (REQ-FONT-010) |
 | `check` | under 5 minutes, warm | unicel's contract alone: 32.5 s idle | (REQ-BUILD-090) |
 
@@ -1239,7 +1364,7 @@ REQ-CONTRACT-030).
    a copying path, or replaces data with larger data, holds the peak for its
    life. Mitigated by one-copy loading and ring reuse (REQ-MEM-*).
 5. **serde_json is a third of a small module** (+33 KB). Accepted for parity
-   (ADR-141); typed setters remove it if a module passes the 100 KB warning.
+   (ADR-141); typed setters remove it if a module passes the 175 KB warning.
 6. **Timings move with load.** Native frame times moved up to 1.6× and the
    contract doubled under load 7–12. The retime rule absorbs it; if budgets
    flake, `tests/budgets.rs` skips when the load passes half the cores and
@@ -1274,57 +1399,51 @@ REQ-CONTRACT-030).
 
 ## Open questions
 
-For the owner. Each has the options and a recommendation; the related ADR is
-Proposed until the owner answers.
+The owner answered every question on 2026-10-18: two with answers of their
+own (1 and 6, and 2 before them), the rest by taking the recommended default.
+The related ADRs are Accepted.
 
-1. **The size threshold a module.** 150 KB (unicel's), 200 KB, or 300 KB
-   gzipped. Recommend 200 KB with a warning at 100 KB (ADR-133): four times
-   today's full line module, about 0.8 s and 2.9 s to a first frame on the two
-   load profiles; 300 KB takes 3.4 s on Lighthouse's slow 4G.
-2. **Depend on a published unicel crate or vendor the core.** Settled by the
-   owner on 2026-10-18: neither. glyphplot copies, ports and vendors nothing
-   from unicel and depends on nothing in its repository (ADR-013; discovery's
-   ADR-100 is rejected).
+1. **The size threshold a module.** 350 KB gzipped, building for fast
+   connections and performant sites; a warning at 175 KB; first frame gated
+   at 1.0 s on the brief's 4G only, slow 4G reported (ADR-133, REQ-SIZE-010,
+   REQ-PERF-080).
+2. **Depend on a published unicel crate or vendor the core.** Neither:
+   glyphplot copies, ports and vendors nothing from unicel and depends on
+   nothing in its repository (ADR-013; ADR-100 rejected).
 3. **One tag or a tag per chart.** One tag, `<glyph-plot type>`, with
-   `define(tag, {type})` aliases for pages that want `<glyph-candles>`
-   (ADR-118).
+   `define(tag, {type})` aliases (ADR-118).
 4. **Palette index or RGB a cell.** A `u8` index into a 255-entry semantic
-   palette (ADR-102); RGB only if a chart must show three or more continuous
-   scales at once.
-5. **Celestial positions.** Charts take positions as data in a declared
-   frame; the astronomy pack computes planets from JPL's Keplerian elements;
-   Horizons for the Moon and precise work (ADR-140).
-6. **The Elm site.** Documentation with live charts, a page per chart type,
-   and an examples page as the gallery (ADR-143), rather than unicel's
-   gallery alone.
-7. **The first milestones' charts and the first domain pack.** `line` (line,
-   step, area) in v0.3.0; `candles`, `bar` and `sparkline` in v0.5.0;
-   streaming in v0.6.0; `scatter`, `heatmap` and the histogram in v0.9.0. The
-   first packs are markets and telemetry together in v0.10.0, astronomy with
-   the sky charts in v0.12.0.
-8. **serde_json in every module (+33 KB) or typed setters.** Keep serde_json
-   until a module passes 100 KB (ADR-141).
-9. **The renderer.** Measure `fillText` and the tinted atlas on your Chrome
-   and Safari in Phase 2 and keep the faster (ADR-119).
-10. **The default palettes and up/down colours.** Pick by eye among the
-    searched candidates held near Okabe–Ito's hues; up and down blue and
-    orange (≥ 50 ΔE00 under every vision) rather than green and red (9.3 for
-    deuteranopes); cividis as the sequential default (ADR-123).
-11. **Mouse drag and wheel.** Drag pans and the plain wheel scrolls the page
-    (no scroll trap); options switch to brushing and wheel zoom (ADR-116).
-12. **The smallest font and the font tiers.** Check digits by eye at 8–12 px;
-    propose a floor of 11 px at 1× and 9 px from 2×; tier A now, tier B in
-    v0.5.0 (ADR-121).
-13. **The live market feed on the site.** Synthetic plus Wikimedia edits a
-    second; write to an exchange for permission only if a real market matters
-    enough to carry a revocable permission (ADR-136).
-14. **The minus sign.** U+2212 in the browser, `-` in the CLI, switchable in
-    the locale pack (REQ-FMT-060).
-15. **The default time zone.** The element defaults to the page's zone,
-    resolved to an IANA name and passed in; the CLI and tests to UTC.
-16. **Gating budgets on a loaded machine.** Retime twice and keep the best,
-    printing the load; skip above half the cores only if it flakes.
-17. **The default height** of a chart with no CSS height: 12 rows.
+   palette (ADR-102).
+5. **Celestial positions.** Charts take positions as data; the astronomy pack
+   computes planets from JPL's Keplerian elements; Horizons for the Moon and
+   precise work (ADR-140).
+6. **The Elm site.** Documentation with live charts, and an examples page
+   that is the gallery, with a great many examples showing every kind of use:
+   the catalogue of [the site](#site-examples), at least 50 at v0.7.0 and 85 at
+   v0.12.0, coverage checked by `examples:check` (ADR-143, REQ-SITE-040 to
+   120).
+7. **The first charts and the first pack.** `line` in v0.3.0; `candles`,
+   `bar` and `sparkline` in v0.5.0; streaming in v0.6.0; `scatter`,
+   `heatmap` and the histogram in v0.9.0; markets and telemetry packs in
+   v0.10.0; astronomy with the sky charts in v0.12.0 (ADR-101).
+8. **serde_json in every module.** Kept until a module passes the 175 KB
+   warning (ADR-141).
+9. **The renderer.** The owner measures `fillText` and the tinted atlas on
+   Chrome and Safari in Phase 2; the faster is kept (ADR-119).
+10. **Default colours.** Palettes picked by eye in Phase 1 among the searched
+    candidates held near Okabe–Ito's hues; up and down blue and orange; cividis
+    (ADR-123, REQ-THEME-065, REQ-THEME-080).
+11. **Mouse.** Drag pans and the plain wheel scrolls the page (ADR-116).
+12. **Font.** A floor of 11 px at 1× and 9 px from 2× (REQ-EL-085), checked by
+    eye in Phase 2; tier A now, tier B in v0.5.0 (ADR-121).
+13. **The site's market feed.** Synthetic plus Wikimedia edits a second
+    (ADR-136).
+14. **The minus sign.** U+2212 in the browser, `-` in the CLI (REQ-FMT-060).
+15. **The default time zone.** The page's, resolved and passed in; UTC for
+    the core, the CLI and tests (REQ-TZ-050, ADR-112).
+16. **Budgets on a loaded machine.** Retime twice and keep the best, printing
+    the load (ADR-126).
+17. **The default height.** 12 rows (REQ-EL-100, ADR-103).
 
 <a id="appendix-a"></a>
 ## Appendix A: measurements

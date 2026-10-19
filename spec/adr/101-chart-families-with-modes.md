@@ -1,6 +1,6 @@
 # ADR-101: Chart families with modes
 
-Status: Proposed (2026-10-18)
+Status: Accepted (2026-10-18), by the owner (open question 7 of the plan)
 
 ## Context
 
@@ -45,4 +45,4 @@ code at 2,694 B (linear scale, nice ticks, SI labels, ladder step 2) plus
 - A page with a line chart and sparklines loads one module, not two.
 - A new mode costs its marks and transform, not another copy of the base.
 - A sparkline page carries axis and date code it does not draw (3,841 B).
-- Revisit a family that passes ADR-133's 100 KB warning by splitting it.
+- Revisit a family that passes ADR-133's 175 KB warning by splitting it.

@@ -1,6 +1,6 @@
 # ADR-119: No glyph-and-colour atlas
 
-Status: Proposed (2026-10-18)
+Status: Accepted (2026-10-18), by the owner (open question 9 of the plan)
 
 ## Context
 

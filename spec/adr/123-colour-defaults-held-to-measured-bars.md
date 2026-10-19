@@ -1,6 +1,6 @@
 # ADR-123: Colour defaults held to measured bars
 
-Status: Proposed (2026-10-18)
+Status: Accepted (2026-10-18), by the owner (open question 10 of the plan)
 
 ## Context
 
@@ -37,6 +37,9 @@ searched per ground to meet the bars, chosen by the owner's eye.
   the searched candidates are in the bench, and the owner picks by eye.
 - The default sequential scale is cividis; the diverging scale runs blue to
   orange with its middle on the ground's side (REQ-THEME-080).
+- The default `up` is a blue and `down` an orange, at least 50 ΔE00 apart under
+  every vision (REQ-THEME-065); the owner picks the categorical palettes by eye
+  in Phase 1 among the bench's candidates.
 - `up` and `down` are tokens, and candles and bars also differ by fill
   (REQ-THEME-060).
 - One ink carries series by dash pattern (REQ-MONO-010), markers for series

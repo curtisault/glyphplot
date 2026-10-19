@@ -1,6 +1,6 @@
 # ADR-102: A semantic palette of 255
 
-Status: Proposed (2026-10-18)
+Status: Accepted (2026-10-18), by the owner (open question 4 of the plan)
 
 ## Context
 

@@ -18,10 +18,10 @@
       "additionalProperties": false,
       "properties": {
         "gzip": {
-          "description": "The module's glyphplot_bg.wasm, gzip -9, in bytes; 204800 by default (REQ-SIZE-010).",
+          "description": "The module's glyphplot_bg.wasm, gzip -9, in bytes; 358400 by default (REQ-SIZE-010).",
           "type": "integer",
           "minimum": 0,
-          "default": 204800
+          "default": 358400
         },
         "frameMs": {
           "description": "The average frame in a native release build, in ms, over the play of REQ-PERF-030; 4 by default.",

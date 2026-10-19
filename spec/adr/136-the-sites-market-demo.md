@@ -1,6 +1,6 @@
 # ADR-136: The site's market demo
 
-Status: Proposed (2026-10-18)
+Status: Accepted (2026-10-18), by the owner (open question 13 of the plan)
 
 ## Context
 

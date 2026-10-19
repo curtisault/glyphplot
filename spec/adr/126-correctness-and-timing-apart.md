@@ -1,6 +1,6 @@
 # ADR-126: Correctness and timing apart
 
-Status: Proposed (2026-10-18)
+Status: Accepted (2026-10-18), by the owner (open question 16 of the plan)
 
 ## Context
 

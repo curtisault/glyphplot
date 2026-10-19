@@ -425,9 +425,10 @@ Nothing is built.
 
 ## 19. Decisions
 
-The owner's decisions, each accepted. Discovery's, ADR-100 to ADR-143, are
-Proposed and listed in [adr/README.md](adr/README.md); each joins this table
-when the owner accepts it.
+Accepted decisions: the owner's (001–013) and those of discovery's the owner
+accepted on 2026-10-18. The rest of ADR-100 to ADR-143 are Proposed (ADR-100
+is rejected) and listed in [adr/README.md](adr/README.md); each joins this
+table when the owner accepts it.
 
 | ADR | Decision | Date |
 |---|---|---|
@@ -444,6 +445,21 @@ when the owner accepts it.
 | [ADR-011](adr/011-mit-licence.md) | MIT licence | 2026-10-18 |
 | [ADR-012](adr/012-no-ai-attribution.md) | No AI attribution | 2026-10-18 |
 | [ADR-013](adr/013-independent-of-unicel.md) | Independent of unicel | 2026-10-18 |
+| [ADR-101](adr/101-chart-families-with-modes.md) | Chart families with modes | 2026-10-18 |
+| [ADR-102](adr/102-semantic-palette-of-255.md) | A semantic palette of 255 | 2026-10-18 |
+| [ADR-103](adr/103-cell-from-font-grid-from-box.md) | The cell from the font, the grid from the box | 2026-10-18 |
+| [ADR-112](adr/112-zones-and-locales-from-the-shell.md) | Zones and locales from the shell | 2026-10-18 |
+| [ADR-116](adr/116-input-defaults.md) | Input defaults | 2026-10-18 |
+| [ADR-118](adr/118-one-tag-with-a-type.md) | One tag with a type | 2026-10-18 |
+| [ADR-119](adr/119-no-glyph-and-colour-atlas.md) | No glyph-and-colour atlas | 2026-10-18 |
+| [ADR-121](adr/121-extend-the-bundled-font.md) | Extend the bundled font | 2026-10-18 |
+| [ADR-123](adr/123-colour-defaults-held-to-measured-bars.md) | Colour defaults held to measured bars | 2026-10-18 |
+| [ADR-126](adr/126-correctness-and-timing-apart.md) | Correctness and timing apart | 2026-10-18 |
+| [ADR-133](adr/133-a-350-kb-module-gate.md) | A 350 KB module gate | 2026-10-18 |
+| [ADR-136](adr/136-the-sites-market-demo.md) | The site's market demo | 2026-10-18 |
+| [ADR-140](adr/140-celestial-positions-in-a-pack.md) | Celestial positions in a pack | 2026-10-18 |
+| [ADR-141](adr/141-serde-json-in-chart-modules.md) | serde_json in chart modules | 2026-10-18 |
+| [ADR-143](adr/143-site-docs-with-live-charts.md) | The site is documentation with live charts | 2026-10-18 |
 
 ---
 

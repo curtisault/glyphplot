@@ -222,6 +222,7 @@ Several checks may be listed for one requirement, separated by commas.
 | REQ-TZ-020 | v0.5.0 | `web/test/locale.test.mjs`, `site/e2e/element.spec.ts` | — |
 | REQ-TZ-030 | v0.5.0 | `reference::local_ticks_match_d3_scale_time` | — |
 | REQ-TZ-040 | v0.8.0 | `crates/cli/tests/cli.rs::frames_match_the_element_in_a_zone` | — |
+| REQ-TZ-050 | v0.5.0 | `site/e2e/element.spec.ts` (the page's zone passed in), `crates/glyphplot/src/time.rs tests::the_core_defaults_to_utc` | — |
 | REQ-I18N-010 | v0.3.0 | `site/e2e/element.spec.ts` | — |
 | REQ-I18N-020 | v0.3.0 | `web/test/locale.test.mjs`, `mise run size --charts` (no locale database) | — |
 | REQ-I18N-030 | v0.2.0 | `crates/glyphplot/src/format.rs tests::default_locale_is_plain` | — |
@@ -415,6 +416,7 @@ Several checks may be listed for one requirement, separated by commas.
 | REQ-EL-060 | v0.3.0 | `site/e2e/element.spec.ts` | — |
 | REQ-EL-070 | v0.3.0 | `site/e2e/element.spec.ts` | — |
 | REQ-EL-080 | v0.3.0 | `site/e2e/resize.spec.ts`, manual (devicePixelRatio on real screens) | — |
+| REQ-EL-085 | v0.3.0 | `site/e2e/resize.spec.ts` (a 6 px font drawn at the floor) | — |
 | REQ-EL-090 | v0.3.0 | `site/e2e/resize.spec.ts` | — |
 | REQ-EL-100 | v0.3.0 | `site/e2e/resize.spec.ts` | — |
 | REQ-EL-110 | v0.5.0 | `site/e2e/resize.spec.ts` | — |
@@ -462,6 +464,7 @@ Several checks may be listed for one requirement, separated by commas.
 | REQ-THEME-040 | v0.3.0 | `crates/glyphplot/src/theme.rs tests::default_contrast_ratios` | — |
 | REQ-THEME-050 | v0.3.0 | `crates/glyphplot/src/theme.rs tests::categorical_palettes_differ_under_cvd` | — |
 | REQ-THEME-060 | v0.5.0 | `contract::every_chart_keeps_the_contract` (rule 10), `contract::every_chart_matches_its_snapshots` | — |
+| REQ-THEME-065 | v0.5.0 | `mise run palette:check` (up and down 50 ΔE00 apart under four visions) | — |
 | REQ-THEME-070 | v0.3.0 | `web/test/theme.test.mjs` (debug build) | — |
 | REQ-THEME-080 | v0.9.0 | `crates/glyphplot/src/theme.rs tests::default_scales_are_monotonic_and_separate` | — |
 | REQ-THEME-090 | v0.8.0 | `crates/cli/tests/cli.rs::theme_file_is_read`, `web/test/exports.test.mjs`, `crates/glyphplot/src/export.rs tests::exports_take_a_theme` | — |
@@ -591,6 +594,11 @@ Several checks may be listed for one requirement, separated by commas.
 | REQ-SITE-050 | v0.7.0 | `site/e2e/site.spec.ts` (feed down), review (source and licence named) | — |
 | REQ-SITE-060 | v0.7.0 | `site/e2e/site.spec.ts` | — |
 | REQ-SITE-070 | v0.7.0 | `site/e2e/a11y.spec.ts` | — |
+| REQ-SITE-080 | v0.7.0 | `mise run examples:check`, `site/e2e/charts.spec.ts` (every example's page) | — |
+| REQ-SITE-090 | v0.7.0 | `mise run examples:check` (the example count) | — |
+| REQ-SITE-100 | v0.8.0 | `mise run examples:check` (on each milestone's branch) | — |
+| REQ-SITE-110 | v0.7.0 | `mise run examples:check` (generated data labelled with its seed), `site/e2e/site.spec.ts` | — |
+| REQ-SITE-120 | v0.7.0 | `site/e2e/site.spec.ts` (no wasm fetched before a scroll; one fetch a family) | — |
 | REQ-DATASET-010 | v0.7.0 | `mise run datasets:check` | — |
 | REQ-DATASET-020 | v0.7.0 | `mise run datasets:check` | — |
 | REQ-DATASET-030 | v0.7.0 | `mise run datasets:check`, `web/test/package.test.mjs` | — |
@@ -637,7 +645,7 @@ Several checks may be listed for one requirement, separated by commas.
 
 ## Summary
 
-332 requirements.
+340 requirements.
 
 ### By milestone
 
@@ -645,17 +653,17 @@ Several checks may be listed for one requirement, separated by commas.
 |---|---|
 | v0.1.0 | 20 |
 | v0.2.0 | 47 |
-| v0.3.0 | 121 |
+| v0.3.0 | 122 |
 | v0.4.0 | 13 |
-| v0.5.0 | 35 |
+| v0.5.0 | 37 |
 | v0.6.0 | 16 |
-| v0.7.0 | 14 |
-| v0.8.0 | 24 |
+| v0.7.0 | 18 |
+| v0.8.0 | 25 |
 | v0.9.0 | 14 |
 | v0.10.0 | 14 |
 | v0.11.0 | 5 |
 | v0.12.0 | 9 |
-| **Total** | **332** |
+| **Total** | **340** |
 
 ### By kind of planned check
 
@@ -665,12 +673,12 @@ kind of the first check listed.
 
 | Kind | Any check | First check |
 |---|---|---|
-| Rust | 181 | 176 |
+| Rust | 182 | 176 |
 | Node | 62 | 43 |
-| browser | 70 | 57 |
-| task/lint | 59 | 47 |
+| browser | 75 | 60 |
+| task/lint | 64 | 52 |
 | manual/review | 33 | 9 |
-| **Total** | — | **332** |
+| **Total** | — | **340** |
 
 ### By status
 
@@ -678,4 +686,4 @@ kind of the first check listed.
 |---|---|
 | yes | 0 |
 | partial | 0 |
-| — | 332 |
+| — | 340 |

@@ -1,6 +1,6 @@
 # ADR-140: Celestial positions in a pack
 
-Status: Proposed (2026-10-18)
+Status: Accepted (2026-10-18), by the owner (open question 5 of the plan)
 
 ## Context
 

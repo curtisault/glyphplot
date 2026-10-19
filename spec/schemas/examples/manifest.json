@@ -30,7 +30,7 @@
       "mono": "authored",
       "charset": "extended",
       "budget": {
-        "gzip": 204800,
+        "gzip": 358400,
         "frameMs": 4,
         "worstMs": 16,
         "inputMs": 0.5
@@ -58,7 +58,7 @@
       "mono": "auto",
       "charset": "extended",
       "budget": {
-        "gzip": 204800,
+        "gzip": 358400,
         "frameMs": 4,
         "worstMs": 16,
         "inputMs": 0.5
@@ -104,7 +104,7 @@
       "mono": "authored",
       "charset": "extended",
       "budget": {
-        "gzip": 204800,
+        "gzip": 358400,
         "frameMs": 4,
         "worstMs": 16,
         "inputMs": 0.5
@@ -119,13 +119,13 @@
   "fallback": null,
   "budgets": {
     "line": {
-      "gzip": 204800,
+      "gzip": 358400,
       "frameMs": 4,
       "worstMs": 16,
       "inputMs": 0.5
     },
     "candles": {
-      "gzip": 204800,
+      "gzip": 358400,
       "frameMs": 4,
       "worstMs": 16,
       "inputMs": 0.5

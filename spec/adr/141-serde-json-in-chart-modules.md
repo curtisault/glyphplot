@@ -1,6 +1,6 @@
 # ADR-141: serde_json in chart modules
 
-Status: Proposed (2026-10-18)
+Status: Accepted (2026-10-18), by the owner (open question 8 of the plan)
 
 ## Context
 
@@ -23,7 +23,7 @@ Measured (wasm-pack release with unicel's profile, `gzip -9`):
   bring were about half of the full module (budgets.md, twiggy 0.7 by owner).
 - Options through serde_json's `Value` alone took a base module from 8,269 B
   to 19,195 B (`discovery/data.md`, its `options` feature).
-- A 200 KB gate (ADR-133) holds a module with serde at 49,297 B with room.
+- A 350 KB gate (ADR-133) holds a module with serde at 49,297 B with room.
 
 ## Decision
 
@@ -41,5 +41,5 @@ Measured (wasm-pack release with unicel's profile, `gzip -9`):
 - Errors name the field at fault, and the module matches unicel's shape.
 - Every module repeats about 33 KB, so a page of five families pays it five
   times.
-- Revisit with (b) when a module passes the 100 KB warning (REQ-SIZE-040): it
+- Revisit with (b) when a module passes the 175 KB warning (REQ-SIZE-040): it
   is the one change that removes two thirds of a small module.

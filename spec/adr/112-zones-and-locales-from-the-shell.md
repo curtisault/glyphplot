@@ -1,6 +1,6 @@
 # ADR-112: Zones and locales from the shell
 
-Status: Proposed (2026-10-18)
+Status: Accepted (2026-10-18), by the owner (open question 15 of the plan)
 
 ## Context
 
@@ -30,10 +30,10 @@ the page's local zone; scales.md recommended UTC.
 - Time scales default to UTC; the core reads no clock, zone or tzdata
   (REQ-TZ-010). Timestamps are UTC instants; a zone moves only ticks and
   labels, and no frame depends on the host's zone (REQ-DATA-090).
-- With no zone given, the core draws in UTC; the CLI and tests use that. Whether
-  the element passes the page's own zone by default is open question 15 in
-  `docs/IMPLEMENTATION_PLAN.md` (recommended: yes, resolved to an IANA name
-  and passed in explicitly, so the frame stays a function of its inputs).
+- With no zone given, the core draws in UTC; the CLI and tests use that. The
+  element passes the page's own zone by default, resolved to an IANA name and
+  passed in explicitly, so the frame stays a function of its inputs
+  (REQ-TZ-050; the owner's answer to open question 15).
 - `timeZone` is `UTC`, a fixed offset or an IANA name. The shell turns it into
   a table of offset transitions over the data's extent and the view with
   `Intl.DateTimeFormat`, and it crosses once (REQ-TZ-020); local ticks equal

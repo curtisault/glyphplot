@@ -1,12 +1,12 @@
 {
   "line": {
-    "gzip": 204800,
+    "gzip": 358400,
     "frameMs": 4,
     "worstMs": 16,
     "inputMs": 0.5
   },
   "candles": {
-    "gzip": 204800,
+    "gzip": 358400,
     "frameMs": 4,
     "worstMs": 16,
     "inputMs": 0.5

@@ -30,7 +30,7 @@
       "mono": "authored",
       "charset": "extended",
       "budget": {
-        "gzip": 204800,
+        "gzip": 358400,
         "frameMs": 4,
         "worstMs": 16,
         "inputMs": 0.5
@@ -43,7 +43,7 @@
   "fallback": "all",
   "budgets": {
     "all": {
-      "gzip": 204800,
+      "gzip": 358400,
       "frameMs": 4,
       "worstMs": 16,
       "inputMs": 0.5

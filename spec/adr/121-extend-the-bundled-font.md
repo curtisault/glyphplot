@@ -1,6 +1,6 @@
 # ADR-121: Extend the bundled font
 
-Status: Proposed (2026-10-18)
+Status: Accepted (2026-10-18), by the owner (open question 12 of the plan)
 
 ## Context
 

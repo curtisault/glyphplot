@@ -1,6 +1,6 @@
 # ADR-118: One tag with a type
 
-Status: Proposed (2026-10-18)
+Status: Accepted (2026-10-18), by the owner (open question 3 of the plan)
 
 ## Context
 

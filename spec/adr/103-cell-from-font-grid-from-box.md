@@ -1,6 +1,6 @@
 # ADR-103: The cell from the font, the grid from the box
 
-Status: Proposed (2026-10-18)
+Status: Accepted (2026-10-18), by the owner (open question 17 of the plan)
 
 ## Context
 

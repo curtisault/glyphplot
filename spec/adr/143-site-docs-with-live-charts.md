@@ -1,6 +1,6 @@
 # ADR-143: The site is documentation with live charts
 
-Status: Proposed (2026-10-18)
+Status: Accepted (2026-10-18), by the owner (open question 6 of the plan)
 
 ## Context
 
@@ -34,8 +34,19 @@ What bears on it:
   snippets that name only installs that work (REQ-SITE-020).
 - Documentation pages (getting started, the data contract, view and events,
   theming, accessibility, the CLI) hold live charts (REQ-SITE-030).
-- The examples page shows the plan's site examples, the two live candlesticks
-  first (REQ-SITE-040, ADR-136); it serves as the gallery.
+- The examples page is the gallery, and the owner wants a great many
+  examples to show every kind of use. Each example is a card with a live chart
+  (a build-time text first frame until it nears the screen), filterable by
+  chart type, mode, domain, feature and milestone, with a page of its own
+  showing the source it runs; the two live candlesticks come first
+  (REQ-SITE-040, REQ-SITE-120, ADR-136).
+- The plan's catalogue lists 90 examples, 60 of them by v0.7.0.
+  `site/examples/manifest.json` and `mise run examples:check` hold the
+  gallery to at least three examples a built chart type, one a built mode and
+  one a built feature, at least 50 examples at v0.7.0 and 85 at v0.12.0, and
+  every milestone after the site adds examples of what it ships (REQ-SITE-080
+  to REQ-SITE-100).
+- Generated data says "simulated" and its seed (REQ-SITE-110).
 - Install snippets say the packages are unpublished until they are
   (REQ-PKG-060).
 
@@ -43,6 +54,7 @@ What bears on it:
 
 - Every documented behaviour is a live chart the e2e tests load
   (REQ-E2E-060).
-- The site has more pages to keep current than unicel's.
+- The site has many more pages to keep current than a gallery of art would;
+  `examples:check` and the e2e test of every example's page keep them honest.
 - The site depends on the dataset manifest (ADR-137).
 - Revisit if the owner wants the gallery as the front page.
