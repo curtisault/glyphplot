@@ -7,11 +7,14 @@
 //! `Math.pow` and `Math.log10` where d3 calls them (`format::js`), so every
 //! tick equals d3's bit for bit (REQ-TICK-010). UTC calendar ticks are
 //! d3-time's `utcTicks`, in [`crate::time`] and re-exported here
-//! (REQ-TICK-020).
+//! (REQ-TICK-020). [`mark`] places a tick on an axis's cells and dots
+//! (REQ-TICK-040); `crate::layout::fit_ticks` chooses how many ticks an axis
+//! shows (REQ-TICK-030).
 
 // d3 tests `!(x > 0)` so that NaN takes the same branch; so does this port.
 #![allow(clippy::neg_cmp_op_on_partial_ord)]
 
+use crate::cells::Axis;
 use crate::format::js;
 
 pub use crate::time::{utc_tick_interval, utc_ticks};
@@ -118,10 +121,60 @@ pub fn tick_step(start: f64, stop: f64, count: f64) -> f64 {
     (if reverse { -1.0 } else { 1.0 }) * (if inc < 0.0 { 1.0 / -inc } else { inc })
 }
 
+/// Where a tick at `v` is drawn on `axis`, as `(cell, dot)`: its gridline
+/// at the dot nearest its position, the dot holding it, and its mark in the
+/// cell holding that dot, the nearest cell (REQ-TICK-040). The dot is
+/// [`Axis::dot_in`]'s, the one data at `v` is drawn in, so a gridline meets
+/// the data to the dot; [`crate::cells::nearest`] on [`Axis::position`] gives
+/// the same dot except at a dot's very edge, where float rounding can tip it
+/// to the neighbour, which is as near. The domain's far end falls in the last
+/// cell and dot. `None` for a value outside the domain or not finite, or an
+/// axis of no cells.
+pub fn mark(axis: &Axis, v: f64) -> Option<(usize, usize)> {
+    let dot = axis.dot_in(v)?;
+    Some((dot / axis.per(), dot))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use proptest::prelude::*;
+
+    /// REQ-TICK-040: a mark takes the cell whose middle is nearest its
+    /// position and a gridline the dot whose middle is nearest, both ends of
+    /// the domain inside the axis, on x and y.
+    #[test]
+    fn marks_take_the_nearest_cell_and_dot() {
+        let x = Axis::x(0.0, 100.0, 40, 2);
+        assert_eq!(mark(&x, 37.0), Some((14, 29)), "37 is at 14.8 cells, 29.6 dots");
+        assert_eq!(mark(&x, 0.0), Some((0, 0)));
+        assert_eq!(mark(&x, 100.0), Some((39, 79)), "the far end is in the last cell");
+        assert_eq!(mark(&x, 100.5), None);
+        assert_eq!(mark(&x, f64::NAN), None);
+        let y = Axis::y(0.0, 10.0, 5, 4);
+        assert_eq!(mark(&y, 10.0), Some((0, 0)), "the top of a y axis is row 0");
+        assert_eq!(mark(&y, 0.0), Some((4, 19)));
+        assert_eq!(mark(&y, 5.0), Some((2, 10)));
+        assert_eq!(mark(&Axis::x(0.0, 1.0, 0, 2), 0.5), None);
+        for axis in [x, y, Axis::x(-3.7, 12.9, 77, 2), Axis::y(0.1, 0.3, 13, 4)] {
+            let per = axis.per() as f64;
+            for i in 0..=1000 {
+                let v = (axis.lo() + (axis.hi() - axis.lo()) * f64::from(i) / 1000.0).min(axis.hi());
+                let (cell, dot) = mark(&axis, v).expect("a value of the domain has a mark");
+                let p = axis.position(v);
+                // Within float rounding of a dot's edge, either neighbour is
+                // the nearest.
+                let slack = 1e-9 * axis.cells() as f64;
+                if p < axis.cells() as f64 {
+                    assert!((cell as f64 + 0.5 - p).abs() <= 0.5 + slack, "{v} at {p} took cell {cell}");
+                    assert!(((dot as f64 + 0.5) / per - p).abs() <= (0.5 + slack) / per, "{v} at {p} took dot {dot}");
+                }
+                assert_eq!(cell, dot / axis.per(), "the cell and the dot agree");
+                let (_, near) = crate::cells::nearest(p, axis.per()).unwrap();
+                assert!((near - dot as i64).abs() <= 1 || p >= axis.cells() as f64, "{v}: nearest gives dot {near}, the data dot {dot}");
+            }
+        }
+    }
 
     #[test]
     fn ticks_match_d3_examples() {
