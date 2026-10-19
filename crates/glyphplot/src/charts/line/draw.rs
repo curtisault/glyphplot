@@ -40,6 +40,11 @@ pub(super) struct Geom {
     pub x: Axis,
     /// The y axis over the plot's rows, 4 dots a cell.
     pub y: Axis,
+    /// The step between the x axis's ticks, which the readout's precision
+    /// starts from.
+    pub x_step: f64,
+    /// The step between the y axis's ticks.
+    pub y_step: f64,
     /// Each legend entry's cells, by series.
     pub legend: Vec<(usize, Rect)>,
     /// The title, when it is drawn.
@@ -179,6 +184,11 @@ pub(super) fn base(grid: &mut Grid, canvas: &mut ColorCanvas, cache: &mut Cache,
     let mut f = Frame::new(grid, ground);
     let shown: Vec<usize> = (0..data.series.len()).filter(|&s| !view.is_hidden(&data.series[s].name)).collect();
     let any = data.rows() > 0 && !data.series.is_empty();
+    let patterned = match cfg.patterns {
+        super::Patterns::On => true,
+        super::Patterns::Off => false,
+        super::Patterns::Auto => mono,
+    };
     if plot.w > 0 && plot.h > 0 && !shown.is_empty() {
         let edges = Edges::new(&geom.x);
         let span = cfg.span_gaps;
@@ -191,11 +201,6 @@ pub(super) fn base(grid: &mut Grid, canvas: &mut ColorCanvas, cache: &mut Cache,
         canvas.resize(plot.w, plot.h);
         let (w, h) = (canvas.width() as i64, canvas.height() as i64);
         let origin = mono::origin(&geom.x);
-        let patterned = match cfg.patterns {
-            super::Patterns::On => true,
-            super::Patterns::Off => false,
-            super::Patterns::Auto => mono,
-        };
         // Z-order: the series list, with selected series raised to the top
         // (REQ-CHART-060).
         let raised: Vec<&str> = view.selection.as_ref().map(|s| s.points.iter().map(|p| p.series.as_str()).collect()).unwrap_or_default();
@@ -245,11 +250,14 @@ pub(super) fn base(grid: &mut Grid, canvas: &mut ColorCanvas, cache: &mut Cache,
     if let (Some(rect), Some(title)) = (layout.title, &geom.title) {
         f.label_in(rect, title, INK);
     }
+    // Each key is the line its series is drawn with: its dash pattern when
+    // patterned (one ink, or `patterns: "on"`), else solid (REQ-MONO-040).
     for (s, span) in &geom.legend {
         let hidden = view.is_hidden(&data.series[*s].name);
         let ink = if hidden { MUTED } else { series_ink(*s) };
         let mut key = [0u8; 4];
-        f.label(span.x, span.y, mono::key(*s).encode_utf8(&mut key), ink);
+        let glyph = if patterned { mono::key(*s) } else { mono::KEYS[0] };
+        f.label(span.x, span.y, glyph.encode_utf8(&mut key), ink);
         f.label(span.x + 2, span.y, &data.series[*s].name, if hidden { MUTED } else { INK });
     }
     if let Some(a) = &layout.x_axis {

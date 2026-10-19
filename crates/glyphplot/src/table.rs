@@ -4,8 +4,8 @@
 //! `Chart::table(max_rows)` gives a [`Table`] of the data in the current
 //! view, at most `max_rows` rows; past that, [`pick_rows`] keeps each
 //! bucket's least and greatest value, so a spike is never dropped, and the
-//! caption says how many points the view holds. Every cell is written by
-//! the core's formatters (REQ-FMT-030). The shell builds the light-DOM
+//! shell adds to the caption how many points the view holds. Every cell is
+//! written by the core's formatters (REQ-FMT-030). The shell builds the light-DOM
 //! `<table>` from it at most once a second, on `final` view changes and
 //! data commits, and sets the drawing's label to [`Table::summary`] and the
 //! slider's `aria-valuetext` to [`Table::value`].
@@ -15,8 +15,9 @@ use serde::Serialize;
 /// The accessible text of a chart's view.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
 pub struct Table {
-    /// The table's caption: what the rows are, and how many points the view
-    /// holds when it holds more than the rows.
+    /// The table's caption: what the rows are, with no count; the shell adds
+    /// how many points the view holds when it holds more than the rows
+    /// (`captionOf` in web/src/a11y.ts).
     pub caption: String,
     /// The column headers (`th scope="col"`): the x column, then one a
     /// series.

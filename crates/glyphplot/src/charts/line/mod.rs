@@ -14,6 +14,7 @@
 //! configuration.
 
 mod draw;
+mod readout;
 mod series;
 
 use std::cell::RefCell;
@@ -29,7 +30,7 @@ use crate::format::Locale;
 use crate::grid::{Grid, NO_BACK};
 use crate::hit::{column_aggregate, nearest};
 use crate::input::Input;
-use crate::layout::{layout, AxisInput, Layout, LayoutExtents, LayoutInput, PaneExtents, Rect};
+use crate::layout::{layout, AxisInput, Layout, LayoutExtents, LayoutInput, PaneExtents, PlacedAxis, Rect};
 use crate::locale::LocalePack;
 use crate::options::Options;
 use crate::palette::GROUND;
@@ -66,6 +67,14 @@ pub const REGISTRY: &[Entry] = &[Entry { meta: &META, make }];
 
 /// The family's registry entry.
 pub const FAMILY: Family = Family { name: "line", budget: Budget::DEFAULT, charts: REGISTRY };
+
+/// The least share of the niced y domain the data must span for the chart
+/// to keep it. `nice` widens a domain to a multiple of the tick step, and
+/// at a few rows the step is coarse: multi-4's −8.4 to 11.4 is niced to −20
+/// to 20 on four rows, leaving half of them empty. Below this share the y
+/// domain is the data's, unniced, and the ticks are fitted inside it, so the
+/// data fills the plot's height.
+const NICE_FILL: f64 = 0.75;
 
 /// A fresh `line` chart for options already layered on [`META`]'s.
 pub fn make(options: &Options) -> Result<Box<dyn Chart>, MakeError> {
@@ -229,6 +238,7 @@ pub struct LineChart {
     base_key: Option<BaseKey>,
     base_draws: u64,
     canvas: crate::canvas::ColorCanvas,
+    formats: readout::Formats,
 }
 
 impl LineChart {
@@ -256,6 +266,7 @@ impl LineChart {
             base_key: None,
             base_draws: 0,
             canvas: crate::canvas::ColorCanvas::new(crate::canvas::Glyphs::Braille, 0, 0),
+            formats: readout::Formats::default(),
         })
     }
 
@@ -357,19 +368,36 @@ impl LineChart {
         let mut x_axis = AxisInput::new(self.data.kind);
         x_axis.scale = scale_options(self.data.kind, Domain::Data, None);
         let mut y_axis = AxisInput::new(Kind::Linear);
-        y_axis.scale = scale_options(Kind::Linear, y_domain, Some(true));
+        y_axis.scale = scale_options(Kind::Linear, y_domain.clone(), Some(true));
         let mut input = LayoutInput::new(x_axis, y_axis);
         input.title = title.clone();
         input.legend = legend.clone();
         input.locale = self.locale.clone();
         let x_ext = Extents { data: Some(xd), visible: None, view: Some(xd) };
         let y_ext = Extents { data: all, visible, view: view.y.domain };
-        let lay = layout(key.cols, key.rows, &input, &LayoutExtents { x: x_ext, panes: vec![PaneExtents { left: y_ext, ..PaneExtents::default() }] })
-            .or_else(|_| layout(key.cols, key.rows, &input, &LayoutExtents { x: x_ext, panes: vec![PaneExtents::default()] }))
-            .unwrap_or_else(|_| empty_layout(key.cols, key.rows));
+        let run = |input: &LayoutInput| {
+            layout(key.cols, key.rows, input, &LayoutExtents { x: x_ext, panes: vec![PaneExtents { left: y_ext, ..PaneExtents::default() }] })
+                .or_else(|_| layout(key.cols, key.rows, input, &LayoutExtents { x: x_ext, panes: vec![PaneExtents::default()] }))
+                .unwrap_or_else(|_| empty_layout(key.cols, key.rows))
+        };
+        let mut lay = run(&input);
+        // A nice domain the data fills too little of gives way to the data's
+        // (NICE_FILL); a y domain in the view is drawn as it is.
+        if view.y.domain.is_none() {
+            let plain = resolve_domain(&scale_options(Kind::Linear, y_domain, None), Kind::Linear, &y_ext, 1.0);
+            if let (Some(p), Ok([a, b])) = (lay.panes.first(), plain) {
+                let [c, d] = p.left_domain;
+                if (b - a).abs() < NICE_FILL * (d - c).abs() {
+                    input.panes[0].left.scale.nice = None;
+                    lay = run(&input);
+                }
+            }
+        }
         let pane = lay.panes.first();
         let plot = pane.map_or(Rect::default(), |p| p.plot);
         let y = pane.map_or([0.0, 1.0], |p| p.left_domain);
+        let x_step = tick_step_of(lay.x_axis.as_ref(), lay.x_domain, plot.w / crate::layout::X_CELLS_PER_TICK);
+        let y_step = tick_step_of(pane.and_then(|p| p.left.as_ref()), y, plot.h / crate::layout::Y_ROWS_PER_TICK);
         let mut spans = Vec::new();
         if let Some(r) = lay.legend {
             let mut x = r.x;
@@ -383,6 +411,8 @@ impl LineChart {
             plot,
             x: Axis::x(lay.x_domain[0], lay.x_domain[1], plot.w, 2),
             y: Axis::y(y[0].min(y[1]), y[0].max(y[1]), plot.h, 4),
+            x_step,
+            y_step,
             legend: spans,
             title: lay.title.and(title),
             layout: lay,
@@ -452,24 +482,6 @@ impl LineChart {
         let (xs, ys) = (self.data.xs(s), self.data.ys(s));
         let aggregate = column_aggregate(xs, ys, 0, xs.len(), lo, hi);
         Some(self.hit_of(Some(geom), s, i, Some(at), aggregate))
-    }
-
-    /// The readout of the cursor: its x, and its series and y when it
-    /// snapped to a datum (REQ-LINE-040).
-    fn readout(&self, geom: &Geom) -> Option<String> {
-        let c = self.view.cursor.as_ref()?;
-        let x = c.x?;
-        let span = geom.x.hi() - geom.x.lo();
-        let mut out = draw::x_label(x, self.data.kind, span, &self.locale);
-        if let Some(series) = &c.series {
-            out.push_str("  ");
-            out.push_str(series);
-            if let Some(y) = c.y {
-                out.push(' ');
-                out.push_str(&draw::number(y, &self.locale));
-            }
-        }
-        Some(out)
     }
 
     /// The x domain drawn now, at the end of any motion.
@@ -562,6 +574,15 @@ impl LineChart {
 fn scale_options(kind: Kind, domain: Domain, nice: Option<bool>) -> ScaleOptions {
     let kind = if kind == Kind::Time { ScaleType::Time } else { ScaleType::Linear };
     ScaleOptions { kind, domain, nice, zero: None, padding: None, base: None, constant: None, zone: None, scheme: None }
+}
+
+/// The step between an axis's drawn ticks; with fewer than two, d3's tick
+/// step over `domain` at `count` (at least 1).
+fn tick_step_of(axis: Option<&PlacedAxis>, domain: [f64; 2], count: usize) -> f64 {
+    match axis.map(|a| a.ticks.as_slice()) {
+        Some([a, b, ..]) => b.value - a.value,
+        _ => crate::ticks::tick_step(domain[0], domain[1], count.max(1) as f64).abs(),
+    }
 }
 
 /// A layout of no parts: the whole grid a plot over [0, 1] both ways.
@@ -715,6 +736,7 @@ impl Chart for LineChart {
             self.pack = env.locale.clone();
             self.locale = Locale::from_pack(env.locale);
             self.locale_version += 1;
+            self.formats.clear();
         }
         let (cols, rows) = (grid.cols(), grid.rows());
         self.ctx = Some(FrameCtx { cols, rows, t, paper: env.paper, mono: env.mono });
@@ -733,7 +755,7 @@ impl Chart for LineChart {
             self.base_draws += 1;
         }
         grid.copy_from(&self.base);
-        let text = self.readout(geom);
+        let text = readout::text(&self.data, &self.view, geom, &self.locale, &mut self.formats);
         draw::overlay(grid, geom, &self.view, text.as_deref(), ground);
     }
 
@@ -771,16 +793,10 @@ impl Chart for LineChart {
             }
             out.push(cells);
         }
+        // The caption holds no count: the shell adds the rows of the total
+        // when the view holds more (REQ-A11Y-020).
         let name = if self.cfg.title.is_empty() { "line chart" } else { self.cfg.title.as_str() };
-        let caption = if out.len() < total {
-            format!(
-                "{name}: {} of the {} points in view, each bucket's least and greatest kept",
-                draw::count(out.len(), &self.locale),
-                draw::count(total, &self.locale)
-            )
-        } else {
-            format!("{name}: the {} points in view", draw::count(total, &self.locale))
-        };
+        let caption = if out.len() < total { format!("{name}, each bucket's least and greatest kept") } else { name.to_string() };
         Table { caption, columns, rows: out, total: total as u64, summary: self.summary(), value: self.value_text() }
     }
 }

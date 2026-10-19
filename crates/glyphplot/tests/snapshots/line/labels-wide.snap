@@ -1,6 +1,6 @@
 # glyphplot snapshot 1 · line · labels-wide · mode line · options {} · default view
 @ 80x24 · t=0 · plain
-|─ 東京都の平均気温 (℃)  ┄ Cafe creme brulee — Zurich  ┈ 北京 Beijīng 서울 데이터|
+|─ 東京都の平均気温 (℃)  ─ Cafe creme brulee — Zurich  ─ 北京 Beijīng 서울 데이터|
 |12┤     ⢀⡠⠔⡄⡀    ⡀                                                              |
 |  │  ⣀⣀⠤⠃  ⠈⠈⠉⠢⠓⠜⠱⠊⢆⡀    ⣀                                                      |
 |10┤⠑⠉               ⠈⠒⠑⠒⠊ ⠋⢣⠎⢆⡀                                                 |
@@ -74,24 +74,24 @@ back
 ..80
 ..80
 ..80
-@ 80x24 · t=1 · plain · fnv1a e17eb5237304eb39
-@ 80x24 · t=2.5 · plain · fnv1a e17eb5237304eb39
-@ 80x24 · t=6 · plain · fnv1a e17eb5237304eb39
+@ 80x24 · t=1 · plain · fnv1a c271b15e33add8dd
+@ 80x24 · t=2.5 · plain · fnv1a c271b15e33add8dd
+@ 80x24 · t=6 · plain · fnv1a c271b15e33add8dd
 @ 80x24 · t=0 · mono · fnv1a 784952de12c3c732
-@ 80x24 · t=0 · paper · fnv1a e9980c2ff43be0b9
+@ 80x24 · t=0 · paper · fnv1a 3932858b030d1e5d
 @ 23x6 · t=0 · plain
-| │⣀⣀⣀⣀⣀⣀⣀⡀             |
-| │⠔⠒⠒⠒⠒⠖⠚⠛⠯⠽⠛⠛⠒⠒⠒⠒⠒⢒⣶⣶⣶|
-|0┤⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠋⠉⠙⠉⠉⠁   |
-| │                     |
-| └┬───┬───┬───┬───┬────|
-|  0   20  40  60  80   |
+|10┤⠒⠋⠉⠋⠓⠒⠖⠦⡀⣀⣀         |
+|  │⣀⠔⠒⠶⢄⣤⣤⣄⣈⣡⠼⠷⠶⠦⠶⠴⢶⡤⠤⣤|
+|  │        ⠁        ⣙⣶⢶|
+| 0┤⠲⢄⠤⣄⣤⣤⠤⠶⠲⢄⣀⣀⣀⣀⡠⠴⠚⠁  |
+|  └┬───┬───┬───┬───┬───|
+|   0   20  40  60  80  |
 ink
-00 01 0a8 0013
-00 01 096 0a15
-00 01 0818 003
-00 01 0021
-00 0122
+002 01 0a11 009
+002 01 098 0a10 092
+002 01 008 09 008 0a3
+002 01 0818 002
+002 0121
 0023
 back
 ..23
@@ -100,10 +100,10 @@ back
 ..23
 ..23
 ..23
-@ 320x120 · t=0 · plain · fnv1a 8167a4c519b99f28
+@ 320x120 · t=0 · plain · fnv1a 47edb40e7cec57ec
 @ 80x24 · t=0 · plain · zoom: ctrl+wheel dy -3 at 27.5,11.5, wheel end, move to 49.5,16.5
-|─ 東京都の平均気温 (℃)  ┄ Cafe creme brulee — Zurich  ┈ 北京 Beijīng 서울 데이터|
-|12┤⡠⠔⢢⢀⡀     ⡀                           53  東京都の平均気温 (℃) -2.49137233033|
+|─ 東京都の平均気温 (℃)  ─ Cafe creme brulee — Zurich  ─ 北京 Beijīng 서울 데이터|
+|12┤⡠⠔⢢⢀⡀     ⡀                                   x 53  東京都の平均気温 (℃) -2.5|
 |  │   ⠁⠈⠉⠑⠔⠑⠜⠘⠔⠊⠢⣀      ⣀                        ⢸                              |
 |10┤               ⠉⠒⠉⠒⠒⠉ ⠑⠉⢆⠎⠒⢄⡀                 ⢸                              |
 |  │                            ⠈⠢⡠⢄⡀             ⢸                              |

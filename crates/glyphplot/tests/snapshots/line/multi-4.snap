@@ -1,6 +1,6 @@
 # glyphplot snapshot 1 · line · multi-4 · mode line · options {} · default view
 @ 80x24 · t=0 · plain
-|─ alpha  ┄ beta  ┈ gamma  ╌ delta                                               |
+|─ alpha  ─ beta  ─ gamma  ─ delta                                               |
 |   │                                          ⣄                                ⣀|
 | 10┤                                         ⢠⠟⣇                              ⢰⠻|
 |   │                                         ⡞ ⠸⡾⢧⡀               ⢀   ⢀⣶⡀    ⡀⡎ |
@@ -74,24 +74,24 @@ back
 ..80
 ..80
 ..80
-@ 80x24 · t=1 · plain · fnv1a 68ec1fb0182ce5a1
-@ 80x24 · t=2.5 · plain · fnv1a 68ec1fb0182ce5a1
-@ 80x24 · t=6 · plain · fnv1a 68ec1fb0182ce5a1
+@ 80x24 · t=1 · plain · fnv1a 54f8d9c7775ae299
+@ 80x24 · t=2.5 · plain · fnv1a 54f8d9c7775ae299
+@ 80x24 · t=6 · plain · fnv1a 54f8d9c7775ae299
 @ 80x24 · t=0 · mono · fnv1a 222b0905fbe68f1f
-@ 80x24 · t=0 · paper · fnv1a 3dae653308c6f521
+@ 80x24 · t=0 · paper · fnv1a 6718d5006d714419
 @ 23x6 · t=0 · plain
-| │           ⢀        ⢀|
-| │⣾⣒⣿⣛⣓⣿⣦⣶⣶⣾⢿⠿⠟⠛⠛⠚⢟⣛⢟⣚⣛|
-|0┤⠉⠛⠛⠻⠟⠿⠺⠋⠉⠙⠷⠻⠿⣷⢶⠴⣯⠿⠿⠾⠛|
-| │                     |
-| └┬─────────┬──────────|
-|  0        500         |
+|10┤⣠⣀⣤⣤⣤⣄ ⡀⡀⣤⣼⢳⣦⣤⣤⣠⣤⡴⣤⣾|
+|  │⣯⣋⡉ ⣈⣼⣿⣿⣿⠷⡴⠟⠉⠋⠉⠙⠉⠋⡙⢈|
+| 0┤⢿⣯⣽⡻⠿⠛⢻⠿⠾⣧⣡⣄⣄  ⡴⠛⡿⢻⣛|
+|  │ ⠁⠈⠛⠟⠟⠋  ⠙⠋⠻⣾⣷⣾⢧⡏⠻⠞⠉|
+|  └┬─────────┬─────────|
+|   0        500        |
 ink
-00 01 0011 09 008 09
-00 01 0b21
-00 01 08 09 0a6 08 0a12
-00 01 0021
-00 0122
+002 01 0b6 00 09 0b 092 0b9
+002 01 0b3 00 0b16
+002 01 0a6 0b 0a3 0b 0a2 002 0a5
+002 01 00 086 002 0a7 084
+002 0121
 0023
 back
 ..23
@@ -100,10 +100,10 @@ back
 ..23
 ..23
 ..23
-@ 320x120 · t=0 · plain · fnv1a c252e9dcc6ce43f2
+@ 320x120 · t=0 · plain · fnv1a 52f717c70c6b217a
 @ 80x24 · t=0 · plain · zoom: ctrl+wheel dy -3 at 31.5,11.5, wheel end, move to 24.5,15.5
-|─ alpha  ┄ beta  ┈ gamma  ╌ delta                                               |
-|   │                    ⢸                          ⡄   296  alpha -4.10944794908|
+|─ alpha  ─ beta  ─ gamma  ─ delta                                               |
+|   │                    ⢸                          ⡄           x 296  alpha -4.1|
 | 10┤                    ⢸                         ⣤⠛⢳⡀                          |
 |   │                    ⢸                        ⡴⠋ ⠸⢷⠿⣦⡀                     ⢀ |
 |   │ ⢠⡀⣆  ⢸⣾⡶⣴⢿⢆⡄  ⢰⣄ ⡄ ⢸                ⢠⣠ ⣰⣰⣠⢀⣴⠇     ⠙⢣⡷⣶⣠ ⣀ ⣀⣄⣇⣄   ⡀  ⢀⢀⢀⡄⣀⢿⡀|

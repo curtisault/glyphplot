@@ -266,6 +266,82 @@ fn readout_names_the_nearest_x() {
     assert!(row.contains(&format!("y {}", y[nearest])), "{row}");
 }
 
+/// REQ-LINE-040, REQ-FMT-030: the readout names x by its column and the
+/// value by its series, and writes each in its axis's tick format with the
+/// digits that tell the datum from its neighbours: never d3's twelve
+/// significant digits, and grouped as the axis is.
+#[test]
+fn readout_names_its_values_in_the_axis_format() {
+    for fixture in ["sine-1k", "tiny-range", "nan-gaps", "steps-10k", "multi-4", "random-walk-100k"] {
+        let mut c = chart(fixture, "");
+        draw(&mut c, 80, 24, 0.0);
+        let p = plot(&c);
+        c.input(&mv(0.0, (p.x + p.w / 2) as f64 + 0.3, (p.y + p.h / 2) as f64 + 0.5));
+        let cur = c.view().cursor.clone().unwrap();
+        let g = draw(&mut c, 80, 24, 0.0);
+        let row = g.text().lines().nth(p.y).unwrap().trim_end().to_string();
+        let (series, y) = (cur.series.clone().unwrap(), cur.y.unwrap());
+        let tail = format!("  {series} ");
+        let (head, y_text) = row.rsplit_once(&tail).unwrap_or_else(|| panic!("{fixture}: {row}"));
+        let x_text = head.rsplit_once(&format!("{} ", c.data.x_name)).unwrap_or_else(|| panic!("{fixture}: no x name in {row}")).1;
+        let s = c.data.find(&series).unwrap();
+        let i = c.data.pos(s, cur.index.unwrap() as usize).unwrap();
+        let ys = c.data.ys(s);
+        let back: f64 = y_text.parse().unwrap_or_else(|_| panic!("{fixture}: {y_text}"));
+        for n in [i.checked_sub(1), Some(i + 1)].into_iter().flatten().filter_map(|j| ys.get(j)).filter(|&&n| n != y) {
+            assert!((back - y).abs() < (back - n).abs(), "{fixture}: {y_text} for {y} beside {n}");
+        }
+        // tiny-range's data lie 10⁻¹⁵ apart near 1, which takes 16 digits.
+        let significant = y_text.trim_start_matches(['-', '0', '.']).chars().filter(char::is_ascii_digit).count();
+        assert!(significant < 12 || fixture == "tiny-range", "{fixture}: {y_text}");
+        if c.data.kind == Kind::Linear {
+            assert_eq!(x_text.replace(',', "").parse::<f64>().ok(), Some(cur.x.unwrap()), "{fixture}: {row}");
+            assert_eq!(x_text.contains(','), cur.x.unwrap().abs() >= 1000.0, "{fixture}: grouped as the axis");
+        } else {
+            assert!(x_text.starts_with("2026-10-1"), "{fixture}: {x_text}");
+        }
+    }
+}
+
+/// REQ-LAYOUT-040, contract rule 5: a nice y domain the data fills less than
+/// `NICE_FILL` of gives way to the data's, so at `META.min` and other small
+/// sizes the data fills the plot's height and the axis still labels ticks;
+/// at 80 × 24 the nice domain stays.
+#[test]
+fn small_plots_fill_their_height() {
+    // The dot rows a braille cell lights, top to bottom.
+    let rows_of = |g: u32| -> Vec<usize> {
+        let bits = if is_dots(g) { g - 0x2800 } else { 0 };
+        [(0, 3), (1, 4), (2, 5), (6, 7)].iter().enumerate().filter(|(_, (a, b))| bits & (1 << a | 1 << b) != 0).map(|(r, _)| r).collect()
+    };
+    for fixture in ["multi-4", "two", "labels-wide", "random-walk-100k", "timestamps-dst", "nan-gaps", "unsorted-x", "inf", "zero-crossing"] {
+        for (cols, rows) in [(23, 6), (30, 8), (40, 12), (80, 24), (160, 48)] {
+            let mut c = chart(fixture, "");
+            let g = draw(&mut c, cols, rows, 0.0);
+            let geom = &c.geom.as_ref().unwrap().1;
+            let [lo, hi] = c.data.y_extent(|_| true, None).unwrap();
+            let span = geom.y.hi() - geom.y.lo();
+            assert!(hi - lo >= NICE_FILL * span, "{fixture} at {cols}×{rows}: data {lo}..{hi} in {}..{}", geom.y.lo(), geom.y.hi());
+            let p = geom.plot;
+            let mut lit = Vec::new();
+            for r in p.y..p.y + p.h {
+                for x in p.x..p.x + p.w {
+                    lit.extend(rows_of(g.glyph(x, r)).into_iter().map(|d| (r - p.y) * 4 + d));
+                }
+            }
+            let (top, bottom) = (lit.iter().min().unwrap(), lit.iter().max().unwrap());
+            assert!((bottom - top + 1) as f64 >= NICE_FILL * (4 * p.h) as f64 - 1.0, "{fixture} at {cols}×{rows}: dots {top}..{bottom} of {}", 4 * p.h);
+        }
+    }
+    let labels = |c: &LineChart| c.geom.as_ref().unwrap().1.layout.panes[0].left.as_ref().unwrap().ticks.iter().filter(|t| t.label.is_some()).count();
+    let mut c = chart("multi-4", "");
+    draw(&mut c, 23, 6, 0.0);
+    assert!(labels(&c) >= 2, "two y labels at META.min");
+    draw(&mut c, 80, 24, 0.0);
+    let y = c.geom.as_ref().unwrap().1.y;
+    assert_eq!((y.lo(), y.hi()), (-10.0, 12.0), "niced at 80 × 24");
+}
+
 /// REQ-LAYOUT-040: every accepted fixture draws at sizes from 1 × 1 to
 /// 320 × 120 in every mode and env without a panic, with `rows` lines of
 /// `cols` cells.
@@ -432,19 +508,29 @@ fn columns_draw_with_no_configuration() {
 }
 
 /// REQ-MONO-010, REQ-MONO-040: in one ink the four series draw four dash
-/// patterns and the legend draws each key beside its name, in colour too.
+/// patterns and the legend draws each pattern's key beside its name; in
+/// colour the lines are solid and so are the keys, each in its series' ink,
+/// unless `patterns: "on"` dashes both.
 #[test]
 fn one_ink_tells_series_apart() {
+    let names = ["alpha", "beta", "gamma", "delta"];
+    let legend_of = |g: &Grid| g.text().lines().next().unwrap().to_string();
     let mut c = chart("multi-4", "");
     let mut g = Grid::new(100, 30);
     c.frame(0.0, &Env { mono: true, ..Env::plain() }, &mut g);
-    let legend = g.text().lines().next().unwrap().to_string();
-    for (k, name) in crate::mono::KEYS.iter().zip(["alpha", "beta", "gamma", "delta"]) {
+    let legend = legend_of(&g);
+    for (k, name) in crate::mono::KEYS.iter().zip(names) {
         assert!(legend.contains(&format!("{k} {name}")), "{legend}");
     }
     let colour = draw(&mut c, 100, 30, 0.0);
-    assert_eq!(colour.text().lines().next(), Some(legend.as_str()));
+    assert_eq!(legend_of(&colour), "─ alpha  ─ beta  ─ gamma  ─ delta".to_string() + &" ".repeat(67), "solid keys for solid lines");
+    for (s, (_, span)) in c.geom.as_ref().unwrap().1.legend.iter().enumerate() {
+        assert_eq!(colour.ink(span.x, span.y), palette::series(s), "the key takes its series' ink");
+    }
     assert_ne!(colour, g, "colour draws solid lines");
+    let mut on = chart("multi-4", r#"{"patterns":"on"}"#);
+    let dashed = draw(&mut on, 100, 30, 0.0);
+    assert_eq!(legend_of(&dashed), legend, "patterned lines in colour show their patterns' keys");
     let p = plot(&c);
     let col_key =
         |s: u8| (p.y..p.y + p.h).flat_map(|r| (p.x..p.x + p.w).map(move |x| (x, r))).filter(|&(x, r)| g.ink(x, r) == palette::series(s.into())).count();
@@ -680,7 +766,10 @@ fn table_and_text() {
     let t = c.table(500);
     assert!(t.rows.len() <= 500 && t.total == 100_000);
     assert_eq!(t.columns, ["t", "y"]);
-    assert!(t.caption.contains("100,000"), "{}", t.caption);
+    // The shell adds the count; the caption holds none (REQ-A11Y-020).
+    assert_eq!(t.caption, "line chart, each bucket's least and greatest kept");
+    assert!(!t.caption.chars().any(|c| c.is_ascii_digit()), "{}", t.caption);
+    assert_eq!(chart("sine-1k", r#"{"title":"Sine"}"#).table(5000).caption, "Sine");
     assert!(t.summary.starts_with("line chart of 1 series (y); t from 2026-10-18"), "{}", t.summary);
     assert_eq!(t.value, None);
     assert!(c.table(0).rows.is_empty());

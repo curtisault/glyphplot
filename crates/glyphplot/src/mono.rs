@@ -5,8 +5,10 @@
 //! off, and 3 on 1 off 1 on 1 off, counted in dot columns from the x scale's
 //! origin ([`origin`]), so a pan by `n` whole dots shifts the pattern by `n`
 //! dots and the dashes never crawl. Series 5 to 8 repeat the four. Each
-//! pattern has a one-cell legend key from the box-drawing block, drawn
-//! beside the series' name in colour and in one ink: `─`, `┄`, `┈`, `╌`.
+//! pattern has a one-cell legend key from the box-drawing block, `─`, `┄`,
+//! `┈`, `╌`, drawn beside the series' name in the series' ink wherever the
+//! series is drawn with its pattern; a series drawn solid (in colour, by
+//! default) has the solid key `─`.
 
 use crate::cells::Axis;
 
