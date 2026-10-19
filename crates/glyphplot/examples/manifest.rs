@@ -73,10 +73,14 @@ fn modules_js(debug: bool) -> String {
     )
 }
 
+/// `modules.d.ts`: the types of modules.js's exports, `Meta` as
+/// meta.schema.json and web/src/api.ts give it.
 fn modules_d_ts() -> String {
     format!(
         "{HEAD}export interface Budget {{\n  gzip: number;\n  frameMs: number;\n  worstMs: number;\n  inputMs: number;\n}}\n\
-         export declare const charts: readonly unknown[];\n\
+         export interface Meta {{\n  slug: string;\n  name: string;\n  note: string;\n  family: string;\n  modes: string[];\n  shapes: string[];\n  \
+         options: Record<string, unknown> | null;\n  min: {{ cols: number; rows: number }};\n  drop: string[];\n  mono: string;\n  charset: string;\n  budget: Budget;\n}}\n\
+         export declare const charts: readonly Meta[];\n\
          export declare const modules: Readonly<Record<string, string>>;\n\
          export declare const fallback: string | null;\n\
          export declare const budgets: Readonly<Record<string, Budget>>;\n\

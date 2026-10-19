@@ -36,8 +36,18 @@ description = "The toolchain mise.toml pins (from v0.3.0 also the npm packages)"
 run = "mise install"
 
 [tasks."build:wasm"]
-description = "One release wasm module a chart family into web/pkg, with modules.js, budgets.json and sizes.json"
+description = "One release wasm module a chart family into web/pkg, with modules.js, budgets.json and sizes.json, staged and swapped in whole"
 run = "bash scripts/build-wasm.sh"
+
+[tasks."build:wasm:debug"]
+description = "One debug module, `all` (every family and `debug`), in target/wasm-debug, staged beside web/pkg and swapped in whole (REQ-BUILD-040)"
+run = "bash scripts/build-wasm.sh --debug"
+
+[tasks."install:web"]
+description = "The web package's pinned npm packages (TypeScript), skipped while web/package-lock.json is unchanged"
+sources = ["web/package.json", "web/package-lock.json"]
+outputs = ["web/node_modules/.package-lock.json"]
+run = "npm ci --prefix web"
 
 [tasks."build:font"]
 description = "The bundled font: Iosevka's release subset to web/fonts/glyphplot-mono.woff2 (`-- --check` compares instead)"
@@ -56,7 +66,8 @@ description = "Format the Rust code (rustfmt.toml)"
 run = "cargo fmt --all"
 
 [tasks.lint]
-description = "rustfmt, clippy (host and wasm32, with and without debug), rustdoc, each family alone, the octant table, the dependency rules, no generated output in git"
+description = "rustfmt, clippy (host and wasm32, with and without debug), rustdoc, each family alone, tsc on web, the octant table, the dependency rules, no generated output in git"
+depends = ["install:web"]
 run = [
   "cargo fmt --all --check",
   "cargo clippy --workspace --all-targets -- -D warnings",
@@ -64,6 +75,7 @@ run = [
   "cargo clippy -p glyphplot-wasm --target wasm32-unknown-unknown -- -D warnings",
   "cargo clippy -p glyphplot-wasm --target wasm32-unknown-unknown --features debug -- -D warnings",
   "for f in $(cargo run -q -p glyphplot --example manifest -- families); do cargo check -q -p glyphplot --no-default-features --features $f || exit 1; done",
+  "web/node_modules/.bin/tsc --noEmit -p web",
   "python3 scripts/octants.py --check",
   "bash scripts/deps.sh",
   "bash scripts/generated.sh",
@@ -73,9 +85,13 @@ run = [
 description = "Every Rust test in the workspace, built with the contract profile (optimised, no LTO)"
 run = "cargo test --workspace --profile contract"
 
+[tasks."test:web"]
+description = "The shell's Node tests (web/test/*.test.mjs)"
+run = "node --test 'web/test/*.test.mjs'"
+
 [tasks.test]
 description = "Every test (from v0.3.0 also the wasm and site tests)"
-depends = ["test:rust"]
+depends = ["test:rust", "test:web"]
 
 [tasks.size]
 description = "Each module's wasm and JS, raw and gzip -9, against its budget; WASM_GZ_LIMIT overrides it"

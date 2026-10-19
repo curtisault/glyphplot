@@ -28,7 +28,7 @@ use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
-pub use desc::{ColumnDesc, Encode, MatrixDesc, TableDesc};
+pub use desc::{Buffer, ColumnDesc, Encode, MatrixDesc, TableDesc};
 
 /// The code of a missing category (REQ-DATA-030).
 pub const MISSING_CODE: u32 = u32::MAX;
@@ -1307,6 +1307,14 @@ pub enum DataError {
         /// The shapes the chart takes.
         expected: Vec<Shape>,
     },
+    /// A buffer given for a column the descriptor does not have
+    /// ([`Data::from_typed`]).
+    Buffer {
+        /// The buffer's column number.
+        index: usize,
+        /// The columns the descriptor has, matrices counted as one each.
+        columns: usize,
+    },
 }
 
 impl fmt::Display for DataError {
@@ -1340,6 +1348,7 @@ impl fmt::Display for DataError {
                     _ => write!(f, "data is not of the shape this chart takes: expected {}", names.join(" or ")),
                 }
             }
+            DataError::Buffer { index, columns } => write!(f, "a buffer for column {index}, but the descriptor has {columns} columns"),
         }
     }
 }

@@ -35,10 +35,28 @@ pub struct Table {
     pub value: Option<String>,
 }
 
+/// The hidden table as the shell reads it (`TableJson` in web/src/api.ts).
+#[derive(Serialize)]
+struct Shown<'a> {
+    caption: &'a str,
+    columns: &'a [String],
+    rows: Vec<Vec<Option<&'a str>>>,
+    total: u64,
+}
+
 impl Table {
-    /// The table as JSON, for `table_json(max_rows)`.
+    /// The table as JSON, every field.
     pub fn to_json(&self) -> String {
         serde_json::to_string(self).unwrap_or_default()
+    }
+
+    /// The table as the wasm boundary's `table_json(max_rows)` returns it:
+    /// `{caption, columns, rows, total}`, each cell the text the core wrote,
+    /// an empty cell `null` (no value) (`TableJson` in web/src/api.ts,
+    /// REQ-A11Y-020).
+    pub fn to_shell_json(&self) -> String {
+        let rows = self.rows.iter().map(|r| r.iter().map(|c| Some(c.as_str()).filter(|c| !c.is_empty())).collect()).collect();
+        serde_json::to_string(&Shown { caption: &self.caption, columns: &self.columns, rows, total: self.total }).unwrap_or_default()
     }
 }
 
@@ -104,5 +122,12 @@ mod tests {
         assert_eq!(pick_rows(3, 500, |i| i as f64), [0, 1, 2]);
         assert_eq!(pick_rows(10, 0, |i| i as f64), Vec::<usize>::new());
         assert_eq!(pick_rows(10, 4, |_| f64::NAN), [0, 5]);
+    }
+
+    /// The shell's form: four fields, an empty cell null.
+    #[test]
+    fn shell_json_has_null_for_no_value() {
+        let t = Table { caption: "c".into(), columns: vec!["x".into(), "y".into()], rows: vec![vec!["1".into(), String::new()]], total: 7, ..Table::default() };
+        assert_eq!(t.to_shell_json(), r#"{"caption":"c","columns":["x","y"],"rows":[["1",null]],"total":7}"#);
     }
 }

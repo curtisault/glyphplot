@@ -3,12 +3,21 @@
 // (REQ-SIZE-010 to 040). Budgets come from web/pkg/budgets.json, and
 // WASM_GZ_LIMIT (bytes) overrides every one.
 //
-//   node scripts/size.mjs           the table and the gate
-//   node scripts/size.mjs --write   only web/pkg/sizes.json (build:wasm)
+//   node scripts/size.mjs                     the table and the gate
+//   node scripts/size.mjs --write             only web/pkg/sizes.json (build:wasm)
+//   node scripts/size.mjs --write --pkg DIR   the same for a staged build in DIR
 import { appendFileSync, existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
+import { pathToFileURL } from "node:url";
+import { resolve } from "node:path";
 
-const pkg = new URL("../web/pkg/", import.meta.url);
+const at = process.argv.indexOf("--pkg");
+const dir = at >= 0 ? process.argv[at + 1] : undefined;
+if (at >= 0 && !dir) {
+  console.error("size: --pkg needs a folder");
+  process.exit(2);
+}
+const pkg = dir ? pathToFileURL(resolve(dir) + "/") : new URL("../web/pkg/", import.meta.url);
 const read = (path) => readFileSync(new URL(path, pkg));
 // gzip -9 of stdin, as `gzip -9 < file | wc -c` counts it (no name in the header).
 const gzipped = (bytes) => execFileSync("gzip", ["-9"], { input: bytes, maxBuffer: 1 << 30 }).length;

@@ -106,6 +106,10 @@
           "description": "For timestamp and duration columns; default ms. A `us` or `ns` timestamp column is held as offsets from an i64 origin (REQ-DATA-020).",
           "enum": ["s", "ms", "us", "ns"]
         },
+        "origin": {
+          "description": "For `us` and `ns` timestamp columns whose values cross the wasm boundary as a buffer: the i64 instant, in `time_unit`, that the buffer's values are offsets from, so values spanning under 2^53 units round-trip exactly (REQ-DATA-020). Absent, the buffer holds whole values. Values given in JSON are read exactly as integers and need none.",
+          "type": "integer"
+        },
         "zone": {
           "description": "For timestamp columns: the IANA zone (`America/New_York`) or `UTC` in which ticks and labels are drawn. Values are UTC instants whatever the zone; default UTC (REQ-DATA-090).",
           "type": "string"
