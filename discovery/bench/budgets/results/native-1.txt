@@ -1,0 +1,29 @@
+Sun Oct 18 20:02:56 CDT 2026
+20:02  up 87 days,  4:37, 3 users, load averages: 7.83 5.36 3.94
+frame 80x24 n=1000 ds=false        avg ms min    0.007 med    0.007 | worst ms min    0.009 med    0.051
+frame 80x24 n=1000 ds=true         avg ms min    0.006 med    0.007 | worst ms min    0.019 med    0.037
+frame 80x24 n=10000 ds=false       avg ms min    0.043 med    0.049 | worst ms min    0.114 med    0.132
+frame 80x24 n=10000 ds=true        avg ms min    0.040 med    0.041 | worst ms min    0.070 med    0.091
+frame 80x24 n=100000 ds=false      avg ms min    0.323 med    0.328 | worst ms min    0.403 med    0.469
+frame 80x24 n=100000 ds=true       avg ms min    0.248 med    0.259 | worst ms min    0.301 med    0.481
+frame 80x24 n=1000000 ds=false     avg ms min    2.601 med    2.748 | worst ms min    3.125 med    3.328
+frame 80x24 n=1000000 ds=true      avg ms min    2.100 med    2.381 | worst ms min    2.450 med    5.073
+frame 320x120 n=1000 ds=false      avg ms min    0.051 med    0.053 | worst ms min    0.081 med    0.083
+frame 320x120 n=1000 ds=true       avg ms min    0.054 med    0.056 | worst ms min    0.082 med    0.100
+frame 320x120 n=10000 ds=false     avg ms min    0.134 med    0.139 | worst ms min    0.252 med    0.270
+frame 320x120 n=10000 ds=true      avg ms min    0.128 med    0.130 | worst ms min    0.181 med    0.236
+frame 320x120 n=100000 ds=false    avg ms min    0.790 med    0.808 | worst ms min    0.949 med    1.033
+frame 320x120 n=100000 ds=true     avg ms min    0.409 med    0.415 | worst ms min    0.568 med    0.629
+frame 320x120 n=1000000 ds=false   avg ms min    5.027 med    5.077 | worst ms min    5.616 med    5.760
+frame 320x120 n=1000000 ds=true    avg ms min    2.396 med    2.446 | worst ms min    2.691 med    3.438
+hover 80x24 n=1000000              avg ms min    0.001 med    0.001 | worst ms min    0.001 med    0.002
+hover 320x120 n=1000000            avg ms min    0.003 med    0.004 | worst ms min    0.008 med    0.012
+stream batch=1 every=1ms ds=true: busy ms/s min 155.2 med 157.3
+  its frames                       avg ms min    2.586 med    2.621 | worst ms min    3.377 med    3.442
+stream batch=1 every=1ms ds=false: busy ms/s min 308.7 med 323.6
+  its frames                       avg ms min    5.144 med    5.394 | worst ms min    5.736 med    8.647
+stream batch=1000 every=100ms ds=true: busy ms/s min 150.8 med 151.4
+  its frames                       avg ms min    2.512 med    2.522 | worst ms min    2.893 med    3.281
+stream batch=1000 every=100ms ds=false: busy ms/s min 302.4 med 315.7
+  its frames                       avg ms min    5.039 med    5.261 | worst ms min    5.643 med    6.456
+20:04  up 87 days,  4:38, 3 users, load averages: 6.68 5.59 4.14

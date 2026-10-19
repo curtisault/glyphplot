@@ -1,0 +1,38 @@
+[package]
+name = "a11y-theming-bench"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+# Throwaway: see README.md. Not part of any workspace.
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+path = "src/lib.rs"
+
+[[bin]]
+name = "widths"
+path = "src/bin/widths.rs"
+
+[features]
+default = []
+# Number formatting by locale through ICU4X with its compiled data (every locale).
+icu = ["dep:icu_decimal", "dep:icu_locale_core"]
+# Dates by locale through ICU4X (year, month, day; every locale; Gregorian input).
+icu_dt = ["dep:icu_datetime", "dep:icu_locale_core", "dep:icu_calendar"]
+
+[dependencies]
+unicode-width = "=0.2.2"
+unicode-segmentation = "=1.13.2"
+icu_decimal = { version = "2", optional = true }
+icu_locale_core = { version = "2", optional = true }
+icu_datetime = { version = "2", optional = true }
+icu_calendar = { version = "2", optional = true }
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

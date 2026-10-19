@@ -1,0 +1,3 @@
+discovery/bench/budgets/pkg/6-downsample/ladder_bg_pad150.wasm: 215544 raw, 153871 gzip -9
+discovery/bench/budgets/pkg/6-downsample/ladder_bg_pad300.wasm: 369144 raw, 307508 gzip -9
+discovery/bench/budgets/pkg/6-downsample/ladder_bg_pad1000.wasm: 1085944 raw, 1024534 gzip -9

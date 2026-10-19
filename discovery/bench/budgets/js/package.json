@@ -1,0 +1,9 @@
+{
+  "name": "glyphplot-budgets-bench",
+  "private": true,
+  "type": "module",
+  "description": "Throwaway: discovery measurements for discovery/budgets.md",
+  "dependencies": {
+    "playwright": "1.64.1"
+  }
+}

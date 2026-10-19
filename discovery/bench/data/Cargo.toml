@@ -1,0 +1,59 @@
+# Throwaway: discovery/data.md's measurements. Not part of glyphplot; see README.md.
+[package]
+name = "glyphplot-bench-data"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# Standalone: not a member of any workspace.
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "native"
+path = "src/bin/native.rs"
+required-features = ["native"]
+
+[dependencies]
+wasm-bindgen = "=0.2.129"
+serde = { version = "1", features = ["derive"], optional = true }
+serde_json = { version = "1", optional = true }
+arrow-ipc = { version = "=60.0.0", optional = true, default-features = false }
+arrow-array = { version = "=60.0.0", optional = true, default-features = false }
+arrow-schema = { version = "=60.0.0", optional = true, default-features = false }
+vsop87 = { version = "=3.0.0", optional = true }
+arrow2 = { version = "=0.18.0", optional = true, default-features = false, features = ["io_ipc"] }
+getrandom = { version = "0.3", optional = true, features = ["wasm_js"] }
+
+[features]
+default = []
+# Each ingestion path, downsampler and position model is its own feature, so a
+# build with one more feature measures what that one adds.
+json = ["dep:serde", "dep:serde_json"]
+# serde_json::Value for options, as unicel parses them: the base a chart module already has.
+options = ["dep:serde_json"]
+csv = []
+arrowmin = []
+arrowrs = ["dep:arrow-ipc", "dep:arrow-array", "dep:arrow-schema"]
+ring = []
+downsample = []
+kepler = []
+vsop = ["dep:vsop87"]
+# arrow2 (archived upstream), for its size only.
+arrow2 = ["dep:arrow2", "dep:getrandom"]
+all = ["json", "csv", "arrowmin", "ring", "downsample", "kepler"]
+native = ["all", "arrowrs", "vsop"]
+
+# As unicel's Cargo.toml.
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
+# As unicel's crates/wasm/Cargo.toml.
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = ["-Os", "--enable-bulk-memory", "--enable-nontrapping-float-to-int"]

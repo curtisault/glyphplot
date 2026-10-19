@@ -1,0 +1,8 @@
+chromium 156.0.8078.4, load 7.23 8.24 7.46, 2026-10-19T01:21:02.157Z, 7 loads each
+brief-4g            6-downsample                         transfer    57102 B | first frame ms min    615 med    619 | wasm received med    617 | compile+instantiate+frame after it med 2.0
+brief-4g            6-downsample +preload                transfer    57102 B | first frame ms min    441 med    443 | wasm received med    441 | compile+instantiate+frame after it med 1.9
+lighthouse-slow-4g  6-downsample                         transfer    57102 B | first frame ms min   2075 med   2084 | wasm received med   2074 | compile+instantiate+frame after it med 9.6
+lighthouse-slow-4g  6-downsample +preload                transfer    57102 B | first frame ms min   1484 med   1500 | wasm received med   1493 | compile+instantiate+frame after it med 6.8
+none                6-downsample                         transfer    57102 B | first frame ms min     33 med     37 | wasm received med     32 | compile+instantiate+frame after it med 5.1
+none                6-downsample +preload                transfer    57102 B | first frame ms min     31 med     32 | wasm received med     29 | compile+instantiate+frame after it med 3.1
+load after 7.03 8.10 7.44

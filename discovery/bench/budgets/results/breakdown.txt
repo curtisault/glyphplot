@@ -1,0 +1,49 @@
+== 0-empty (1600779 bytes unoptimised)
+  allocator (dlmalloc)                         8133 B  36.1%
+  wasm-bindgen                                 6255 B  27.8%
+  rest of std, core, alloc                     4969 B  22.1%
+  core::fmt (formatting, panics)               2029 B   9.0%
+  data section                                  645 B   2.9%
+  glyphplot bench code (ladder::)               213 B   0.9%
+  other (tables, type, names, unnamed)          193 B   0.9%
+  libm (log10, sin, floor...)                    82 B   0.4%
+== 1-line (1630372 bytes unoptimised)
+  glyphplot bench code (ladder::)              9410 B  23.1%
+  wasm-bindgen                                 8245 B  20.3%
+  allocator (dlmalloc)                         8217 B  20.2%
+  rest of std, core, alloc                     6986 B  17.2%
+  core::fmt (formatting, panics)               3338 B   8.2%
+  other (tables, type, names, unnamed)         1916 B   4.7%
+  data section                                 1774 B   4.4%
+  libm (log10, sin, floor...)                   812 B   2.0%
+== 3-time (1646033 bytes unoptimised)
+  glyphplot bench code (ladder::)             15421 B  31.5%
+  wasm-bindgen                                 8259 B  16.9%
+  allocator (dlmalloc)                         8217 B  16.8%
+  rest of std, core, alloc                     7257 B  14.8%
+  core::fmt (formatting, panics)               4040 B   8.2%
+  data section                                 2432 B   5.0%
+  other (tables, type, names, unnamed)         2056 B   4.2%
+  libm (log10, sin, floor...)                  1320 B   2.7%
+== 4-serde (1756105 bytes unoptimised)
+  serde, serde_json                           26279 B  19.7%
+  glyphplot bench code (ladder::)             22326 B  16.7%
+  data section                                17954 B  13.5%
+  float formatting and parsing                16023 B  12.0%
+  rest of std, core, alloc                    16015 B  12.0%
+  core::fmt (formatting, panics)              13028 B   9.8%
+  wasm-bindgen                                 8614 B   6.5%
+  allocator (dlmalloc)                         8463 B   6.3%
+  other (tables, type, names, unnamed)         3387 B   2.5%
+  libm (log10, sin, floor...)                  1380 B   1.0%
+== 6-downsample (1770688 bytes unoptimised)
+  glyphplot bench code (ladder::)             29941 B  20.8%
+  serde, serde_json                           26279 B  18.3%
+  data section                                18386 B  12.8%
+  rest of std, core, alloc                    16373 B  11.4%
+  float formatting and parsing                16023 B  11.1%
+  core::fmt (formatting, panics)              13028 B   9.1%
+  wasm-bindgen                                 9447 B   6.6%
+  allocator (dlmalloc)                         8463 B   5.9%
+  other (tables, type, names, unnamed)         4150 B   2.9%
+  libm (log10, sin, floor...)                  1664 B   1.2%
