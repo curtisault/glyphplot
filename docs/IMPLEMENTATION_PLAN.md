@@ -337,7 +337,7 @@ testing.md, with the milestone each rule lands in.
 | 4 | no panic | Every fixture × size × mode × env draws without a panic, 1 × 1 included | v0.3.0 |
 | 5 | charset | Every code point outside label text is in the font's ranges; label text from data may be any Unicode, wide as `set_wide` + `WIDE_TAIL` | v0.3.0 |
 | 6 | colours | Every index below the palette's length, or `NO_BACK` for backs | v0.3.0 |
-| 7 | good first frame | Every non-empty fixture inks the plot area at the default view: ≥ 1 cell for `one`, ≥ 2% of plot cells otherwise | v0.3.0 |
+| 7 | good first frame | Every non-empty fixture inks the plot area at the default view: ≥ 1 cell for `one`; otherwise ≥ 2% of plot cells, or a cell in at least half the plot's columns (a flat line at 320 × 120 inks 315 of 37,170 plot cells) | v0.3.0 |
 | 8 | determinism | Two fresh charts given the same data, options, view and `t` draw the same frame | v0.3.0 |
 | 9 | out-of-order calls | One chart asked for t = 6, 1, 2.5, 0 with `view()`, `hit()` and a repeated `frame()` between draws what a fresh chart draws in order | v0.3.0 |
 | 10 | one ink | `mono` frames keep rules 3–7 and pass the one-ink checks (ink 1–90%, no slab, glyphs in the font) | v0.4.0 |

@@ -57,6 +57,11 @@ run = "uv run --no-project --with 'fonttools[woff]==4.60.1' --with 'brotli==1.2.
 description = "Capture the pinned d3 packages' output into crates/glyphplot/tests/fixtures (REQ-REF-010)"
 run = ["npm ci --ignore-scripts --prefix scripts/fixtures", "node scripts/fixtures.mjs"]
 
+[tasks.snap]
+description = "Rewrite the snapshots of every chart, or of the types given (REQ-SNAP-030)"
+usage = 'arg "[type]..." help="chart types; every chart when none"'
+run = 'CHART="${usage_type:-}" SNAP=write cargo test -q -p glyphplot --profile contract --test contract every_chart_matches_its_snapshots -- --exact --nocapture'
+
 [tasks.build]
 description = "Everything check builds: the wasm modules"
 depends = ["build:wasm"]
