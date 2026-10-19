@@ -1,8 +1,9 @@
 # glyphplot — Conformance
 
-Every requirement in [ROADMAP.md](ROADMAP.md), mapped to the test or check
-that will cover it. Nothing is built yet, so every check below is planned and
-every Status is `—`. The planned names follow
+Every requirement, built ([SPEC.md](SPEC.md)) or not yet
+([ROADMAP.md](ROADMAP.md)), mapped to the test or check that covers it or
+will. v0.1.0 is built and its checks run; the checks of later milestones are
+planned, their Status `—`. The planned names follow
 [discovery/testing.md](../discovery/testing.md) where it gives one; the rest
 are proposals in the same style.
 
@@ -42,32 +43,32 @@ Several checks may be listed for one requirement, separated by commas.
 
 | Requirement | Milestone | Planned check | Status |
 |---|---|---|---|
-| REQ-ARCH-010 | v0.1.0 | `mise run lint` (`cargo tree -e normal -p glyphplot` against `serde`, `serde_json`, `unicode-width`) | — |
+| REQ-ARCH-010 | v0.1.0 | `mise run lint` (`scripts/deps.sh`: `cargo tree -e normal -p glyphplot` against `serde`, `serde_json`, `unicode-width`) | yes |
 | REQ-ARCH-020 | v0.3.0 | `web/test/player.test.mjs`, review (`crates/wasm` and `crates/cli` define no chart) | — |
 | REQ-ARCH-030 | v0.3.0 | `mise run lint` (no import of `web/pkg` outside `web/src`), review (the site imports only the shell's exports) | — |
-| REQ-ARCH-040 | v0.1.0 | `mise run lint` (`cargo check` of each family feature alone), `mise run build:wasm` | — |
+| REQ-ARCH-040 | v0.1.0 | `mise run lint` (`cargo check` of each family feature alone), `mise run build:wasm` | yes |
 | REQ-ARCH-050 | v0.3.0 | `mise run lint` (`cargo check -p glyphplot --no-default-features --features <family>` per family) | — |
-| REQ-ARCH-060 | v0.1.0 | `mise run check`, review (`Cargo.toml`, `rust-toolchain.toml`, `mise.toml`) | — |
-| REQ-ARCH-070 | v0.1.0 | `mise run lint` (`cargo metadata`: no git source) | — |
+| REQ-ARCH-060 | v0.1.0 | `mise run check`, review (`Cargo.toml`, `rust-toolchain.toml`, `mise.toml`) | partial |
+| REQ-ARCH-070 | v0.1.0 | `mise run lint` (`scripts/deps.sh`: `cargo metadata`, no git source) | yes |
 | REQ-ARCH-080 | v0.8.0 | `crates/cli/tests/cli.rs::list_names_every_type_and_pack` | — |
 
 ### 1.2 Independence (INDEP)
 
 | Requirement | Milestone | Planned check | Status |
 |---|---|---|---|
-| REQ-INDEP-010 | v0.1.0 | `mise run lint` (no manifest, task or script names `animate-unicode` or a `unicel` crate or package), review (no file copied, ported or generated from unicel) | — |
-| REQ-INDEP-020 | v0.1.0 | `mise run lint` (the independence check, with a test edit that must fail it) | — |
+| REQ-INDEP-010 | v0.1.0 | `mise run lint` (`scripts/deps.sh`: no manifest, task or script names `animate-unicode` or a `unicel` crate or package), review (no file copied, ported or generated from unicel) | partial |
+| REQ-INDEP-020 | v0.1.0 | `mise run lint` (`scripts/deps.sh`; a test edit adding `../animate-unicode` as a path dependency fails it, checked 2026-10-18) | yes |
 
 ### 1.3 Tasks (BUILD)
 
 | Requirement | Milestone | Planned check | Status |
 |---|---|---|---|
-| REQ-BUILD-010 | v0.1.0 | `mise run check` | — |
-| REQ-BUILD-020 | v0.1.0 | `mise run check`, review (the task graph in `mise.toml`) | — |
-| REQ-BUILD-030 | v0.1.0 | `mise run build:wasm`, `mise run size` (reads `budgets.json` and `sizes.json`), `web/test/player.test.mjs` | — |
+| REQ-BUILD-010 | v0.1.0 | `mise run check` | yes |
+| REQ-BUILD-020 | v0.1.0 | `mise run check`, review (the task graph in `mise.toml`) | yes |
+| REQ-BUILD-030 | v0.1.0 | `mise run build:wasm`, `mise run size` (reads `budgets.json` and `sizes.json`), `web/test/player.test.mjs` (v0.3.0) | partial |
 | REQ-BUILD-040 | v0.3.0 | `mise run build:wasm:debug`, review (the staged swap) | — |
-| REQ-BUILD-050 | v0.1.0 | review (`[profile.release]` and the wasm-opt flags), `mise run size` | — |
-| REQ-BUILD-060 | v0.1.0 | `mise run lint` (`git ls-files` holds no generated output) | — |
+| REQ-BUILD-050 | v0.1.0 | review (`[profile.release]` and the wasm-opt flags), `mise run size` | partial |
+| REQ-BUILD-060 | v0.1.0 | `mise run lint` (`scripts/generated.sh`: `git ls-files` holds no generated output) | yes |
 | REQ-BUILD-070 | v0.2.0 | `mise run test:rust`, review (`[profile.contract]`) | — |
 | REQ-BUILD-080 | v0.3.0 | manual (`mise run dev` rebuilds and reloads) | — |
 | REQ-BUILD-090 | v0.4.0 | `mise run signoff` (logs the time of `check`), manual | — |
@@ -76,9 +77,9 @@ Several checks may be listed for one requirement, separated by commas.
 
 | Requirement | Milestone | Planned check | Status |
 |---|---|---|---|
-| REQ-LINT-010 | v0.1.0 | `mise run lint` (itself) | — |
+| REQ-LINT-010 | v0.1.0 | `mise run lint` (itself) | yes |
 | REQ-LINT-020 | v0.3.0 | `mise run lint` (`tsc --noEmit`, `elm-format --validate`) | — |
-| REQ-LINT-030 | v0.1.0 | `mise run lint` (rustfmt, `missing_docs`, rustdoc `-D warnings`) | — |
+| REQ-LINT-030 | v0.1.0 | `mise run lint` (rustfmt, `missing_docs`, rustdoc `-D warnings`) | yes |
 | REQ-LINT-040 | v0.2.0 | `mise run lint` (clippy `disallowed-methods`) | — |
 
 ### 1.5 Local CI (CI)
@@ -503,10 +504,10 @@ Several checks may be listed for one requirement, separated by commas.
 
 | Requirement | Milestone | Planned check | Status |
 |---|---|---|---|
-| REQ-SIZE-010 | v0.1.0 | `mise run size` | — |
-| REQ-SIZE-020 | v0.1.0 | `mise run size` | — |
-| REQ-SIZE-030 | v0.1.0 | `mise run size` (`WASM_GZ_LIMIT`) | — |
-| REQ-SIZE-040 | v0.1.0 | `mise run size` | — |
+| REQ-SIZE-010 | v0.1.0 | `mise run size` | yes |
+| REQ-SIZE-020 | v0.1.0 | `mise run size` | yes |
+| REQ-SIZE-030 | v0.1.0 | `mise run size` (`WASM_GZ_LIMIT`) | yes |
+| REQ-SIZE-040 | v0.1.0 | `mise run size` | yes |
 | REQ-SIZE-050 | v0.4.0 | `mise run size --charts` | — |
 | REQ-SIZE-060 | v0.2.0 | `mise run lint` (`cargo tree -e normal --target wasm32-unknown-unknown` ban list) | — |
 | REQ-SIZE-070 | v0.10.0 | `mise run size` (pack modules) | — |
@@ -543,7 +544,7 @@ Several checks may be listed for one requirement, separated by commas.
 
 | Requirement | Milestone | Planned check | Status |
 |---|---|---|---|
-| REQ-TEST-010 | v0.1.0 | `mise run check`, review (process) | — |
+| REQ-TEST-010 | v0.1.0 | `mise run check`, review (process) | partial |
 | REQ-TEST-020 | v0.3.0 | `mise run test:wasm`, `web/test/player.test.mjs` (debug build) | — |
 | REQ-TEST-030 | v0.3.0 | manual (itself) | — |
 | REQ-TEST-040 | v0.3.0 | manual (the owner's pass on `site/test.html`), review (the page) | — |
@@ -684,6 +685,6 @@ kind of the first check listed.
 
 | Status | Requirements |
 |---|---|
-| yes | 0 |
-| partial | 0 |
-| — | 340 |
+| yes | 13 |
+| partial | 5 |
+| — | 322 |

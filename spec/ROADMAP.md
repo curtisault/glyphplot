@@ -2,11 +2,11 @@
 
 Version 0.1 (draft) · 2026-10-18
 
-This document holds every requirement of glyphplot. Nothing is built, so every
-requirement starts here, grouped by area, each naming the milestone that
-ships it. When a milestone lands, its requirements move into
-[SPEC.md](SPEC.md) with their IDs unchanged, and the milestone's row in §20
-says when it was built. IDs go up in tens within an area so a requirement
+This document holds every requirement of glyphplot not yet built, grouped by
+area, each naming the milestone that ships it. When a milestone lands, its
+requirements move into [SPEC.md](SPEC.md) with their IDs unchanged, a line
+in their old section says where they went, and the milestone's row in §20
+says when it was built. v0.1.0 has shipped. IDs go up in tens within an area so a requirement
 can be added between two others (`REQ-DATA-045`); an ID is never reused,
 even after its requirement is removed.
 
@@ -52,44 +52,35 @@ plan's phases, one each (§20).
 
 ### 1.1 Layers (ARCH)
 
-- REQ-ARCH-010: The core crate (`crates/glyphplot`) MUST NOT depend on a DOM, a canvas or a terminal; its normal dependencies MUST be `serde`, `serde_json` and `unicode-width` only. (v0.1.0)
+- Shipped in v0.1.0 and moved to [SPEC.md](SPEC.md) §2.1: REQ-ARCH-010, REQ-ARCH-040, REQ-ARCH-060, REQ-ARCH-070.
 - REQ-ARCH-020: The wasm crate (`crates/wasm`) and the CLI (`crates/cli`) MUST reach charts only through the core's registry and define no chart of their own, except the debug charts of REQ-WASM-060. (v0.3.0)
 - REQ-ARCH-030: The shell (`web/src`) MUST be the only consumer of the wasm API; the site MUST reach charts only through the shell's exports and `<glyph-plot>`. (v0.3.0)
-- REQ-ARCH-040: Each chart family MUST be one Cargo feature in both `glyphplot` and `glyphplot-wasm`; the feature `all`, on by default, MUST enable every one. (v0.1.0)
 - REQ-ARCH-050: A chart MUST use only the core's shared modules and its own family folder `crates/glyphplot/src/charts/<family>/`, never another family's; `mise run lint` MUST check every family alone (`cargo check -p glyphplot --no-default-features --features <family>`). (v0.3.0)
-- REQ-ARCH-060: The workspace MUST be one version, Rust edition 2021, licence MIT, on the Rust 1.97 toolchain with the `wasm32-unknown-unknown` target, `rustfmt` and `clippy` (`rust-toolchain.toml`, `mise.toml`). (v0.1.0)
-- REQ-ARCH-070: The workspace MUST have no git dependencies. (v0.1.0)
 - REQ-ARCH-080: The CLI MUST link the core natively with every family and every pack, without wasm. (v0.8.0)
 
 ### 1.2 Independence (INDEP)
 
-- REQ-INDEP-010: No file in the repository MUST be copied, ported or generated from unicel's repository (`../animate-unicode`), and no crate, package, script or task MUST depend on it or read from it; glyphplot's grid, canvases, glyph tables, block shapes, font build, loader, element, CLI and scripts are written for glyphplot. unicel is prior art, cited for design as other libraries are. [ADR-013](adr/013-independent-of-unicel.md) (v0.1.0)
-- REQ-INDEP-020: `mise run lint` MUST fail when any `Cargo.toml`, `package.json`, `mise.toml` or file under `scripts/` names `animate-unicode`, or a `unicel` crate or package, as a dependency, a path or an input. (v0.1.0)
+- Shipped in v0.1.0 and moved to [SPEC.md](SPEC.md) §3.5: REQ-INDEP-010, REQ-INDEP-020.
 
 REQ-VENDOR-010 and REQ-VENDOR-020 were withdrawn on 2026-10-18 by ADR-013, before anything was built; their IDs are not reused.
 
 ### 1.3 Tasks (BUILD)
 
-- REQ-BUILD-010: mise MUST be the only entry point for building, checking and serving; `mise install` MUST install every tool `mise.toml` pins, and `mise run check` MUST exit 0. (v0.1.0)
-- REQ-BUILD-020: `mise run check` MUST run `lint`, `test`, `build` and `size` in one task graph, and from v0.3.0 also `test:site --smoke`. (v0.1.0)
-- REQ-BUILD-030: `mise run build:wasm` MUST empty `web/pkg`, build one release module per family into `web/pkg/<family>/glyphplot{.js,_bg.wasm}` with `wasm-pack --target web --release --no-pack`, delete the `.gitignore` wasm-pack writes beside each, and write `modules.js`, `modules.d.ts`, `budgets.json` and `sizes.json`. (v0.1.0)
+- Shipped in v0.1.0 and moved to [SPEC.md](SPEC.md) §16.1: REQ-BUILD-010, REQ-BUILD-020, REQ-BUILD-030, REQ-BUILD-050, REQ-BUILD-060.
 - REQ-BUILD-040: `mise run build:wasm:debug` MUST build one module, `all`, with every family and the `debug` feature, in its own cargo target dir, staged beside `web/pkg` and swapped in whole, so a failed build leaves the last good `web/pkg`. (v0.3.0)
-- REQ-BUILD-050: The release profile MUST be `opt-level = "s"`, LTO, one codegen unit, `panic = "abort"` and `strip`, and wasm-opt MUST run with `-Os --enable-bulk-memory --enable-nontrapping-float-to-int`. (v0.1.0)
-- REQ-BUILD-060: Generated output (`web/pkg`, `web/dist`, `site/dist`, `target`, the bench outputs under `discovery/bench`) MUST stay out of git; the bundled font is generated and checked in. (v0.1.0)
 - REQ-BUILD-070: `mise run test:rust` MUST run `cargo test --workspace --profile contract`, a profile inheriting `release` with LTO off, 16 codegen units and `opt-level = 3`. [ADR-127](adr/127-test-profile-without-lto.md) (v0.2.0)
 - REQ-BUILD-080: `mise run dev` MUST serve the debug build with the checklist page and rebuild the debug wasm when a file under `crates/` changes, reloading the page. (v0.3.0)
 - REQ-BUILD-090: `mise run check` SHOULD finish in under five minutes from a warm cache on the reference machine. (v0.4.0)
 
 ### 1.4 Lint (LINT)
 
-- REQ-LINT-010: `mise run lint` MUST run `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `RUSTDOCFLAGS='-D warnings' cargo doc --no-deps -p glyphplot`, and clippy on `glyphplot-wasm` for `wasm32-unknown-unknown` with and without `debug`. (v0.1.0)
+- Shipped in v0.1.0 and moved to [SPEC.md](SPEC.md) §16.2: REQ-LINT-010, REQ-LINT-030.
 - REQ-LINT-020: From the milestone each lands in, `mise run lint` MUST also run `tsc --noEmit` for `web` (v0.3.0) and `site` (v0.7.0) and `elm-format --validate` on `site/src` and `site/tests` (v0.7.0). (v0.3.0)
-- REQ-LINT-030: Rust style MUST follow `rustfmt.toml` (`max_width = 160`, `use_small_heuristics = "Max"`), and every public item of every crate MUST have a doc comment (`#![warn(missing_docs)]`, rustdoc with `-D warnings`). (v0.1.0)
 - REQ-LINT-040: `clippy.toml` MUST list `f64::clamp` and `f32::clamp` under `disallowed-methods`, so a call fails `mise run lint`. (v0.2.0)
 
 ### 1.5 Local CI (CI)
 
-- REQ-CI-010: There MUST be no hosted CI workflow; `mise run signoff` is CI ([ADR-003](adr/003-unicels-architecture.md)). (v0.1.0)
+- Shipped in v0.1.0 and moved to [SPEC.md](SPEC.md) §16.5: REQ-CI-010.
 - REQ-CI-020: `mise run signoff` MUST, for each open pull request (or those named), copy the head commit's tree into `target/ci/tree`, run `npm ci`, `lint`, `test`, `build`, `size`, the whole of `test:site`, `bench:web` and `bench:load` there, with `PROPTEST_CASES=4096`, log to `target/ci/logs/`, and post a `signoff` commit status; it MUST exit 1 when any pull request fails, after checking the rest. (v0.4.0)
 
 ---
@@ -477,10 +468,7 @@ default), and reaches `mise run size`, the contract and the benches through
 
 ### 12.1 Size (SIZE)
 
-- REQ-SIZE-010: `mise run size` MUST fail when any module's `glyphplot_bg.wasm` passes its budget gzip -9 (358,400 bytes unless its budget says otherwise), naming each module over with its size and its limit. [ADR-008](adr/008-a-generous-size-threshold.md), [ADR-133](adr/133-a-350-kb-module-gate.md) (v0.1.0)
-- REQ-SIZE-020: `mise run size` MUST print each module's wasm and JS glue, raw and gzipped, and the total, and append those lines to `$GITHUB_STEP_SUMMARY` when it is set. (v0.1.0)
-- REQ-SIZE-030: `WASM_GZ_LIMIT` MUST override every module's limit, in bytes. (v0.1.0)
-- REQ-SIZE-040: `mise run size` SHOULD print a warning for each module past half its budget (179,200 bytes by default). (v0.1.0)
+- Shipped in v0.1.0 and moved to [SPEC.md](SPEC.md) §16.3: REQ-SIZE-010, REQ-SIZE-020, REQ-SIZE-030, REQ-SIZE-040.
 - REQ-SIZE-050: `mise run size --charts` MUST list, for each module, the gzipped share of the chart's own code, the core, serde and serde_json, and the rest (std, alloc, wasm-bindgen), from an unstripped build. (v0.4.0)
 - REQ-SIZE-060: No wasm module's dependency tree MUST hold chrono, time, jiff, chrono-tz, num-format, any `icu_` crate, arrow, arrow2 or vsop87, which `mise run lint` checks with `cargo tree -e normal --target wasm32-unknown-unknown`. (v0.2.0)
 - REQ-SIZE-070: A pack module MUST stay under 32 KB gzipped. (v0.10.0)
@@ -511,7 +499,7 @@ default), and reaches `mise run size`, the contract and the benches through
 
 ## 13. Testing
 
-- REQ-TEST-010: `mise run test` MUST pass before every commit, and `mise run check` MUST be green. (v0.1.0)
+- Shipped in v0.1.0 and moved to [SPEC.md](SPEC.md) §17: REQ-TEST-010.
 - REQ-TEST-020: The Node tests (`web/test/*.test.mjs`) MUST run against the release modules in `web/pkg` and against a debug build, find modules with the shell's own compiled `moduleOf`, and run the panic tests against the debug build only. (v0.3.0)
 - REQ-TEST-030: Browser behaviour on real devices (pixels, fonts, touch, screen readers, Safari) MUST be checked by the owner; agents check headless and hand the manual checks over as a list. (v0.3.0)
 - REQ-TEST-040: `site/test.html` MUST be a plain HTML checklist page (no Elm) with one `<glyph-plot>` per rendering and interaction case and a button that copies the pass as Markdown. (v0.3.0)
@@ -607,7 +595,7 @@ default), and reaches `mise run size`, the contract and the benches through
 - REQ-PKG-010: The npm package MUST be named `glyphplot`, ESM, with exports `.`, `./element`, `./wasm` and `./node`, each with types, `files` `dist`, `pkg` and `fonts`, and `sideEffects` only `./dist/element.js`. [ADR-001](adr/001-name-glyphplot.md) (v0.11.0)
 - REQ-PKG-020: The packed tarball MUST hold every export target, every module's `glyphplot.js` and `glyphplot_bg.wasm`, the font and its licence, and no `.gitignore`. (v0.11.0)
 - REQ-PKG-030: The package SHOULD export JSX typings as `glyphplot/jsx` typing `<glyph-plot>` as a union discriminated on `type`; a `tsc` fixture MUST reject candle data on `type="line"`. (v0.11.0)
-- REQ-PKG-040: The crates MUST be `glyphplot` (library), `glyphplot-cli` (binary `glyphplot`), `glyphplot-wasm` (`publish = false`) and the packs `glyphplot-<domain>`. (v0.1.0)
+- Shipped in v0.1.0 and moved to [SPEC.md](SPEC.md) §18: REQ-PKG-040.
 - REQ-PKG-050: `prepublishOnly` MUST run `mise run build:web`, which builds the wasm first. (v0.11.0)
 - REQ-PKG-060: Until the package is on npm and the CLI on crates.io, every install snippet MUST say so and show how to build from the repository. (v0.7.0)
 
@@ -622,7 +610,7 @@ command verifies; real-browser checks are the owner's (REQ-TEST-030).
 
 | Version | Phase | Areas it ships | Acceptance (plan) |
 |---|---|---|---|
-| v0.1.0 | 0 · Toolchain green | ARCH-010, 040, 060, 070; INDEP-010–020; BUILD-010–030, 050, 060; LINT-010, 030; CI-010; SIZE-010–040; TEST-010; PKG-040 | `mise run check` exits 0 on an empty family; `mise run size` prints the empty module |
+| v0.1.0 (built 2026-10-18) | 0 · Toolchain green | ARCH-010, 040, 060, 070; INDEP-010–020; BUILD-010–030, 050, 060; LINT-010, 030; CI-010; SIZE-010–040; TEST-010; PKG-040 | `mise run check` exits 0 on an empty family; `mise run size` prints the empty module |
 | v0.2.0 | 1 · Core | GRID, CANVAS, COLOR-010–040, DATA-010–040, 080–090, 110, 130, SCALE-010–030, TICK-010–040, FMT-010–030, TZ-010, I18N-030–040, LAYOUT-010–030, TEXT, FIX-010, REF-010, PROP-010, FONT-010, BUILD-070, LINT-040, SIZE-060 | `mise run test:rust`: reference fixtures 0 differ; properties pass; `fixtures` regenerates bitwise |
 | v0.3.0 | 2 · Line end to end | the `line` type; VIEW-010–050; INPUT; HIT-010–020; OVERLAY; EVENT-010–030; KEY; TOUCH; CHART; OPT; REG; CONTRACT-010–020; SNAP; WASM; MANIFEST; LOAD; EL (most); MOUNT; JS; RENDER-010–030, 050; FONT-030; THEME-010–050, 070; MONO-010, 040; A11Y-010–070; PERF-010–020; MEM; DATA-050–070, 120; STREAM-060; SAMPLE-010–030; I18N-010–020, 050; FMT-060; CANVAS-040; EL-085; LAYOUT-040, 070; CHAR; TEST-020–040; E2E-010–040, 070; BUILD-040, 080; LINT-020; ARCH-020–050 | `mise run check`; `mise run test:site` (interaction, element, resize, axe) |
 | v0.4.0 | 3 · Contract and budgets | CONTRACT-030, 050, 060; PERF-030–060, 080; SIZE-050; BENCH; CI-020; BUILD-090 | `cargo test --profile contract --test contract --test budgets`; `mise run bench`; `mise run signoff` on the branch |

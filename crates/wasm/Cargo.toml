@@ -1,0 +1,27 @@
+[package]
+name = "glyphplot-wasm"
+description = "glyphplot's wasm-bindgen boundary, built once a chart family"
+publish = false
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+glyphplot = { path = "../glyphplot", default-features = false }
+wasm-bindgen = "0.2"
+
+# The core's families, mirrored (REQ-ARCH-040), and `debug` for the debug
+# build (the panic hook arrives with the `Chart` object in Phase 3).
+[features]
+default = ["all"]
+all = ["line"]
+line = ["glyphplot/line"]
+debug = []
+
+# REQ-BUILD-050.
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = ["-Os", "--enable-bulk-memory", "--enable-nontrapping-float-to-int"]

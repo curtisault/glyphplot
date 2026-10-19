@@ -1,6 +1,6 @@
 # glyphplot — Specification
 
-Version 0.0.0 (nothing is built) · 2026-10-18 · License: MIT
+Version 0.1.0 · 2026-10-18 · License: MIT
 
 glyphplot is an interactive charting library whose charts are drawn in
 Unicode glyphs, one code point and one colour a cell. Charts are Rust,
@@ -9,8 +9,8 @@ by a `<glyph-plot>` custom element over a small TypeScript shell and in the
 terminal by a CLI; every chart draws data the page or the terminal gives it.
 
 This document describes the application exactly as it stands. On
-2026-10-18 nothing is built, so every section below holds only its heading
-and the words "nothing is built". Requirements arrive from
+2026-10-18 v0.1.0, the toolchain, is built: a section with nothing built
+holds only its heading and the words "nothing is built". Requirements arrive from
 [ROADMAP.md](ROADMAP.md) when their milestone lands, keeping their IDs and
 saying which milestone brought them (`Note: (v0.3.0)`). Where this document
 and other docs disagree, this document records what the code does and says
@@ -144,19 +144,32 @@ one is marked superseded. A number says how it was measured, or is marked
 
 ### 1.3 State of delivery
 
-Nothing is built. Discovery, the plan and the roadmap were written on
-2026-10-18; Phase 0 is next (`docs/IMPLEMENTATION_PLAN.md`).
+v0.1.0 (Phase 0, the toolchain) was built on 2026-10-18: the three crates,
+an empty `line` family, and the mise tasks that lint, test, build, measure
+and sign off. No chart is drawn yet. Phase 1, the core, is next
+(`docs/IMPLEMENTATION_PLAN.md`).
 
 ---
 
 ## 2. Architecture
 
-Nothing is built. The intended layers are drawn in
+The workspace holds three crates: `crates/glyphplot` (the core, with the
+chart families as features), `crates/wasm` (`glyphplot-wasm`, the
+wasm-bindgen boundary, built once a family) and `crates/cli`
+(`glyphplot-cli`, binary `glyphplot`). The intended layers are drawn in
 `docs/IMPLEMENTATION_PLAN.md`, "Architecture".
 
 ### 2.1 Layer rules
 
-Nothing is built.
+The core has no dependencies yet. Its registry, `glyphplot::FAMILIES`, lists
+the families compiled in, each with its budget; the wasm crate exports
+`version()` and `families()`, and the CLI prints its usage and version.
+
+- REQ-ARCH-010: The core crate (`crates/glyphplot`) MUST NOT depend on a DOM, a canvas or a terminal; its normal dependencies MUST be `serde`, `serde_json` and `unicode-width` only. Note: (v0.1.0)
+- REQ-ARCH-040: Each chart family MUST be one Cargo feature in both `glyphplot` and `glyphplot-wasm`; the feature `all`, on by default, MUST enable every one. Note: (v0.1.0)
+- REQ-ARCH-060: The workspace MUST be one version, Rust edition 2021, licence MIT, on the Rust 1.97 toolchain with the `wasm32-unknown-unknown` target, `rustfmt` and `clippy` (`rust-toolchain.toml`, `mise.toml`). Note: (v0.1.0)
+- REQ-ARCH-070: The workspace MUST have no git dependencies. Note: (v0.1.0)
+
 
 ### 2.2 Per-frame and per-event data flow
 
@@ -184,7 +197,13 @@ Nothing is built.
 
 ### 3.5 Independence from unicel
 
-Nothing is built.
+`scripts/deps.sh`, run by `mise run lint`, fails on any non-comment line of
+a `Cargo.toml`, `package.json`, `mise.toml` or script that names
+`animate-unicode` or `unicel`.
+
+- REQ-INDEP-010: No file in the repository MUST be copied, ported or generated from unicel's repository (`../animate-unicode`), and no crate, package, script or task MUST depend on it or read from it; glyphplot's grid, canvases, glyph tables, block shapes, font build, loader, element, CLI and scripts are written for glyphplot. unicel is prior art, cited for design as other libraries are. [ADR-013](adr/013-independent-of-unicel.md) Note: (v0.1.0)
+- REQ-INDEP-020: `mise run lint` MUST fail when any `Cargo.toml`, `package.json`, `mise.toml` or file under `scripts/` names `animate-unicode`, or a `unicel` crate or package, as a dependency, a path or an input. Note: (v0.1.0)
+
 
 ---
 
@@ -390,16 +409,48 @@ Nothing is built.
 
 ### 16.1 mise tasks
 
-Nothing is built. `mise install` installs the pinned toolchain; `mise run
-check` is a placeholder until Phase 0.
+| Task | What it does |
+|---|---|
+| `install` | `mise install`: the pinned toolchain |
+| `build:wasm` | `scripts/build-wasm.sh`: one release module a family into `web/pkg/<family>/`, then `modules.js`, `modules.d.ts` and `budgets.json` (`crates/glyphplot/examples/manifest.rs`) and `sizes.json` |
+| `build` | `build:wasm` |
+| `fmt` | `cargo fmt --all` |
+| `lint` | rustfmt, clippy, rustdoc, each family alone, `scripts/deps.sh`, `scripts/generated.sh` (§16.2) |
+| `test:rust`, `test` | `cargo test --workspace` |
+| `size` | `build:wasm`, then `scripts/size.mjs` (§16.3) |
+| `check` | `lint`, `test`, `build` and `size` |
+| `signoff` | `scripts/signoff.sh` (§16.5) |
+
+- REQ-BUILD-010: mise MUST be the only entry point for building, checking and serving; `mise install` MUST install every tool `mise.toml` pins, and `mise run check` MUST exit 0. Note: (v0.1.0)
+- REQ-BUILD-020: `mise run check` MUST run `lint`, `test`, `build` and `size` in one task graph, and from v0.3.0 also `test:site --smoke`. Note: (v0.1.0)
+- REQ-BUILD-030: `mise run build:wasm` MUST empty `web/pkg`, build one release module per family into `web/pkg/<family>/glyphplot{.js,_bg.wasm}` with `wasm-pack --target web --release --no-pack`, delete the `.gitignore` wasm-pack writes beside each, and write `modules.js`, `modules.d.ts`, `budgets.json` and `sizes.json`. Note: (v0.1.0)
+- REQ-BUILD-050: The release profile MUST be `opt-level = "s"`, LTO, one codegen unit, `panic = "abort"` and `strip`, and wasm-opt MUST run with `-Os --enable-bulk-memory --enable-nontrapping-float-to-int`. Note: (v0.1.0)
+- REQ-BUILD-060: Generated output (`web/pkg`, `web/dist`, `site/dist`, `target`, the bench outputs under `discovery/bench`) MUST stay out of git; the bundled font is generated and checked in. Note: (v0.1.0)
+
 
 ### 16.2 Lint
 
-Nothing is built.
+`mise run lint` also checks each family alone (`cargo check -p glyphplot
+--no-default-features --features <family>`), the core's dependencies
+(REQ-ARCH-010), git dependencies (REQ-ARCH-070), unicel's repository
+(REQ-INDEP-020) and tracked generated output (REQ-BUILD-060).
+
+- REQ-LINT-010: `mise run lint` MUST run `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `RUSTDOCFLAGS='-D warnings' cargo doc --no-deps -p glyphplot`, and clippy on `glyphplot-wasm` for `wasm32-unknown-unknown` with and without `debug`. Note: (v0.1.0)
+- REQ-LINT-030: Rust style MUST follow `rustfmt.toml` (`max_width = 160`, `use_small_heuristics = "Max"`), and every public item of every crate MUST have a doc comment (`#![warn(missing_docs)]`, rustdoc with `-D warnings`). Note: (v0.1.0)
+
 
 ### 16.3 Size budgets
 
-Nothing is built.
+`scripts/size.mjs` reads each module's limit from `web/pkg/budgets.json` and
+measures with `gzip -9` of the file on stdin, as `gzip -9 < file | wc -c`
+counts it. On 2026-10-18 the empty `line` module is 15,742 B, 7,052 B
+gzipped, and its JS glue 7,016 B, 2,016 B gzipped (`mise run size`).
+
+- REQ-SIZE-010: `mise run size` MUST fail when any module's `glyphplot_bg.wasm` passes its budget gzip -9 (358,400 bytes unless its budget says otherwise), naming each module over with its size and its limit. [ADR-008](adr/008-a-generous-size-threshold.md), [ADR-133](adr/133-a-350-kb-module-gate.md) Note: (v0.1.0)
+- REQ-SIZE-020: `mise run size` MUST print each module's wasm and JS glue, raw and gzipped, and the total, and append those lines to `$GITHUB_STEP_SUMMARY` when it is set. Note: (v0.1.0)
+- REQ-SIZE-030: `WASM_GZ_LIMIT` MUST override every module's limit, in bytes. Note: (v0.1.0)
+- REQ-SIZE-040: `mise run size` SHOULD print a warning for each module past half its budget (179,200 bytes by default). Note: (v0.1.0)
+
 
 ### 16.4 Time and memory budgets
 
@@ -407,19 +458,33 @@ Nothing is built.
 
 ### 16.5 Local CI (signoff)
 
-Nothing is built.
+`mise run signoff [rev]` checks a commit (HEAD by default) out into
+`target/ci/tree`, a detached git worktree removed afterwards, runs
+`mise run check` there with a cargo cache in
+`target/ci/target`, and logs to `target/ci/logs/<sha>.log`. It posts no
+commit status yet; REQ-CI-020 adds that in v0.4.0.
+
+- REQ-CI-010: There MUST be no hosted CI workflow; `mise run signoff` is CI ([ADR-003](adr/003-unicels-architecture.md)). Note: (v0.1.0)
+
 
 ---
 
 ## 17. Testing
 
-Nothing is built.
+The tests are the core's unit tests (the default budget, the registry's
+names) and the CLI's (`crates/cli/tests/usage.rs`).
+
+- REQ-TEST-010: `mise run test` MUST pass before every commit, and `mise run check` MUST be green. Note: (v0.1.0)
+
 
 ---
 
 ## 18. Packaging
 
-Nothing is built.
+Nothing is published. The crates are named; the packs come with v0.10.0.
+
+- REQ-PKG-040: The crates MUST be `glyphplot` (library), `glyphplot-cli` (binary `glyphplot`), `glyphplot-wasm` (`publish = false`) and the packs `glyphplot-<domain>`. Note: (v0.1.0)
+
 
 ---
 
@@ -489,4 +554,4 @@ table when the owner accepts it.
 
 ## 21. Appendix: where the docs differ from the code
 
-There is no code yet, so there is no difference to record.
+None on 2026-10-18.

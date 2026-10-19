@@ -3,10 +3,10 @@
 # The tools are pinned as unicel's (../animate-unicode/mise.toml) pins them.
 #
 #   mise install          the toolchain
-#   mise run check        lint, test and build (from Phase 0; nothing is built yet)
+#   mise run check        lint, test, build and size: green before every commit
+#   mise run signoff      the CI, run locally on a committed tree
 #
-# Phase 0 of docs/IMPLEMENTATION_PLAN.md adds the build, test, lint, size and
-# signoff tasks as the code they run lands.
+# `mise tasks` lists every task.
 
 [tools]
 # The charts, the wasm modules and the CLI. `targets` adds the wasm32 target
@@ -31,6 +31,52 @@ wasm-tools = "latest"
 # Reruns a task when files change.
 watchexec = "latest"
 
+[tasks.install]
+description = "The toolchain mise.toml pins (from v0.3.0 also the npm packages)"
+run = "mise install"
+
+[tasks."build:wasm"]
+description = "One release wasm module a chart family into web/pkg, with modules.js, budgets.json and sizes.json"
+run = "bash scripts/build-wasm.sh"
+
+[tasks.build]
+description = "Everything check builds: the wasm modules"
+depends = ["build:wasm"]
+
+[tasks.fmt]
+description = "Format the Rust code (rustfmt.toml)"
+run = "cargo fmt --all"
+
+[tasks.lint]
+description = "rustfmt, clippy (host and wasm32, with and without debug), rustdoc, each family alone, the dependency rules, no generated output in git"
+run = [
+  "cargo fmt --all --check",
+  "cargo clippy --workspace --all-targets -- -D warnings",
+  "RUSTDOCFLAGS='-D warnings' cargo doc --no-deps -p glyphplot",
+  "cargo clippy -p glyphplot-wasm --target wasm32-unknown-unknown -- -D warnings",
+  "cargo clippy -p glyphplot-wasm --target wasm32-unknown-unknown --features debug -- -D warnings",
+  "for f in $(cargo run -q -p glyphplot --example manifest -- families); do cargo check -q -p glyphplot --no-default-features --features $f || exit 1; done",
+  "bash scripts/deps.sh",
+  "bash scripts/generated.sh",
+]
+
+[tasks."test:rust"]
+description = "Every Rust test in the workspace"
+run = "cargo test --workspace"
+
+[tasks.test]
+description = "Every test (from v0.3.0 also the wasm and site tests)"
+depends = ["test:rust"]
+
+[tasks.size]
+description = "Each module's wasm and JS, raw and gzip -9, against its budget; WASM_GZ_LIMIT overrides it"
+depends = ["build:wasm"]
+run = "node scripts/size.mjs"
+
 [tasks.check]
-description = "Lint, test and build. Nothing is built yet: Phase 0 replaces this with the real graph"
-run = "echo 'glyphplot: nothing is built yet (see docs/IMPLEMENTATION_PLAN.md, Phase 0)'"
+description = "lint, test, build and size: green before every commit"
+depends = ["lint", "test", "build", "size"]
+
+[tasks.signoff]
+description = "The CI, run locally: check on a committed tree (HEAD, or the revision given)"
+run = "bash scripts/signoff.sh"

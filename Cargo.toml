@@ -1,16 +1,14 @@
-# The glyphplot workspace. Nothing is built yet: Phase 0 of
-# docs/IMPLEMENTATION_PLAN.md adds crates/glyphplot (the core and the charts),
-# crates/wasm (the wasm-bindgen boundary) and crates/cli (the terminal), each
-# added to `members` as it lands (a `crates/*` glob fails while nothing matches).
+# The glyphplot workspace: the core and the charts, the wasm-bindgen boundary
+# and the terminal, one version (REQ-ARCH-060).
 [workspace]
 resolver = "2"
-members = []
+members = ["crates/glyphplot", "crates/wasm", "crates/cli"]
 # Discovery's measurements are throwaway standalone crates with their own
 # `[workspace]` tables; they are never members.
 exclude = ["discovery"]
 
 [workspace.package]
-version = "0.0.0"
+version = "0.1.0"
 edition = "2021"
 license = "MIT"
 repository = "https://github.com/curtisault/glyphplot"
