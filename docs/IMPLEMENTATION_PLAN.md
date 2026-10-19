@@ -489,6 +489,39 @@ Built by `crates/wasm` once per family. The shell is its only consumer
 | `resolve_palette(theme_json)` | The 255 RGBA entries for a theme (`theme::resolve`, REQ-COLOR-030) |
 | `start()` | Debug builds only: the panic hook |
 
+<a id="input-encoding"></a>
+### Input encoding
+
+`input(kind, x, y, a, b, buttons, mods, t)` carries one event of
+[input.schema.json](../spec/schemas/input.schema.json) as numbers, so the
+hot path builds no strings (REQ-INPUT-020). `Chart::input` takes the decoded
+event; the wasm crate decodes.
+
+| kind | Code | x, y | a | b | buttons |
+|---|---|---|---|---|---|
+| `move`, `down`, `up` | 0, 1, 2 | position | 0 | 0 | buttons bitmask + 256 × pointer (mouse 0, pen 1, touch 2) |
+| `leave` | 3 | 0 | 0 | 0 | 0 |
+| `wheel` | 4 | position | `dx` | `dy` | 0 |
+| `pinch` | 5 | centre | `scale` | `end` (1 or 0) | 0 |
+| `pan` | 6 | `velocity`, `end` (1 or 0) | `dx` | `dy` | 0 |
+| `tap` | 7 | position | `count` (1 or 2) | 0 | 0 |
+| `press` | 8 | position | 0 | 0 | 0 |
+| `key` | 9 | 0 | key code | 0 | 0 |
+
+`mods` is a bitmask: shift 1, ctrl 2, alt 4, meta 8. `t` is play time in
+seconds. Key codes index this list of `KeyboardEvent.key` values; the shell
+sends no other key:
+
+```
+0 ArrowLeft   1 ArrowRight  2 ArrowUp    3 ArrowDown  4 Home     5 End
+6 PageUp      7 PageDown    8 +          9 =         10 -        11 0
+12 Enter     13 Escape     14 " "       15 ?         16–24 1–9
+25 h  26 j  27 k  28 l  29 f  30 q      (the CLI's)
+```
+
+`input` returns a bitmask: overlay changed 1, base changed 2, events pending
+4.
+
 ### The manifest
 
 `crates/glyphplot/examples/manifest.rs` writes `web/pkg/modules.js`,
