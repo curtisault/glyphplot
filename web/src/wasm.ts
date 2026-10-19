@@ -11,7 +11,12 @@ export interface Loaded {
   readonly name: string;
   readonly module: WasmModule;
   readonly memory: WebAssembly.Memory;
+  /** wasm-bindgen's `__wbindgen_add_to_stack_pointer`, when the module exports it: {@link Guarded.call} rewinds the shadow stack with it after a trap. */
+  readonly stack: ((delta: number) => number) | null;
 }
+
+/** Guarded calls in progress on each module: only the outermost one may rewind the shadow stack. */
+const depth = new WeakMap<Loaded, number>();
 
 let manifestPromise: Promise<Manifest> | null = null;
 const loaded = new Map<string, Promise<Loaded>>();
@@ -77,7 +82,8 @@ export function loadModule(name: string): Promise<Loaded> {
       const out = await module.default(await initInput(name));
       instantiations.set(name, (instantiations.get(name) ?? 0) + 1);
       module.start?.();
-      return { name, module, memory: out.memory };
+      const stack = typeof out.__wbindgen_add_to_stack_pointer === "function" ? out.__wbindgen_add_to_stack_pointer : null;
+      return { name, module, memory: out.memory, stack };
     })();
     loaded.set(name, p);
     p.catch(() => {
@@ -145,18 +151,40 @@ export class Guarded {
     return this.#freed ? "the chart was freed" : this.#dead;
   }
 
-  /** Runs `f` on the chart; a trap kills the chart and is rethrown. */
+  /**
+   * Runs `f` on the chart; a trap kills the chart and is rethrown.
+   *
+   * A trap skips the epilogues of the Rust frames it unwinds, so the shadow
+   * stack pointer (a wasm global the module moves down on entry and back up
+   * on return) stays where the deepest frame left it: about 240 B lost a
+   * trap, measured in the debug build's `debug-panic` chart. The outermost
+   * guarded call on a module reads the pointer before `f` and puts it back
+   * after a trap. That is safe because a trap has unwound every wasm frame
+   * up to this JS call, so nothing live sits below the saved pointer; an
+   * inner call (wasm calling JS calling wasm) leaves it to the outer one,
+   * whose frames are still live.
+   */
   call<T>(f: (c: WasmChart) => T): T {
     const dead = this.dead;
     if (dead !== null) throw new Error(`glyphplot: ${dead}`);
+    const loaded = this.loaded;
+    const level = depth.get(loaded) ?? 0;
+    const sp = level === 0 && loaded.stack ? loaded.stack(0) : null;
+    depth.set(loaded, level + 1);
     try {
       return f(this.raw);
     } catch (e) {
       if (isTrap(e)) {
+        if (sp !== null && loaded.stack) {
+          const now = loaded.stack(0);
+          if (now !== sp) loaded.stack(sp - now);
+        }
         this.#dead = `the chart stopped after a trap (${messageOf(e)})`;
         console.error(`glyphplot: a chart trapped and was stopped: ${messageOf(e)}`);
       }
       throw e;
+    } finally {
+      depth.set(loaded, level);
     }
   }
 

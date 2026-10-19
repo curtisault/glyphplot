@@ -44,14 +44,18 @@ export class EventGate {
     const out: WasmEvent[] = [];
     let hover: WasmEvent | null = null;
     let view: WasmEvent | null = null;
+    let final: WasmEvent | null = null;
     for (const e of events) {
       if (e.type === "plot-hover") {
         hover = e;
       } else if (e.type === "plot-view") {
         const d = e.detail as ViewDetail;
         if (d && d.final) {
-          view = null; // the final supersedes this frame's earlier steps
-          out.push(e);
+          // The final supersedes this frame's earlier steps, and the frame's
+          // last final the earlier ones: a two-finger gesture ends its pan
+          // and its pinch together, and that is one gesture ending.
+          view = null;
+          final = e;
           this.#open = null;
         } else {
           view = e;
@@ -60,6 +64,7 @@ export class EventGate {
         out.push(e);
       }
     }
+    if (final) out.push(final);
     if (view) {
       const d = view.detail as ViewDetail;
       out.push(view);

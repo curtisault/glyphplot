@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="en-US">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>glyphplot checklist</title>
+<meta name="description" content="The owner's manual checklist for glyphplot v0.3.0: one chart per rendering and interaction case, in Chrome and Safari, desktop and phone.">
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #ffffff; --fg: #1b1b1b; --muted: #555; --line: #d6d6d6; --panel: #f5f5f2; --accent: #0b57d0;
+    --pass: #0a6b2d; --fail: #b3261e;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --bg: #121212; --fg: #e8e8e8; --muted: #b0b0b0; --line: #3a3a3a; --panel: #1d1d1d; --accent: #8ab4f8; --pass: #6dd58c; --fail: #f2b8b5; }
+  }
+  :root[data-theme="dark"] { --bg: #121212; --fg: #e8e8e8; --muted: #b0b0b0; --line: #3a3a3a; --panel: #1d1d1d; --accent: #8ab4f8; --pass: #6dd58c; --fail: #f2b8b5; }
+  :root[data-theme="light"] { color-scheme: light; }
+  :root[data-theme="dark"] { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 60rem; margin: 0 auto; padding: 16px; }
+  a { color: var(--accent); }
+  h1 { font-size: 1.6rem; margin: 0.5rem 0; }
+  h2 { font-size: 1.2rem; margin: 0 0 0.5rem; }
+  code { font-family: ui-monospace, monospace; font-size: 0.92em; }
+  header p, .note { color: var(--muted); }
+  .bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0.5rem 0; }
+  button { font: inherit; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel); color: var(--fg); cursor: pointer; min-height: 32px; }
+  button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  dl.env { display: grid; grid-template-columns: max-content 1fr; gap: 2px 12px; margin: 0.5rem 0; font-size: 0.9rem; }
+  dl.env dt { color: var(--muted); }
+  dl.env dd { margin: 0; overflow-wrap: anywhere; }
+  .case { border-top: 1px solid var(--line); padding: 1.25rem 0; }
+  .case > .what { margin: 0.5rem 0; padding-left: 1.25rem; }
+  .case > .what li { margin: 0.15rem 0; }
+  .charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: 12px; }
+  .charts figure { margin: 0; min-width: 0; }
+  .charts figcaption { font-size: 0.85rem; color: var(--muted); }
+  glyph-plot { width: 100%; }
+  .result { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; margin-top: 0.5rem; padding: 6px 10px; background: var(--panel); border-radius: 6px; }
+  .result label { display: inline-flex; gap: 4px; align-items: center; }
+  .result input[type="text"] { flex: 1 1 14rem; min-width: 0; font: inherit; padding: 2px 6px; border: 1px solid var(--line); border-radius: 4px; background: var(--bg); color: var(--fg); }
+  .result[data-state="pass"] { box-shadow: inset 4px 0 0 var(--pass); }
+  .result[data-state="fail"] { box-shadow: inset 4px 0 0 var(--fail); }
+  output, .log { display: block; font: 0.85rem/1.4 ui-monospace, monospace; color: var(--muted); white-space: pre-wrap; overflow-wrap: anywhere; }
+  .log { max-height: 9.5rem; overflow: auto; border: 1px solid var(--line); border-radius: 4px; padding: 4px 6px; margin-top: 6px; }
+  pre.gp-pre { margin: 0; font-family: "glyphplot mono", ui-monospace, monospace; font-size: 13px; line-height: 1; overflow: hidden; white-space: pre; }
+  canvas.gp-canvas { display: block; max-width: 100%; }
+  .resizable { resize: horizontal; overflow: hidden; width: 70%; min-width: 80px; max-width: 100%; border: 1px dashed var(--line); padding: 4px; }
+  .fold { height: 200vh; display: flex; align-items: flex-end; justify-content: center; color: var(--muted); }
+  #markdown { width: 100%; min-height: 10rem; font: 0.85rem/1.4 ui-monospace, monospace; background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-radius: 6px; padding: 8px; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+</style>
+</head>
+<body>
+<main>
+<header>
+  <h1>glyphplot v0.3.0 checklist</h1>
+  <p>The owner's manual pass (REQ-TEST-030, REQ-TEST-040): run each case in Chrome and Safari, on a desktop and on a phone, mark it, then copy the pass as Markdown into the plan or the pull request. The headless browser tests cover what they can; everything here is what only a real screen, finger, font or screen reader can show.</p>
+  <dl class="env" id="env"></dl>
+  <div class="bar">
+    <button type="button" id="copy">Copy the pass as Markdown</button>
+    <button type="button" id="clear">Clear the marks</button>
+    <span id="copied" role="status" class="note"></span>
+  </div>
+  <label for="markdown" class="sr-only">The pass as Markdown</label>
+  <textarea id="markdown" readonly hidden></textarea>
+</header>
+
+<section class="case" id="pre-canvas" data-title="<pre> and canvas">
+  <h2>1. <code>&lt;pre&gt;</code> and canvas</h2>
+  <ul class="what">
+    <li>The text drawing (a <code>&lt;pre&gt;</code>, one ink) and the canvas drawing show the same cells: same braille line, axes and labels, same row breaks.</li>
+    <li>The canvas is sharp, not blurred, at this screen's pixel ratio; braille dots are square and evenly spaced.</li>
+    <li>The <code>&lt;pre&gt;</code> text can be selected and pasted as the chart.</li>
+  </ul>
+  <div class="charts">
+    <figure><pre class="gp-pre" data-mount="pre" aria-label="The text drawing"></pre><figcaption>mount() on a &lt;pre&gt;</figcaption></figure>
+    <figure><canvas class="gp-canvas" data-mount="canvas" role="img" aria-label="The canvas drawing"></canvas><figcaption>mount() on a &lt;canvas&gt;, the text renderer</figcaption></figure>
+  </div>
+</section>
+
+<section class="case" id="renderers" data-title="Both renderers">
+  <h2>2. Both renderers</h2>
+  <ul class="what">
+    <li>The <code>text</code> renderer (fillText per changed cell) and the <code>atlas</code> renderer (glyph masks tinted by compositing) draw the same picture, in the same colours.</li>
+    <li>No glyph is clipped, offset or fringed in either; block and braille glyphs line up across cell edges.</li>
+    <li>Hovering either redraws only the crosshair and readout, with no flicker; the numbers under each chart say how many cells the last frame redrew.</li>
+    <li>The renderer measurement is a separate page: <a href="./bench/render.html">bench/render.html</a> (<code>mise run bench:render</code>).</li>
+  </ul>
+  <div class="charts">
+    <figure><canvas class="gp-canvas" data-mount="text" role="img" aria-label="The text renderer"></canvas><output data-stats="text"></output><figcaption>renderer: text</figcaption></figure>
+    <figure><canvas class="gp-canvas" data-mount="atlas" role="img" aria-label="The atlas renderer"></canvas><output data-stats="atlas"></output><figcaption>renderer: atlas</figcaption></figure>
+  </div>
+</section>
+
+<section class="case" id="modes" data-title="Each mode">
+  <h2>3. Each mode</h2>
+  <ul class="what">
+    <li><code>line</code>: straight segments; <code>step</code>: flat runs with vertical risers; <code>area</code>: filled down to the baseline 0.</li>
+    <li>Two series in each, told apart by colour and named in the legend.</li>
+  </ul>
+  <div class="charts">
+    <figure><glyph-plot id="mode-line" type="line" options='{"mode":"line"}' label="Mode line"></glyph-plot><figcaption>mode: line</figcaption></figure>
+    <figure><glyph-plot id="mode-step" type="line" options='{"mode":"step"}' label="Mode step"></glyph-plot><figcaption>mode: step</figcaption></figure>
+    <figure><glyph-plot id="mode-area" type="line" options='{"mode":"area"}' label="Mode area"></glyph-plot><figcaption>mode: area</figcaption></figure>
+  </div>
+</section>
+
+<section class="case" id="gaps" data-title="Gaps">
+  <h2>4. Gaps</h2>
+  <ul class="what">
+    <li>Missing values (null) break the line: two clear holes in the left chart.</li>
+    <li>With <code>spanGaps: true</code> (right) the line runs straight across the same holes.</li>
+    <li>Hovering a hole reads the nearest datum that has a value, never "NaN".</li>
+  </ul>
+  <div class="charts">
+    <figure><glyph-plot id="gaps-off" type="line" label="Gaps kept"></glyph-plot><figcaption>spanGaps: false</figcaption></figure>
+    <figure><glyph-plot id="gaps-on" type="line" options='{"spanGaps":true}' label="Gaps spanned"></glyph-plot><figcaption>spanGaps: true</figcaption></figure>
+  </div>
+</section>
+
+<section class="case" id="million" data-title="1M points">
+  <h2>5. A million points</h2>
+  <ul class="what">
+    <li>The first frame appears within about a second of scrolling here; the time is printed below.</li>
+    <li>Drag, Ctrl/⌘ + wheel or pinch zoom, and hover stay smooth (no visible stutter) at every zoom level down to single points.</li>
+    <li>Zoomed all the way out, the envelope keeps every spike (M4 keeps each column's extremes).</li>
+  </ul>
+  <glyph-plot id="million-chart" type="line" rows="14" label="One million points"></glyph-plot>
+  <output id="million-status">waiting for the chart</output>
+</section>
+
+<section class="case" id="mono" data-title="Mono">
+  <h2>6. Mono (one ink)</h2>
+  <ul class="what">
+    <li>Drawn in a <code>&lt;pre&gt;</code> in one ink: the page's text colour.</li>
+    <li>The three series are told apart by dash pattern (solid, dashed, dotted) with a legend key for each.</li>
+    <li>Dashes stay put when the view pans: they do not crawl.</li>
+  </ul>
+  <glyph-plot id="mono-chart" type="line" mono label="Mono"></glyph-plot>
+</section>
+
+<section class="case" id="light-dark" data-title="Light and dark">
+  <h2>7. Light and dark</h2>
+  <ul class="what">
+    <li><code>theme="light"</code> paints a light ground, <code>theme="dark"</code> a dark one, whatever the page's scheme.</li>
+    <li>Ink, axes and labels are readable on both; the series colours are distinct on both.</li>
+    <li>Focus each (Tab): the outline is in the accent colour and visible on its ground.</li>
+  </ul>
+  <div class="charts">
+    <figure><glyph-plot id="theme-light" type="line" theme="light" label="Light theme"></glyph-plot><figcaption>theme="light"</figcaption></figure>
+    <figure><glyph-plot id="theme-dark" type="line" theme="dark" label="Dark theme"></glyph-plot><figcaption>theme="dark"</figcaption></figure>
+  </div>
+</section>
+
+<section class="case" id="theme-switch" data-title="A theme switch">
+  <h2>8. A theme switch</h2>
+  <ul class="what">
+    <li>Each button re-colours this chart (and the page buttons every <code>auto</code> chart on the page) at once, with no flash, no reload and no empty frame.</li>
+    <li>"Page dark/light" flips <code>data-theme</code> on <code>&lt;html&gt;</code>; "System" follows the OS setting again: change the OS appearance and the charts follow.</li>
+    <li>"Custom property" sets <code>--glyphplot-series-1</code> on the element; "Theme object" sets a <code>theme</code> object that wins over it; "Clear" returns to the defaults.</li>
+    <li>The frame count below stays the same through every switch: a theme change repaints, it draws no new frame.</li>
+  </ul>
+  <div class="bar" role="group" aria-label="Theme">
+    <button type="button" data-page-theme="light">Page light</button>
+    <button type="button" data-page-theme="dark">Page dark</button>
+    <button type="button" data-page-theme="">System</button>
+    <button type="button" id="theme-prop">Custom property</button>
+    <button type="button" id="theme-object">Theme object</button>
+    <button type="button" id="theme-clear">Clear</button>
+  </div>
+  <glyph-plot id="theme-chart" type="line" label="Theme switch"></glyph-plot>
+  <output id="theme-status"></output>
+</section>
+
+<section class="case" id="wide-labels" data-title="Wide labels">
+  <h2>9. Wide labels</h2>
+  <ul class="what">
+    <li>Large y values (billions) and a title with wide (CJK) glyphs, in German number format (<code>locale="de-DE"</code>: <code>1.234,5</code>).</li>
+    <li>No label overlaps another or the plot; the y gutter widens to fit; wide glyphs take two cells each and nothing after them is shifted.</li>
+    <li>Narrow the window: labels drop rather than collide, and the chart never draws text over text.</li>
+  </ul>
+  <glyph-plot id="wide-chart" type="line" locale="de-DE" label="Wide labels"></glyph-plot>
+</section>
+
+<section class="case" id="resize" data-title="A resizable container">
+  <h2>10. A resizable container</h2>
+  <ul class="what">
+    <li>Drag the box's bottom-right corner (desktop) or use the buttons: the chart relays out on every change, without a blank frame.</li>
+    <li>The columns change with the width; the x domain (in data units) stays the same after you zoom in and then resize.</li>
+    <li>Rotating a phone relays out the same way.</li>
+  </ul>
+  <div class="bar" role="group" aria-label="Width">
+    <button type="button" data-width="160px">160 px</button>
+    <button type="button" data-width="320px">320 px</button>
+    <button type="button" data-width="70%">70 %</button>
+    <button type="button" data-width="100%">100 %</button>
+  </div>
+  <div class="resizable" id="resize-box"><glyph-plot id="resize-chart" type="line" label="Resizable"></glyph-plot></div>
+  <output id="resize-status"></output>
+</section>
+
+<section class="case" id="script" data-title="Data, options and view from script">
+  <h2>11. Data, options and view set from script</h2>
+  <ul class="what">
+    <li>"New data" replaces the data; "Area" sets options and keeps the view; "Zoom to 20–40" sets the view; "Reset" returns to the fitted view.</li>
+    <li>None of these buttons adds a <code>plot-hover</code>, <code>plot-view</code> or <code>plot-cursor</code> line to the log: events are for the reader's actions only. Dragging the chart does add them.</li>
+    <li>The view printed after each change is in data units and matches what is drawn.</li>
+  </ul>
+  <div class="bar" role="group" aria-label="Script">
+    <button type="button" id="script-data">New data</button>
+    <button type="button" id="script-options">Area</button>
+    <button type="button" id="script-view">Zoom to 20–40</button>
+    <button type="button" id="script-reset">Reset</button>
+  </div>
+  <glyph-plot id="script-chart" type="line" label="Set from script"></glyph-plot>
+  <output id="script-view-out"></output>
+  <div class="log" id="script-log" aria-label="Events" tabindex="0"></div>
+</section>
+
+<section class="case" id="pointer" data-title="Pointer: hover, drag, wheel, brush">
+  <h2>12. Pointer: hover, drag, wheel, brush</h2>
+  <ul class="what">
+    <li>Hover: a crosshair and a readout of the nearest datum (date and both values) follow the pointer; leaving the chart hides them.</li>
+    <li>Drag pans; Shift + drag brushes a range; Ctrl or ⌘ + wheel zooms about the pointer; a trackpad pinch zooms; the plain wheel scrolls the page; a double-click resets.</li>
+    <li>The control row (− + ↺ ◀ ▶) appears on hover and does the same with single clicks.</li>
+    <li>The log shows one <code>plot-view</code> with <code>final: true</code> at the end of each drag or zoom, and <code>plot-hover</code> only when the datum changes.</li>
+  </ul>
+  <glyph-plot id="pointer-chart" type="line" label="Pointer"></glyph-plot>
+  <div class="log" id="pointer-log" aria-label="Events" tabindex="0"></div>
+</section>
+
+<section class="case" id="keys" data-title="Keyboard">
+  <h2>13. Keyboard</h2>
+  <ul class="what">
+    <li>Tab reaches the chart once (one tab stop) with a 2 px outline in the accent colour.</li>
+    <li>← → step datum by datum and pan past the edge; Home/End; PageUp/PageDown; Shift + ← → pan; + − zoom about the cursor; 0 resets; Enter locks; Shift + Enter twice brushes; Escape hides the readout, a second Escape leaves the chart; 1 and 2 toggle the series.</li>
+    <li>Both charts have the option <code>motion: true</code>: 0 (reset) after a zoom eases back over a moment. With the OS set to reduce motion, the left one jumps instead; the right one, with the <code>motion</code> attribute, still eases.</li>
+  </ul>
+  <div class="charts">
+    <figure><glyph-plot id="keys-chart" type="line" options='{"motion":true}' label="Keyboard"></glyph-plot><figcaption>default</figcaption></figure>
+    <figure><glyph-plot id="keys-motion" type="line" motion options='{"motion":true}' label="Keyboard with motion"></glyph-plot><figcaption>motion</figcaption></figure>
+  </div>
+</section>
+
+<section class="case" id="touch" data-title="Touch">
+  <h2>14. Touch (phone or tablet)</h2>
+  <ul class="what">
+    <li>One finger moving sideways scrubs the cursor; moving up or down scrolls the page.</li>
+    <li>Two fingers pan; a pinch zooms about its centre; a double tap resets; a long press starts a brush that the finger then extends.</li>
+    <li>Nothing selects text or opens a callout menu; the page does not zoom.</li>
+  </ul>
+  <glyph-plot id="touch-chart" type="line" label="Touch"></glyph-plot>
+  <div class="log" id="touch-log" aria-label="Events" tabindex="0"></div>
+</section>
+
+<section class="case" id="screen-reader" data-title="Screen reader">
+  <h2>15. Screen reader (VoiceOver, TalkBack, NVDA)</h2>
+  <ul class="what">
+    <li>The figure is announced by its label; the drawing as an image with a summary (type, series, ranges, count).</li>
+    <li>The cursor is a slider: arrows read the date and each series' value, one datum at a time.</li>
+    <li>The hidden table is reachable (VoiceOver: rotor, Tables): a caption, column headers and a row header a row; 1,000 points read as a 500-row table whose caption gives the count once.</li>
+  </ul>
+  <glyph-plot id="sr-chart" type="line" label="Daily temperature, two stations"></glyph-plot>
+</section>
+
+<section class="case" id="panic" data-title="Debug build: panic">
+  <h2>16. The debug build's panic case</h2>
+  <ul class="what">
+    <li>Served by <code>mise run dev</code> (the debug build) only; the release build says so here instead.</li>
+    <li>The <code>debug-panic</code> chart fires <code>plot-error</code>; the console shows the panic's message and file:line, then "a chart trapped and was stopped" and the error's message.</li>
+    <li>The chart beside it keeps drawing and responding; the shadow stack pointer is the same before and after the trap.</li>
+  </ul>
+  <div id="panic-box" class="charts"></div>
+  <output id="panic-status">checking the build</output>
+</section>
+
+<section class="case" id="lazy" data-title="A lazy element below the fold">
+  <h2>17. A lazy element below the fold</h2>
+  <ul class="what">
+    <li>Reload at the top of the page: the status says "not loaded" and the chart below the spacer draws nothing yet.</li>
+    <li>Scroll down: it loads when it comes within one screen height, and draws by the time it is on screen; the status gives the scroll position at load.</li>
+  </ul>
+  <output id="lazy-status">not loaded</output>
+  <div class="fold">↓ two screens of spacer ↓</div>
+  <glyph-plot id="lazy-chart" type="line" label="Lazy"></glyph-plot>
+</section>
+</main>
+<script type="module" src="./test.ts"></script>
+</body>
+</html>

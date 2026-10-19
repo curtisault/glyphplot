@@ -226,14 +226,21 @@ export function mount(el: HTMLCanvasElement | HTMLPreElement, chart: Chart, opts
     schedule();
   }
 
+  /**
+   * After the wheel has rested 150 ms, a wheel of no delta: the reducer ends
+   * its open zoom with the one `final: true` (REQ-EVENT-030). Ending it here
+   * alone left the module's zoom open, so its next input fired a second final.
+   */
   const armWheel = (): void => {
     if (wheelTimer !== null) clearTimeout(wheelTimer);
     wheelTimer = setTimeout(() => {
       wheelTimer = null;
+      push({ kind: InputKind.wheel, x: lastWheel.x, y: lastWheel.y, a: 0, b: 0, buttons: 0, mods: lastWheel.mods });
       ended.push("wheel");
       schedule();
     }, WHEEL_IDLE_MS);
   };
+  let lastWheel = { x: 0, y: 0, mods: 0 };
 
   const push = (e: Encoded): void => {
     if (stopped) return;
@@ -337,15 +344,12 @@ export function mount(el: HTMLCanvasElement | HTMLPreElement, chart: Chart, opts
         const r = el.getBoundingClientRect();
         const lineCss = rows > 0 && r.height > 0 ? r.height / rows : 16;
         const scale = e.deltaMode === 1 ? 1 : e.deltaMode === 2 ? Math.max(1, rows) : 1 / lineCss;
-        push({
-          kind: InputKind.wheel,
+        lastWheel = {
           x: r.width > 0 ? ((e.clientX - r.left) / r.width) * (cols || 1) : 0,
           y: r.height > 0 ? ((e.clientY - r.top) / r.height) * (rows || 1) : 0,
-          a: e.deltaX * scale,
-          b: e.deltaY * scale,
-          buttons: 0,
           mods: modsOfEvent(e),
-        });
+        };
+        push({ kind: InputKind.wheel, x: lastWheel.x, y: lastWheel.y, a: e.deltaX * scale, b: e.deltaY * scale, buttons: 0, mods: lastWheel.mods });
       },
       { passive: false },
     );

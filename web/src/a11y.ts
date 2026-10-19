@@ -39,6 +39,7 @@ function columnTypes(desc: DataObject | null): Map<string, { type: string; zone?
 /** Formats values for reading aloud, in the locale; timestamps as dates. */
 export class Formats {
   readonly #num: Intl.NumberFormat;
+  readonly #count: Intl.NumberFormat;
   readonly #dates = new Map<string, Intl.DateTimeFormat>();
   readonly #locale: string;
 
@@ -51,6 +52,18 @@ export class Formats {
       num = new Intl.NumberFormat("en-US", { maximumSignificantDigits: 6 });
     }
     this.#num = num;
+    let count: Intl.NumberFormat;
+    try {
+      count = new Intl.NumberFormat(locale, { maximumFractionDigits: 0 });
+    } catch {
+      count = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
+    }
+    this.#count = count;
+  }
+
+  /** A count, whole and exact (`number` keeps six significant digits). */
+  count(n: number): string {
+    return this.#count.format(n);
   }
 
   number(v: number): string {
@@ -97,7 +110,11 @@ export function valueText(detail: unknown, desc: DataObject | null, fmt: Formats
   const d = detail as HoverDetail;
   const types = columnTypes(desc);
   const entries = Object.entries(d.datum ?? {});
-  const xKey = entries.find(([, v]) => v === d.x)?.[0];
+  // The detail does not name the x column: take the datum's key holding x,
+  // never the hovered series' own (whose value can equal x, as y = 0 at x = 0
+  // does), a timestamp column first.
+  const xs = entries.filter(([k, v]) => v === d.x && k !== d.series).map(([k]) => k);
+  const xKey = xs.find((k) => types.get(k)?.type === "timestamp") ?? xs[0] ?? entries.find(([, v]) => v === d.x)?.[0];
   const xText = typeof d.x === "string" ? d.x : d.x === undefined ? "" : fmt.value(d.x, xKey ? types.get(xKey) : undefined);
   let values = entries.filter(([k]) => k !== xKey).map(([k, v]) => `${k} ${fmt.value(v, types.get(k))}`);
   if (values.length === 0 && d.series !== undefined) values = [`${d.series} ${fmt.value(d.y ?? null)}`];
@@ -111,11 +128,18 @@ export function figureName(type: string, series: readonly string[]): string {
   return series.length > 0 ? `${type}: ${series.join(", ")}` : type;
 }
 
-/** The table's caption (REQ-A11Y-020): the chart's, and the count when the view holds more points than the table. */
+/**
+ * The table's caption (REQ-A11Y-020): the chart's, and the count when the
+ * view holds more points than the table, stated once: a chart caption that
+ * already gives the total (as the line chart's did before v0.3.0) gets
+ * nothing appended.
+ */
 export function captionOf(t: Pick<TableJson, "caption" | "rows" | "total">, fmt: Formats): string {
   const base = t.caption || "Data in view";
-  if (t.total > t.rows.length) return `${base}: ${fmt.number(t.rows.length)} of ${fmt.number(t.total)} points; zoom in for more`;
-  return base;
+  if (t.total <= t.rows.length) return base;
+  const total = fmt.count(t.total);
+  if (base.includes(total)) return base;
+  return `${base}: ${fmt.count(t.rows.length)} of ${total} points; zoom in for more`;
 }
 
 /** The accessible parts of one chart, made in the element's light DOM. */

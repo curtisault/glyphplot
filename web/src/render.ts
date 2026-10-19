@@ -69,6 +69,8 @@ abstract class Base {
   protected rgba = new Uint8Array(PALETTE_LEN * 4);
   protected ground: string | null = null;
   protected prev: { cells: Uint32Array; colors: Uint8Array; backs: Uint8Array } | null = null;
+  /** The next draw redraws every cell (a palette or font changed); the last frame is kept to repaint from. */
+  protected stale = false;
   protected baseline = 0;
   protected fontPx = 13;
 
@@ -100,22 +102,28 @@ abstract class Base {
 
   protected onResize(): void {}
 
-  /** A new palette; `paintGround` paints entry 4 behind every cell. The next draw is full. */
+  /**
+   * A new palette; `paintGround` paints entry 4 behind every cell. The next
+   * draw is full; the last frame is kept, so {@link repaint} can redraw it
+   * in the new colours (forgetting it here left a theme change undrawn until
+   * the next frame).
+   */
   setPalette(bytes: Uint8Array, paintGround: boolean): void {
     this.rgba = bytes.slice(0, PALETTE_LEN * 4);
     this.css = paletteCss(bytes);
     this.ground = paintGround ? (this.css[Token.ground] ?? null) : null;
-    this.prev = null;
+    this.stale = true;
   }
 
-  /** Forgets the last frame, so the next draw redraws every cell (a font load, a palette). */
+  /** The next draw redraws every cell (a font load, a palette). */
   invalidate(): void {
-    this.prev = null;
+    this.stale = true;
   }
 
   /** Draws the changed cells of `g` and keeps a copy of it for the next diff. */
   draw(g: GridViews): DrawStats {
-    const full = this.prev === null || g.cols !== this.cols || g.rows !== this.rows;
+    const full = this.stale || this.prev === null || g.cols !== this.cols || g.rows !== this.rows;
+    this.stale = false;
     const dirty = diffCells(g, this.prev, full);
     let count = 0;
     for (let i = 0; i < dirty.length; i++) if (dirty[i]) count++;
@@ -128,7 +136,7 @@ abstract class Base {
   repaint(): void {
     const p = this.prev;
     if (!p) return;
-    this.prev = null;
+    this.stale = true;
     this.draw({ cols: this.cols, rows: this.rows, cells: p.cells, colors: p.colors, backs: p.backs });
   }
 
@@ -263,7 +271,12 @@ export class AtlasRenderer extends Base {
       return [c, x];
     };
     [this.#mask, this.#mctx] = make(this.canvas.width, this.canvas.height);
-    [this.#tint, this.#tctx] = make(this.canvas.width, this.canvas.height);
+    // One row tall: compositing with `copy` and `destination-in` touches the
+    // whole destination canvas, so a full-size tint canvas cost a full-canvas
+    // pass for every changed row (about 700 ms a frame at 320 × 120 in
+    // headless Chromium, bench:render); a row-sized one, clipped to the span,
+    // costs the span.
+    [this.#tint, this.#tctx] = make(this.canvas.width, this.ch);
     [this.#inks, this.#ictx] = make(Math.max(1, this.cols), Math.max(1, this.rows));
     this.#img = this.#ictx.createImageData(Math.max(1, this.cols), Math.max(1, this.rows));
     this.#atlas = new MaskAtlas(this.cw, this.ch, this.fontPx, this.baseline);
@@ -321,12 +334,16 @@ export class AtlasRenderer extends Base {
         const i = r * cols + c;
         if (dirty[i]) this.backOf(c * cw, y, g.backs[i] ?? NO_BACK);
       }
+      tctx.save();
+      tctx.beginPath();
+      tctx.rect(x, 0, w, ch);
+      tctx.clip();
       tctx.globalCompositeOperation = "copy";
       tctx.imageSmoothingEnabled = false;
-      tctx.drawImage(this.#inks, c0, r, c1 - c0 + 1, 1, x, y, w, ch);
+      tctx.drawImage(this.#inks, c0, r, c1 - c0 + 1, 1, x, 0, w, ch);
       tctx.globalCompositeOperation = "destination-in";
-      tctx.drawImage(this.#mask, x, y, w, ch, x, y, w, ch);
-      tctx.globalCompositeOperation = "source-over";
+      tctx.drawImage(this.#mask, x, y, w, ch, x, 0, w, ch);
+      tctx.restore();
       // Cells in the span that did not change keep their pixels: copy the tint of each run of changed cells.
       for (let c = c0; c <= c1; ) {
         if (!dirty[r * cols + c]) {
@@ -335,7 +352,7 @@ export class AtlasRenderer extends Base {
         }
         let e = c;
         while (e + 1 <= c1 && dirty[r * cols + e + 1]) e++;
-        this.ctx.drawImage(this.#tint, c * cw, y, (e - c + 1) * cw, ch, c * cw, y, (e - c + 1) * cw, ch);
+        this.ctx.drawImage(this.#tint, c * cw, 0, (e - c + 1) * cw, ch, c * cw, y, (e - c + 1) * cw, ch);
         c = e + 1;
       }
     }

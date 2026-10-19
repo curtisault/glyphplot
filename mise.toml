@@ -28,12 +28,12 @@ wasm-tools = "latest"
 "npm:elm-test" = "0.19.1-revision17"
 # Python scripts with pinned dependencies and no install (fonts, tables, datasets).
 "aqua:astral-sh/uv" = "0.12.23"
-# Reruns a task when files change.
-watchexec = "latest"
+# Reruns a build when files change: `mise run dev` (scripts/dev.sh).
+watchexec = "2.8.0"
 
 [tasks.install]
-description = "The toolchain mise.toml pins (from v0.3.0 also the npm packages)"
-run = "mise install"
+description = "The toolchain mise.toml pins, the npm packages and Playwright's Chromium"
+run = ["mise install", "mise run install:web", "mise run install:chromium"]
 
 [tasks."build:wasm"]
 description = "One release wasm module a chart family into web/pkg, with modules.js, budgets.json and sizes.json, staged and swapped in whole"
@@ -48,6 +48,37 @@ description = "The web package's pinned npm packages (TypeScript), skipped while
 sources = ["web/package.json", "web/package-lock.json"]
 outputs = ["web/node_modules/.package-lock.json"]
 run = "npm ci --prefix web"
+
+[tasks."install:site"]
+description = "The site's pinned npm packages (Vite, Playwright, axe-core), skipped while site/package-lock.json is unchanged"
+sources = ["site/package.json", "site/package-lock.json"]
+outputs = ["site/node_modules/.package-lock.json"]
+run = "npm ci --prefix site"
+
+[tasks."install:chromium"]
+description = "Playwright's headless Chromium for the browser tests and bench:render (a no-op once installed)"
+depends = ["install:site"]
+dir = "site"
+run = "npx playwright install chromium"
+
+[tasks."build:site"]
+description = "site/ built by Vite into site/dist over the release wasm in web/pkg: test.html, blank.html, bench/render.html"
+depends = ["install:site", "build:wasm"]
+dir = "site"
+run = "npx vite build --logLevel warn"
+
+[tasks.dev]
+description = "The debug build served with the checklist page (localhost:5310/test.html), the debug wasm rebuilt on a change under crates/ and the page reloaded (REQ-BUILD-080); `-- --host` for a phone"
+depends = ["install:site", "install:web"]
+raw = true
+run = "bash scripts/dev.sh"
+
+[tasks."bench:render"]
+description = "The renderer bench: serves bench/render.html for Chrome and Safari (`-- --host` for the network); `-- --headless` runs it once in headless Chromium and prints the table (REQ-RENDER-010, 050)"
+depends = ["install:chromium"]
+dir = "site"
+raw = true
+run = "node bench/run.mjs"
 
 [tasks."build:font"]
 description = "The bundled font: Iosevka's release subset to web/fonts/glyphplot-mono.woff2 (`-- --check` compares instead)"
@@ -71,8 +102,8 @@ description = "Format the Rust code (rustfmt.toml)"
 run = "cargo fmt --all"
 
 [tasks.lint]
-description = "rustfmt, clippy (host and wasm32, with and without debug), rustdoc, each family alone, tsc on web, the octant table, the dependency rules, no generated output in git"
-depends = ["install:web"]
+description = "rustfmt, clippy (host and wasm32, with and without debug), rustdoc, each family alone, tsc on web and site, the octant table, the dependency rules, no generated output in git"
+depends = ["install:web", "install:site"]
 run = [
   "cargo fmt --all --check",
   "cargo clippy --workspace --all-targets -- -D warnings",
@@ -81,6 +112,7 @@ run = [
   "cargo clippy -p glyphplot-wasm --target wasm32-unknown-unknown --features debug -- -D warnings",
   "for f in $(cargo run -q -p glyphplot --example manifest -- families); do cargo check -q -p glyphplot --no-default-features --features $f || exit 1; done",
   "web/node_modules/.bin/tsc --noEmit -p web",
+  "web/node_modules/.bin/tsc --noEmit -p site",
   "python3 scripts/octants.py --check",
   "bash scripts/deps.sh",
   "bash scripts/generated.sh",
@@ -94,9 +126,24 @@ run = "cargo test --workspace --profile contract"
 description = "The shell's Node tests (web/test/*.test.mjs)"
 run = "node --test 'web/test/*.test.mjs'"
 
+[tasks."test:site"]
+description = "The browser tests: Playwright in headless Chromium against vite preview of the release build (REQ-E2E-010); `--smoke` runs the smoke set alone (REQ-E2E-070)"
+depends = ["build:site", "install:chromium"]
+wait_for = ["test:rust"]
+dir = "site"
+usage = 'flag "--smoke" help="only the smoke set: a first frame, a hover, a drag, a wheel, a key and the axe scans"'
+run = 'if [ "${usage_smoke:-false}" = true ]; then npx playwright test --grep @smoke; else npx playwright test; fi'
+
+[tasks."test:site:smoke"]
+description = "test:site --smoke, the set check runs (REQ-E2E-070); under signoff (GLYPHPLOT_SIGNOFF=1) all of test:site"
+depends = ["build:site", "install:chromium"]
+wait_for = ["test:rust"]
+dir = "site"
+run = 'if [ "${GLYPHPLOT_SIGNOFF:-}" = 1 ]; then npx playwright test; else npx playwright test --grep @smoke; fi'
+
 [tasks.test]
-description = "Every test (from v0.3.0 also the wasm and site tests)"
-depends = ["test:rust", "test:web"]
+description = "Every test: Rust, the shell's Node tests, and the browser tests' smoke set (all of them under signoff)"
+depends = ["test:rust", "test:web", "test:site:smoke"]
 
 [tasks.size]
 description = "Each module's wasm and JS, raw and gzip -9, against its budget; WASM_GZ_LIMIT overrides it"
@@ -108,5 +155,6 @@ description = "lint, test, build and size: green before every commit"
 depends = ["lint", "test", "build", "size"]
 
 [tasks.signoff]
-description = "The CI, run locally: check on a committed tree (HEAD, or the revision given)"
+description = "The CI, run locally: check on a committed tree (HEAD, or the revision given), with all of test:site (REQ-E2E-070)"
+env = { GLYPHPLOT_SIGNOFF = "1" }
 run = "bash scripts/signoff.sh"

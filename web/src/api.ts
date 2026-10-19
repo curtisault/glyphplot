@@ -110,6 +110,12 @@ export type WasmChartClass = new (type: string, options_json: string) => WasmCha
 /** What wasm-bindgen's `default(init)` resolves to: the instance's exports, `memory` among them. */
 export interface InitOutput {
   readonly memory: WebAssembly.Memory;
+  /**
+   * wasm-bindgen's shadow-stack helper: moves the stack pointer by `delta`
+   * bytes and returns the new value (`0` reads it). Exported when a glue
+   * function passes a return pointer, as `text()` and `view_json()` do.
+   */
+  readonly __wbindgen_add_to_stack_pointer?: (delta: number) => number;
 }
 
 /** One module, web/pkg/<module>/glyphplot.js. */
