@@ -17,10 +17,11 @@ glyphplot candles --from feed.csv
 tail -f metrics.csv | glyphplot line
 ```
 
-**Status: v0.2.0, the core.** The grid, canvases, palette, data, scales,
-ticks, formats, layout and font are built and tested; no chart is drawn yet.
-Neither the element nor the CLI above works yet, and nothing is published.
-The next phase builds the line chart end to end.
+**Status: v0.3.0.** The `line` chart works end to end, in Rust, in wasm and
+in `<glyph-plot>`, with pointer, keyboard and touch input, a hidden table
+and a slider cursor. `mise run dev` serves the checklist page. The CLI does
+not draw yet, and nothing is published. The next phase completes the chart
+contract and the budgets.
 
 glyphplot is the sibling of [unicel](../animate-unicode) (animated Unicode
 art) and follows its architecture, but it is a separate, independent
