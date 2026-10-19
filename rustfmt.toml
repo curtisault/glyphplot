@@ -1,0 +1,3 @@
+# The house style, as unicel's: long lines, compact small expressions. `mise run fmt` applies it once there is code.
+max_width = 160
+use_small_heuristics = "Max"

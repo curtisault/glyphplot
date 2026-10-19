@@ -1,0 +1,38 @@
+# The glyphplot workspace. Nothing is built yet: Phase 0 of
+# docs/IMPLEMENTATION_PLAN.md adds crates/glyphplot (the core and the charts),
+# crates/wasm (the wasm-bindgen boundary) and crates/cli (the terminal), each
+# added to `members` as it lands (a `crates/*` glob fails while nothing matches).
+[workspace]
+resolver = "2"
+members = []
+# Discovery's measurements are throwaway standalone crates with their own
+# `[workspace]` tables; they are never members.
+exclude = ["discovery"]
+
+[workspace.package]
+version = "0.0.0"
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/curtisault/glyphplot"
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+unicode-width = "0.2"
+
+# As unicel's: size first, abort on panic (the contract test is the guard).
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
+# A release build that keeps its function names, for size attribution.
+[profile.size-names]
+inherits = "release"
+strip = false
+
+# The contract test's timing budgets only mean something optimised.
+[profile.test]
+opt-level = 2

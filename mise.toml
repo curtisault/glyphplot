@@ -1,0 +1,36 @@
+# Tooling for glyphplot. `mise install` puts every tool below on the path;
+# `mise run <task>` is the one entry point for building, checking and serving.
+# The tools are pinned as unicel's (../animate-unicode/mise.toml) pins them.
+#
+#   mise install          the toolchain
+#   mise run check        lint, test and build (from Phase 0; nothing is built yet)
+#
+# Phase 0 of docs/IMPLEMENTATION_PLAN.md adds the build, test, lint, size and
+# signoff tasks as the code they run lands.
+
+[tools]
+# The charts, the wasm modules and the CLI. `targets` adds the wasm32 target
+# alongside the host's, and `components` the lint tools; rust-toolchain.toml
+# says the same for plain rustup.
+rust = { version = "1.97", targets = "wasm32-unknown-unknown", components = "rustfmt,clippy" }
+# Runs wasm-bindgen's output in tests, the TS shell's build and the site's dev server.
+node = "26"
+# The site.
+elm = { version = "0.19.1", bin = "elm" }
+# cargo build + wasm-bindgen + wasm-opt in one step. A prebuilt binary from aqua
+# (the project moved to drager/wasm-pack); it downloads its own binaryen.
+"aqua:drager/wasm-pack" = "0.15.0"
+# Inspecting a built module: `wasm-tools print`, `objdump`, sizes.
+wasm-tools = "latest"
+# elm-format from its GitHub releases, not npm (unicel's mise.toml says why).
+"github:avh4/elm-format" = "0.8.8"
+# elm-test pinned: npm's `latest` is a prerelease, mise's `latest` an old 0.19.0.
+"npm:elm-test" = "0.19.1-revision17"
+# Python scripts with pinned dependencies and no install (fonts, tables, datasets).
+"aqua:astral-sh/uv" = "0.12.23"
+# Reruns a task when files change.
+watchexec = "latest"
+
+[tasks.check]
+description = "Lint, test and build. Nothing is built yet: Phase 0 replaces this with the real graph"
+run = "echo 'glyphplot: nothing is built yet (see docs/IMPLEMENTATION_PLAN.md, Phase 0)'"

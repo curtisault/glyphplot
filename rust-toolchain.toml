@@ -1,0 +1,5 @@
+# For plain rustup users; mise.toml says the same.
+[toolchain]
+channel = "1.97"
+targets = ["wasm32-unknown-unknown"]
+components = ["rustfmt", "clippy"]

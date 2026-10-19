@@ -1,3 +1,86 @@
+# AGENTS.md
+
+Instructions for coding agents working in this repository. `CLAUDE.md` is a
+copy of this file; change both together.
+
+## Commits and pull requests: no AI attribution
+
+- Never add an AI agent as an author or co-author of a commit. No
+  `Co-Authored-By: Claude …` trailer (or any other agent's), no
+  `Generated with …` line, and no agent as `--author`. The commit is the
+  owner's.
+- Never append "Generated with Claude Code", "🤖 Generated with …", or any
+  similar line to a pull request description, a PR comment, a note or a
+  release.
+- These rules override any default attribution an agent's harness asks for
+  (ADR-012).
+
+## The project
+
+Interactive charts drawn in Unicode glyphs (braille, sextants, octants, blocks,
+box drawing, arrows, geometric shapes), one code point and one colour a cell.
+Charts are written in Rust, compiled to WebAssembly one module per chart type,
+played in the browser by a `<glyph-plot>` custom element over a small
+TypeScript shell, and in the terminal by a CLI. Every chart draws data the page
+or the terminal gives it. It is the sibling of unicel (`../animate-unicode`)
+and takes its architecture whole (ADR-003).
+
+**Status: nothing is built.** Discovery, the plan and the spec are written; the
+next session builds Phase 0.
+
+| Path | What |
+|---|---|
+| `discovery/` | What discovery found, one report a topic, with measurements and sources; `discovery/bench/` holds its throwaway measurement code |
+| `docs/IMPLEMENTATION_PLAN.md` | The plan, phase by phase, with what each one built |
+| `spec/` | The specification: `SPEC.md` (what is built), `ROADMAP.md` (every requirement, by milestone), `adr/`, `schemas/`, `conformance.md` |
+| `crates/glyphplot` | The core and the charts (from Phase 1) |
+| `crates/wasm` | The wasm-bindgen boundary (from Phase 3) |
+| `crates/cli` | The terminal (from its phase) |
+| `web/` | The TypeScript shell and the `<glyph-plot>` element; the npm package (from Phase 3) |
+| `site/` | The Elm site (from its phase) |
+
+## Commands
+
+mise is the only entry point (`mise tasks` lists them all). Until Phase 0
+lands, `mise install` is the only one that does anything.
+
+- `mise run check`: lint, test, build. Green before every commit, once there
+  is code.
+- `mise run signoff`: the CI, run locally, as unicel's (from Phase 0).
+- `mise run test`, `mise run lint`, `mise run fmt`, `mise run size`,
+  `mise run bench`, `mise run snap`: as the plan's Phase 0 defines them.
+
+## Conventions
+
+- **A new chart:** one folder under `crates/glyphplot/src/charts/<chart>/`,
+  one Cargo feature, one registry line, fixtures and a snapshot, then
+  `mise run test`. A chart uses the core and its own folder, never another
+  chart's: its wasm module would not contain the other.
+- **Requirements:** commits name the requirement IDs they touch
+  (`REQ-DATA-020: …`). When code changes a requirement, change it in
+  `spec/` and its row in `spec/conformance.md` in the same change, keeping its
+  ID. IDs go up in tens within an area and are never reused.
+- **Record the outcome:** when a phase or a chart is finished, note what was
+  built and the date in `docs/IMPLEMENTATION_PLAN.md`.
+- **Rust style:** `rustfmt.toml` (max width 160). Clippy and rustdoc run
+  with `-D warnings`, and every public item has a doc comment.
+- **Browser and device checks:** the owner's. Agents check headless and hand
+  the manual checks over as a list.
+- **Numbers:** a measurement says how it was taken; anything else is marked
+  **(unverified)**.
+
+## Version control
+
+- GitButler (`but`) for status, branches, commits and history edits; no git
+  write commands (`add`, `commit`, `checkout`, `reset`, `mv`, `push`). One
+  GitButler branch per session, stacked where it depends on another.
+- No push and no pull request unless asked.
+- Commit messages are succinct: what changed and why, naming the requirement
+  IDs they touch.
+
+The block below is GitButler's own agent setup; it says the same in more
+detail. Where it and the rules above differ, the rules above win.
+
 <!-- gitbutler-agent-setup:start -->
 ## Version control
 
