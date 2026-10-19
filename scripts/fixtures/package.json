@@ -1,0 +1,13 @@
+{
+  "name": "glyphplot-fixtures",
+  "private": true,
+  "type": "module",
+  "description": "The pinned references scripts/fixtures.mjs captures crates/glyphplot/tests/fixtures from (REQ-REF-010). d3-format and d3-time-format are the versions d3-scale 4.0.2 resolves to.",
+  "dependencies": {
+    "d3-array": "3.2.4",
+    "d3-format": "3.1.2",
+    "d3-scale": "4.0.2",
+    "d3-time": "3.1.0",
+    "d3-time-format": "4.1.0"
+  }
+}

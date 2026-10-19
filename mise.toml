@@ -39,6 +39,14 @@ run = "mise install"
 description = "One release wasm module a chart family into web/pkg, with modules.js, budgets.json and sizes.json"
 run = "bash scripts/build-wasm.sh"
 
+[tasks."build:font"]
+description = "The bundled font: Iosevka's release subset to web/fonts/glyphplot-mono.woff2 (`-- --check` compares instead)"
+run = "uv run --no-project --with 'fonttools[woff]==4.60.1' --with 'brotli==1.2.0' python -I scripts/font.py"
+
+[tasks.fixtures]
+description = "Capture the pinned d3 packages' output into crates/glyphplot/tests/fixtures (REQ-REF-010)"
+run = ["npm ci --ignore-scripts --prefix scripts/fixtures", "node scripts/fixtures.mjs"]
+
 [tasks.build]
 description = "Everything check builds: the wasm modules"
 depends = ["build:wasm"]
@@ -48,7 +56,7 @@ description = "Format the Rust code (rustfmt.toml)"
 run = "cargo fmt --all"
 
 [tasks.lint]
-description = "rustfmt, clippy (host and wasm32, with and without debug), rustdoc, each family alone, the dependency rules, no generated output in git"
+description = "rustfmt, clippy (host and wasm32, with and without debug), rustdoc, each family alone, the octant table, the dependency rules, no generated output in git"
 run = [
   "cargo fmt --all --check",
   "cargo clippy --workspace --all-targets -- -D warnings",
@@ -56,6 +64,7 @@ run = [
   "cargo clippy -p glyphplot-wasm --target wasm32-unknown-unknown -- -D warnings",
   "cargo clippy -p glyphplot-wasm --target wasm32-unknown-unknown --features debug -- -D warnings",
   "for f in $(cargo run -q -p glyphplot --example manifest -- families); do cargo check -q -p glyphplot --no-default-features --features $f || exit 1; done",
+  "python3 scripts/octants.py --check",
   "bash scripts/deps.sh",
   "bash scripts/generated.sh",
 ]
