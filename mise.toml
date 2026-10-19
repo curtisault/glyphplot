@@ -61,8 +61,8 @@ run = [
 ]
 
 [tasks."test:rust"]
-description = "Every Rust test in the workspace"
-run = "cargo test --workspace"
+description = "Every Rust test in the workspace, built with the contract profile (optimised, no LTO)"
+run = "cargo test --workspace --profile contract"
 
 [tasks.test]
 description = "Every test (from v0.3.0 also the wasm and site tests)"

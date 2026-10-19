@@ -3,6 +3,8 @@
 # - the core's normal dependencies are serde, serde_json and unicode-width at
 #   most (REQ-ARCH-010);
 # - no git dependencies (REQ-ARCH-070);
+# - no wasm module holds a date, locale, number-format, Arrow or ephemeris
+#   crate (REQ-SIZE-060): the core writes its own;
 # - nothing from unicel's repository (REQ-INDEP-020): no Cargo.toml,
 #   package.json, mise.toml or file under scripts/ may name animate-unicode,
 #   or a unicel crate or package, outside a comment line. Citing unicel as
@@ -16,6 +18,14 @@ core_deps=$(cargo tree -e normal -p glyphplot --depth 1 --prefix none --format '
 if [ -n "$core_deps" ]; then
   echo "deps: the core depends on more than serde, serde_json and unicode-width (REQ-ARCH-010):"
   echo "$core_deps" | sed 's/^/  /'
+  status=1
+fi
+
+banned=$(cargo tree -e normal -p glyphplot-wasm --target wasm32-unknown-unknown --prefix none --format '{p}' | awk '{ print $1 }' | sort -u \
+  | grep -xE 'chrono|time|jiff|chrono-tz|num-format|icu_.*|arrow|arrow2|vsop87' || true)
+if [ -n "$banned" ]; then
+  echo "deps: a wasm module depends on a crate the core writes for itself (REQ-SIZE-060):"
+  echo "$banned" | sed 's/^/  /'
   status=1
 fi
 
