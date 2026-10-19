@@ -1,0 +1,148 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/curtisault/glyphplot/spec/schemas/input.schema.json",
+  "title": "Input events",
+  "description": "One input event or a list of them, in order, as `Chart::input` folds them into the view state (REQ-INPUT-010, REQ-INPUT-020). The JSON form is canonical: tests, the contract, the CLI's scripted input and recorded sessions use it. The browser crosses the boundary with a numeric encoding of the same fields (`input(kind, x, y, a, b, buttons, mods, t)` returning a bitmask), so the hot path builds no strings. Positions are in cells from the drawn grid's top-left, with fractions inside a cell (the terminal sends 0.5, a cell's centre); they may fall outside the grid while a drag is captured. `t` is play time in seconds, used only to stamp `motion`; the reducer reads no clock.",
+  "oneOf": [
+    { "$ref": "#/$defs/event" },
+    { "type": "array", "items": { "$ref": "#/$defs/event" } }
+  ],
+  "$defs": {
+    "t": { "description": "Play time in seconds.", "type": "number", "minimum": 0 },
+    "x": { "description": "Column in cells, with a fraction inside the cell.", "type": "number" },
+    "y": { "description": "Row in cells, with a fraction inside the cell.", "type": "number" },
+    "mods": {
+      "description": "Modifier keys held: a subset of shift, ctrl, alt, meta. Default none.",
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "enum": ["shift", "ctrl", "alt", "meta"] }
+    },
+    "end": { "description": "True on the gesture's last event.", "type": "boolean" },
+    "event": {
+      "description": "One input event, discriminated by `kind`.",
+      "type": "object",
+      "required": ["kind"],
+      "properties": {
+        "kind": {
+          "description": "The event's kind.",
+          "enum": ["move", "down", "up", "leave", "wheel", "pinch", "pan", "tap", "press", "key"]
+        }
+      },
+      "oneOf": [
+        { "$ref": "#/$defs/pointer" },
+        { "$ref": "#/$defs/leave" },
+        { "$ref": "#/$defs/wheel" },
+        { "$ref": "#/$defs/pinch" },
+        { "$ref": "#/$defs/pan" },
+        { "$ref": "#/$defs/tap" },
+        { "$ref": "#/$defs/press" },
+        { "$ref": "#/$defs/key" }
+      ]
+    },
+    "pointer": {
+      "description": "move, down or up: from pointermove, pointerdown and pointerup, or crossterm's Moved, Drag, Down and Up.",
+      "type": "object",
+      "required": ["t", "kind", "x", "y"],
+      "additionalProperties": false,
+      "properties": {
+        "t": { "description": "Play time in seconds.", "$ref": "#/$defs/t" },
+        "kind": { "description": "move, down or up.", "enum": ["move", "down", "up"] },
+        "x": { "description": "Column in cells.", "$ref": "#/$defs/x" },
+        "y": { "description": "Row in cells.", "$ref": "#/$defs/y" },
+        "pointer": { "description": "The pointer's type, as PointerEvent.pointerType; default mouse.", "enum": ["mouse", "pen", "touch"] },
+        "buttons": { "description": "Buttons held, as PointerEvent.buttons (1 primary, 2 secondary, 4 middle); default 0.", "type": "integer", "minimum": 0, "maximum": 31 },
+        "mods": { "description": "Modifier keys held.", "$ref": "#/$defs/mods" }
+      }
+    },
+    "leave": {
+      "description": "The pointer left the chart or the chart lost focus (pointerleave, blur).",
+      "type": "object",
+      "required": ["t", "kind"],
+      "additionalProperties": false,
+      "properties": {
+        "t": { "description": "Play time in seconds.", "$ref": "#/$defs/t" },
+        "kind": { "description": "leave.", "const": "leave" }
+      }
+    },
+    "wheel": {
+      "description": "Wheel deltas summed over one animation frame (pixels ÷ line height), or a terminal scroll of ±1.",
+      "type": "object",
+      "required": ["t", "kind", "x", "y", "dx", "dy"],
+      "additionalProperties": false,
+      "properties": {
+        "t": { "description": "Play time in seconds.", "$ref": "#/$defs/t" },
+        "kind": { "description": "wheel.", "const": "wheel" },
+        "x": { "description": "Column of the pointer in cells.", "$ref": "#/$defs/x" },
+        "y": { "description": "Row of the pointer in cells.", "$ref": "#/$defs/y" },
+        "dx": { "description": "Horizontal delta in lines.", "type": "number" },
+        "dy": { "description": "Vertical delta in lines; negative is up.", "type": "number" },
+        "mods": { "description": "Modifier keys held; ctrl or meta makes the wheel zoom (REQ-INPUT-040).", "$ref": "#/$defs/mods" }
+      }
+    },
+    "pinch": {
+      "description": "A two-pointer pinch, from the shell's recogniser or a trackpad.",
+      "type": "object",
+      "required": ["t", "kind", "x", "y", "scale"],
+      "additionalProperties": false,
+      "properties": {
+        "t": { "description": "Play time in seconds.", "$ref": "#/$defs/t" },
+        "kind": { "description": "pinch.", "const": "pinch" },
+        "x": { "description": "Column of the pinch's centre in cells.", "$ref": "#/$defs/x" },
+        "y": { "description": "Row of the pinch's centre in cells.", "$ref": "#/$defs/y" },
+        "scale": { "description": "The change in spread since the last pinch event; above 1 zooms in.", "type": "number", "exclusiveMinimum": 0 },
+        "end": { "description": "True on the pinch's last event.", "$ref": "#/$defs/end" }
+      }
+    },
+    "pan": {
+      "description": "A two-finger pan, from the shell's recogniser.",
+      "type": "object",
+      "required": ["t", "kind", "dx", "dy"],
+      "additionalProperties": false,
+      "properties": {
+        "t": { "description": "Play time in seconds.", "$ref": "#/$defs/t" },
+        "kind": { "description": "pan.", "const": "pan" },
+        "dx": { "description": "Horizontal movement in cells since the last pan event.", "type": "number" },
+        "dy": { "description": "Vertical movement in cells since the last pan event.", "type": "number" },
+        "end": { "description": "True on the pan's last event, when the fingers lift.", "$ref": "#/$defs/end" },
+        "velocity": { "description": "Horizontal velocity in cells a second at the end, which starts a kinetic motion.", "type": "number" }
+      }
+    },
+    "tap": {
+      "description": "A tap or double tap, from the shell's recogniser (5 px slop, 500 ms between taps).",
+      "type": "object",
+      "required": ["t", "kind", "x", "y"],
+      "additionalProperties": false,
+      "properties": {
+        "t": { "description": "Play time in seconds.", "$ref": "#/$defs/t" },
+        "kind": { "description": "tap.", "const": "tap" },
+        "x": { "description": "Column in cells.", "$ref": "#/$defs/x" },
+        "y": { "description": "Row in cells.", "$ref": "#/$defs/y" },
+        "count": { "description": "1 for a tap, 2 for a double tap (which resets the view); default 1.", "enum": [1, 2] }
+      }
+    },
+    "press": {
+      "description": "A long press, which starts a brush on touch (REQ-TOUCH-010).",
+      "type": "object",
+      "required": ["t", "kind", "x", "y"],
+      "additionalProperties": false,
+      "properties": {
+        "t": { "description": "Play time in seconds.", "$ref": "#/$defs/t" },
+        "kind": { "description": "press.", "const": "press" },
+        "x": { "description": "Column in cells.", "$ref": "#/$defs/x" },
+        "y": { "description": "Row in cells.", "$ref": "#/$defs/y" }
+      }
+    },
+    "key": {
+      "description": "A key pressed while the chart has focus: keydown, or crossterm's KeyEvent.",
+      "type": "object",
+      "required": ["t", "kind", "key"],
+      "additionalProperties": false,
+      "properties": {
+        "t": { "description": "Play time in seconds.", "$ref": "#/$defs/t" },
+        "kind": { "description": "key.", "const": "key" },
+        "key": { "description": "The key, as KeyboardEvent.key (`ArrowRight`, `Enter`, `+`, `1`).", "type": "string", "minLength": 1 },
+        "mods": { "description": "Modifier keys held.", "$ref": "#/$defs/mods" }
+      }
+    }
+  }
+}

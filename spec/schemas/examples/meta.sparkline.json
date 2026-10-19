@@ -1,0 +1,28 @@
+{
+  "slug": "sparkline",
+  "name": "sparkline",
+  "note": "a small line, area or column series with no axes",
+  "family": "line",
+  "modes": [
+    "line",
+    "area",
+    "column"
+  ],
+  "shapes": [
+    "series"
+  ],
+  "options": null,
+  "min": {
+    "cols": 8,
+    "rows": 1
+  },
+  "drop": [],
+  "mono": "auto",
+  "charset": "extended",
+  "budget": {
+    "gzip": 204800,
+    "frameMs": 4,
+    "worstMs": 16,
+    "inputMs": 0.5
+  }
+}

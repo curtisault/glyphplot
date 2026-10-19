@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/curtisault/glyphplot/spec/schemas/manifest.schema.json",
+  "title": "Wasm manifest (web/pkg/modules.js)",
+  "description": "The data exports of web/pkg/modules.js, written during `mise run build:wasm` (or build:wasm:debug) (REQ-MANIFEST-010). modules.js is an ES module, not JSON: it also exports `imports`, an object of module name to a function returning `import(\"./<module>/glyphplot.js\")`, which no JSON can hold and this schema leaves out. The site boots from `charts`, the shell's `moduleOf()` reads `modules` and `fallback`, and `chart(type, init)` loads a type's module at most once a page (REQ-LOAD-010). `budgets` is also written as web/pkg/budgets.json.",
+  "type": "object",
+  "required": ["charts", "modules", "fallback", "budgets"],
+  "properties": {
+    "charts": {
+      "description": "Every chart type's meta, in registry order.",
+      "type": "array",
+      "items": { "$ref": "meta.schema.json" }
+    },
+    "modules": {
+      "description": "The module that plays each chart type: its family in a release build, `all` in the debug build (REQ-MANIFEST-020).",
+      "type": "object",
+      "propertyNames": {
+        "description": "A chart type (a meta's `slug`).",
+        "type": "string",
+        "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+      },
+      "additionalProperties": {
+        "description": "A module name: a folder of web/pkg holding glyphplot.js and glyphplot_bg.wasm.",
+        "type": "string",
+        "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+      }
+    },
+    "fallback": {
+      "description": "The module asked for a type that `modules` does not list (the debug charts): `all` in the debug build, null in a release build.",
+      "type": ["string", "null"]
+    },
+    "budgets": {
+      "description": "Each module, with what it may cost; the same object as web/pkg/budgets.json.",
+      "$ref": "budgets.schema.json"
+    }
+  }
+}

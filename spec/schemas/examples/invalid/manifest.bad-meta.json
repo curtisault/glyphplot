@@ -1,0 +1,10 @@
+{
+  "charts": [
+    {
+      "slug": "line"
+    }
+  ],
+  "modules": {},
+  "fallback": null,
+  "budgets": {}
+}

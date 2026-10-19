@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/curtisault/glyphplot/spec/schemas/zone.schema.json",
+  "title": "Zone table",
+  "description": "A time zone's UTC offsets over a span, as a table of transitions (REQ-TZ-020, ADR-112). The element computes it with `Intl.DateTimeFormat` for the zone of `timeZone` over the data's time extent and the view; the CLI builds the same table from the system's tzdata (REQ-TZ-040). The core reads no clock, zone or tzdata (REQ-TZ-010): local-time ticks and labels convert by this table, so a frame is a function of its inputs. A pan past `covering` asks the shell for a wider table.",
+  "type": "object",
+  "required": ["name", "transitions", "covering"],
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "description": "The zone as `timeZone` named it: `UTC`, a fixed offset (`+05:30`) or an IANA name (`America/New_York`).",
+      "type": "string",
+      "minLength": 1
+    },
+    "transitions": {
+      "description": "Each change of offset, sorted by `at` strictly increasing. The first is at or before `covering[0]`, so every instant in the span has an offset: the offset of the last transition at or before it. A zone with one offset has one transition.",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "description": "From `at` on, local time is UTC plus `offset`.",
+        "type": "object",
+        "required": ["at", "offset"],
+        "additionalProperties": false,
+        "properties": {
+          "at": {
+            "description": "The instant the offset starts, in epoch ms (UTC).",
+            "type": "integer"
+          },
+          "offset": {
+            "description": "Local time minus UTC, in minutes: -300 for US Eastern standard time, 330 for India.",
+            "type": "integer",
+            "minimum": -1080,
+            "maximum": 1080
+          }
+        }
+      }
+    },
+    "covering": {
+      "description": "The span [from, to] the table is good for, in epoch ms.",
+      "type": "array",
+      "prefixItems": [{ "type": "integer" }, { "type": "integer" }],
+      "minItems": 2,
+      "maxItems": 2
+    }
+  }
+}

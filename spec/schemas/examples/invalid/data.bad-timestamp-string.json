@@ -1,0 +1,15 @@
+{
+  "tables": {
+    "a": {
+      "columns": [
+        {
+          "name": "t",
+          "type": "timestamp",
+          "values": [
+            "yesterday"
+          ]
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "name": "Asia/Kolkata",
+  "covering": [
+    0,
+    1
+  ],
+  "transitions": [
+    {
+      "at": 0,
+      "offset": 5.5
+    }
+  ]
+}

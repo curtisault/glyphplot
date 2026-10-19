@@ -1,0 +1,134 @@
+{
+  "charts": [
+    {
+      "slug": "line",
+      "name": "line",
+      "note": "values over x as a line, steps or an area",
+      "family": "line",
+      "modes": [
+        "line",
+        "step",
+        "area"
+      ],
+      "shapes": [
+        "series"
+      ],
+      "options": {
+        "mode": "line",
+        "spanGaps": false
+      },
+      "min": {
+        "cols": 23,
+        "rows": 6
+      },
+      "drop": [
+        "title",
+        "legend",
+        "labels",
+        "axes"
+      ],
+      "mono": "authored",
+      "charset": "extended",
+      "budget": {
+        "gzip": 204800,
+        "frameMs": 4,
+        "worstMs": 16,
+        "inputMs": 0.5
+      }
+    },
+    {
+      "slug": "sparkline",
+      "name": "sparkline",
+      "note": "a small line, area or column series with no axes",
+      "family": "line",
+      "modes": [
+        "line",
+        "area",
+        "column"
+      ],
+      "shapes": [
+        "series"
+      ],
+      "options": null,
+      "min": {
+        "cols": 8,
+        "rows": 1
+      },
+      "drop": [],
+      "mono": "auto",
+      "charset": "extended",
+      "budget": {
+        "gzip": 204800,
+        "frameMs": 4,
+        "worstMs": 16,
+        "inputMs": 0.5
+      }
+    },
+    {
+      "slug": "candles",
+      "name": "candlestick",
+      "note": "open, high, low and close a period, with volume",
+      "family": "candles",
+      "modes": [
+        "candle",
+        "hollow",
+        "ohlc"
+      ],
+      "shapes": [
+        "ohlcv"
+      ],
+      "options": {
+        "mode": "candle",
+        "sample": "m4",
+        "panes": [
+          {
+            "id": "price",
+            "weight": 3
+          },
+          {
+            "id": "volume",
+            "weight": 1
+          }
+        ]
+      },
+      "min": {
+        "cols": 28,
+        "rows": 8
+      },
+      "drop": [
+        "title",
+        "legend",
+        "labels",
+        "axes"
+      ],
+      "mono": "authored",
+      "charset": "extended",
+      "budget": {
+        "gzip": 204800,
+        "frameMs": 4,
+        "worstMs": 16,
+        "inputMs": 0.5
+      }
+    }
+  ],
+  "modules": {
+    "line": "line",
+    "sparkline": "line",
+    "candles": "candles"
+  },
+  "fallback": null,
+  "budgets": {
+    "line": {
+      "gzip": 204800,
+      "frameMs": 4,
+      "worstMs": 16,
+      "inputMs": 0.5
+    },
+    "candles": {
+      "gzip": 204800,
+      "frameMs": 4,
+      "worstMs": 16,
+      "inputMs": 0.5
+    }
+  }
+}

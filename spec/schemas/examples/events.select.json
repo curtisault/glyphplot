@@ -1,0 +1,21 @@
+{
+  "type": "plot-select",
+  "detail": {
+    "source": "keyboard",
+    "series": "close",
+    "index": 51234,
+    "x": 1760043200000,
+    "y": 212.4,
+    "datum": {
+      "close": 212.4
+    },
+    "selection": {
+      "points": [
+        {
+          "series": "close",
+          "index": 51234
+        }
+      ]
+    }
+  }
+}

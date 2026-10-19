@@ -1,0 +1,7 @@
+{
+  "line": {
+    "gzip": 204800,
+    "frameMs": 4,
+    "worstMs": 16
+  }
+}

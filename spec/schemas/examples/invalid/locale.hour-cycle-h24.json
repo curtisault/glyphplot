@@ -1,0 +1,80 @@
+{
+  "decimal": ",",
+  "group": ".",
+  "grouping": [
+    3
+  ],
+  "minus": "−",
+  "percent": "# %",
+  "numerals": [
+    "0",
+    "1",
+    "2",
+    "3",
+    "4",
+    "5",
+    "6",
+    "7",
+    "8",
+    "9"
+  ],
+  "currency": [
+    "",
+    " €"
+  ],
+  "months": [
+    "Januar",
+    "Februar",
+    "März",
+    "April",
+    "Mai",
+    "Juni",
+    "Juli",
+    "August",
+    "September",
+    "Oktober",
+    "November",
+    "Dezember"
+  ],
+  "monthsShort": [
+    "Jan",
+    "Feb",
+    "Mär",
+    "Apr",
+    "Mai",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Okt",
+    "Nov",
+    "Dez"
+  ],
+  "days": [
+    "Sonntag",
+    "Montag",
+    "Dienstag",
+    "Mittwoch",
+    "Donnerstag",
+    "Freitag",
+    "Samstag"
+  ],
+  "daysShort": [
+    "So",
+    "Mo",
+    "Di",
+    "Mi",
+    "Do",
+    "Fr",
+    "Sa"
+  ],
+  "periods": [
+    "AM",
+    "PM"
+  ],
+  "dateTime": "%A, der %e. %B %Y, %X",
+  "date": "%d.%m.%Y",
+  "time": "%H:%M:%S",
+  "hourCycle": "h24",
+  "direction": "ltr"
+}

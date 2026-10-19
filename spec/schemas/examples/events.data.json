@@ -1,0 +1,9 @@
+{
+  "type": "plot-data",
+  "detail": {
+    "rows": 1000000,
+    "dropped": 1000,
+    "late": 2,
+    "version": 3601
+  }
+}

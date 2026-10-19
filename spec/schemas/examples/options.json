@@ -1,0 +1,88 @@
+{
+  "title": "BTC-USD, 5 min",
+  "mode": "candle",
+  "locale": "de-DE",
+  "timeZone": "America/New_York",
+  "legend": {
+    "position": "auto"
+  },
+  "panes": [
+    {
+      "id": "price",
+      "weight": 3
+    },
+    {
+      "id": "volume",
+      "weight": 1
+    }
+  ],
+  "scales": {
+    "x": {
+      "type": "time",
+      "domain": "view",
+      "nice": false
+    },
+    "price": {
+      "type": "linear",
+      "domain": "view",
+      "nice": true,
+      "zero": false,
+      "padding": 0.05
+    },
+    "volume": {
+      "type": "linear",
+      "domain": "view",
+      "zero": true
+    },
+    "change": {
+      "type": "diverging",
+      "domain": [
+        -0.05,
+        0,
+        0.05
+      ],
+      "scheme": "red-blue"
+    }
+  },
+  "axes": [
+    {
+      "scale": "price",
+      "pane": "price",
+      "orient": "right",
+      "format": ",.2f",
+      "ticks": "auto",
+      "grid": true
+    },
+    {
+      "scale": "volume",
+      "pane": "volume",
+      "orient": "right",
+      "format": "~s",
+      "ticks": 3
+    },
+    {
+      "scale": "x",
+      "pane": "volume",
+      "orient": "bottom",
+      "format": "auto",
+      "labelGap": 2,
+      "context": true
+    }
+  ],
+  "annotations": [
+    {
+      "type": "hline",
+      "scale": "price",
+      "value": 67250.5,
+      "label": "last",
+      "axis": "right"
+    },
+    {
+      "type": "band",
+      "scale": "x",
+      "from": 1792328400000,
+      "to": 1792351800000,
+      "label": "session"
+    }
+  ]
+}

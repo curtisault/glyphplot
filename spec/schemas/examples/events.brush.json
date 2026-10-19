@@ -1,0 +1,13 @@
+{
+  "type": "plot-brush",
+  "detail": {
+    "source": "pointer",
+    "x": [
+      1760010000000,
+      1760030000000
+    ],
+    "y": null,
+    "count": 3301,
+    "final": true
+  }
+}

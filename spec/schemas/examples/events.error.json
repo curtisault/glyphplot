@@ -1,0 +1,7 @@
+{
+  "type": "plot-error",
+  "detail": {
+    "type": "pie",
+    "message": "there is no chart named \"pie\""
+  }
+}

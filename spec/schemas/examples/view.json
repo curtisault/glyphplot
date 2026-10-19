@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "x": {
+    "domain": [
+      1760000000000,
+      1760086400000
+    ],
+    "follow": false
+  },
+  "y": {
+    "domain": null,
+    "fit": "visible"
+  },
+  "axes": {
+    "volume": {
+      "domain": null,
+      "fit": "visible"
+    }
+  },
+  "cursor": {
+    "x": 1760043200000,
+    "y": 212.4,
+    "series": "close",
+    "index": 51234,
+    "locked": false
+  },
+  "selection": {
+    "x": [
+      1760010000000,
+      1760030000000
+    ],
+    "y": null,
+    "points": [
+      {
+        "series": "close",
+        "index": 51234
+      }
+    ]
+  },
+  "hidden": [
+    "volume"
+  ],
+  "time": null,
+  "motion": {
+    "kind": "ease",
+    "t0": 12.5,
+    "from": [
+      1760000000000,
+      1760086400000
+    ],
+    "to": [
+      1760020000000,
+      1760060000000
+    ],
+    "duration": 0.25
+  }
+}

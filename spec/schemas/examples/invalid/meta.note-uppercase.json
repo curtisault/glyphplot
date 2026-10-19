@@ -1,0 +1,46 @@
+{
+  "slug": "candles",
+  "name": "candlestick",
+  "note": "Candlestick",
+  "family": "candles",
+  "modes": [
+    "candle",
+    "hollow",
+    "ohlc"
+  ],
+  "shapes": [
+    "ohlcv"
+  ],
+  "options": {
+    "mode": "candle",
+    "sample": "m4",
+    "panes": [
+      {
+        "id": "price",
+        "weight": 3
+      },
+      {
+        "id": "volume",
+        "weight": 1
+      }
+    ]
+  },
+  "min": {
+    "cols": 28,
+    "rows": 8
+  },
+  "drop": [
+    "title",
+    "legend",
+    "labels",
+    "axes"
+  ],
+  "mono": "authored",
+  "charset": "extended",
+  "budget": {
+    "gzip": 204800,
+    "frameMs": 4,
+    "worstMs": 16,
+    "inputMs": 0.5
+  }
+}

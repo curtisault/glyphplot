@@ -1,0 +1,33 @@
+{
+  "slug": "candles",
+  "name": "candlestick",
+  "note": "open, high, low and close a period, with volume",
+  "family": "candles",
+  "modes": [
+    "candle",
+    "hollow",
+    "ohlc"
+  ],
+  "shapes": [
+    "ohlcv"
+  ],
+  "options": "{\"mode\":\"candle\"}",
+  "min": {
+    "cols": 28,
+    "rows": 8
+  },
+  "drop": [
+    "title",
+    "legend",
+    "labels",
+    "axes"
+  ],
+  "mono": "authored",
+  "charset": "extended",
+  "budget": {
+    "gzip": 204800,
+    "frameMs": 4,
+    "worstMs": 16,
+    "inputMs": 0.5
+  }
+}

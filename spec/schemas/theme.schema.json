@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/curtisault/glyphplot/spec/schemas/theme.schema.json",
+  "title": "Theme",
+  "description": "The colours a chart uses, as tokens (REQ-THEME-010, REQ-THEME-090): the element's `theme` property and option, the JS API, the CLI's `--theme <file.json>`, the Rust crate and the SVG and ANSI exports take this object. Every token is optional; a token left out falls back to the element's `--glyphplot-*` custom property, then to the dark or light default set (REQ-THEME-020). `theme::resolve` turns the tokens into the 255-entry palette: indices 0–31 the tokens in the order ink, muted, rule, accent, ground, up, down, selection, series 1–8, and 32–159 a 128-step ramp of the scale stops (REQ-COLOR-020, REQ-COLOR-040). A theme change repaints from the new palette and draws no new frame (REQ-COLOR-030).",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "ground": {
+      "description": "The colour behind the chart. Without one the chart draws no ground and is transparent.",
+      "$ref": "#/$defs/color"
+    },
+    "ink": {
+      "description": "Text: titles, tick labels, readouts. At least 4.5:1 against the ground by default (REQ-THEME-040).",
+      "$ref": "#/$defs/color"
+    },
+    "muted": {
+      "description": "Axes and tick marks. At least 4.5:1 against the ground by default.",
+      "$ref": "#/$defs/color"
+    },
+    "rule": {
+      "description": "Gridlines; decoration, exempt from the contrast rules.",
+      "$ref": "#/$defs/color"
+    },
+    "accent": {
+      "description": "The crosshair, the brush outline and the focus ring. At least 3:1 against the ground by default.",
+      "$ref": "#/$defs/color"
+    },
+    "selection": {
+      "description": "The fill behind a brushed range and selected data.",
+      "$ref": "#/$defs/color"
+    },
+    "up": {
+      "description": "A rising candle or bar; a token, never a fixed colour, since markets differ in which colour means up (REQ-THEME-060).",
+      "$ref": "#/$defs/color"
+    },
+    "down": {
+      "description": "A falling candle or bar.",
+      "$ref": "#/$defs/color"
+    },
+    "series": {
+      "description": "Series colours 1 to 8, in series order (the custom properties `--glyphplot-series-1` to `-8`). Series past the eighth repeat them, told apart by pattern (REQ-MONO-020). Fewer than eight replaces the first ones only.",
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 8,
+      "items": { "$ref": "#/$defs/color" }
+    },
+    "scale": {
+      "description": "The sequential scale's stops, low end first, interpolated in Oklab over 128 palette steps; the low end should be the end nearer the ground's lightness (REQ-THEME-080).",
+      "type": "array",
+      "minItems": 2,
+      "items": { "$ref": "#/$defs/color" }
+    },
+    "diverging": {
+      "description": "The diverging scale's stops, low end first, the middle stop the neutral one.",
+      "type": "array",
+      "minItems": 3,
+      "items": { "$ref": "#/$defs/color" }
+    },
+    "paper": {
+      "description": "Paper: dark marks on a light ground, in one ink, for print and the exports' paper toggle.",
+      "type": "boolean"
+    }
+  },
+  "$defs": {
+    "color": {
+      "description": "A colour as #rrggbb.",
+      "type": "string",
+      "pattern": "^#[0-9A-Fa-f]{6}$"
+    }
+  }
+}

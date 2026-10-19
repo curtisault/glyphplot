@@ -1,0 +1,9 @@
+{
+  "type": "plot-view",
+  "detail": {
+    "source": "wheel",
+    "cause": "scroll",
+    "final": true,
+    "view": {}
+  }
+}

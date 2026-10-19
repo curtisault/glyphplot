@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/curtisault/glyphplot/spec/schemas/locale.schema.json",
+  "title": "Locale pack",
+  "description": "The symbols, digits, names and patterns the core formats labels with (REQ-I18N-020), in d3-format and d3-time-format's shape. The shell builds it once per locale from `Intl` with the Gregorian calendar forced (`-u-ca-gregory`) and passes it to wasm; no wasm module links a locale database. The CLI reads it from `--locale-file` (REQ-I18N-070), and the `localeData` option overrides the pack derived from `locale`. Without a pack the core uses `.`, `,`, groups of three, ASCII digits and `-` (REQ-I18N-030).",
+  "type": "object",
+  "required": ["decimal", "group", "grouping", "minus", "percent", "numerals", "currency", "months", "monthsShort", "days", "daysShort", "periods", "dateTime", "date", "time", "hourCycle", "direction"],
+  "additionalProperties": false,
+  "properties": {
+    "decimal": {
+      "description": "The decimal separator: `.` (en), `,` (de), `٫` (ar-EG).",
+      "type": "string",
+      "minLength": 1
+    },
+    "group": {
+      "description": "The group separator: `,` (en), `.` (de), U+202F (fr). U+2009, U+202F and U+00A0 are drawn as one plain space cell (REQ-FMT-060). Empty for none.",
+      "type": "string"
+    },
+    "grouping": {
+      "description": "Group sizes from the decimal point leftward, the last repeating, as d3-format's `grouping`: [3] for en-US, [3, 2] for en-IN.",
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "integer", "minimum": 1 }
+    },
+    "minus": {
+      "description": "The minus sign: U+2212 in the browser and `-` in the CLI by default (REQ-FMT-060).",
+      "type": "string",
+      "minLength": 1
+    },
+    "percent": {
+      "description": "The percent pattern, `#` standing for the number: `#%` (en), `# %` (de, with U+00A0), `#٪` (ar).",
+      "type": "string",
+      "pattern": "#"
+    },
+    "numerals": {
+      "description": "The ten digits 0 to 9, each one cell wide: ASCII, or `٠١٢٣٤٥٦٧٨٩` for ar-EG.",
+      "type": "array",
+      "minItems": 10,
+      "maxItems": 10,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "currency": {
+      "description": "The currency's [prefix, suffix], as d3-format's `currency`: [\"$\", \"\"] for en-US, [\"\", \" €\"] for de-DE. The currency itself is the page's choice.",
+      "type": "array",
+      "prefixItems": [{ "type": "string" }, { "type": "string" }],
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "months": {
+      "description": "Month names, January first (`%B`).",
+      "$ref": "#/$defs/twelve"
+    },
+    "monthsShort": {
+      "description": "Short month names, January first (`%b`).",
+      "$ref": "#/$defs/twelve"
+    },
+    "days": {
+      "description": "Weekday names, Sunday first (`%A`).",
+      "$ref": "#/$defs/seven"
+    },
+    "daysShort": {
+      "description": "Short weekday names, Sunday first (`%a`).",
+      "$ref": "#/$defs/seven"
+    },
+    "periods": {
+      "description": "The [AM, PM] markers for `%p` and the 12-hour cycle, as d3-time-format's `periods`.",
+      "type": "array",
+      "prefixItems": [{ "type": "string" }, { "type": "string" }],
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "dateTime": {
+      "description": "The date-and-time pattern in the strftime subset of REQ-FMT-050, as d3-time-format's `dateTime`: `%a %b %e %H:%M:%S %Y`.",
+      "type": "string",
+      "minLength": 1
+    },
+    "date": {
+      "description": "The date pattern: `%m/%d/%Y` (en-US), `%d.%m.%Y` (de-DE).",
+      "type": "string",
+      "minLength": 1
+    },
+    "time": {
+      "description": "The time pattern: `%I:%M:%S %p` (en-US), `%H:%M:%S` (de-DE).",
+      "type": "string",
+      "minLength": 1
+    },
+    "hourCycle": {
+      "description": "h23 draws 24-hour time labels; h12 draws 12-hour labels with `periods` (REQ-FMT-050).",
+      "enum": ["h12", "h23"]
+    },
+    "direction": {
+      "description": "The text direction; an rtl locale puts the y axis and the legend on the right (REQ-I18N-060).",
+      "enum": ["ltr", "rtl"]
+    }
+  },
+  "$defs": {
+    "twelve": {
+      "description": "Twelve non-empty names.",
+      "type": "array",
+      "minItems": 12,
+      "maxItems": 12,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "seven": {
+      "description": "Seven non-empty names.",
+      "type": "array",
+      "minItems": 7,
+      "maxItems": 7,
+      "items": { "type": "string", "minLength": 1 }
+    }
+  }
+}

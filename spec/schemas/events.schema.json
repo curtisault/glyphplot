@@ -1,0 +1,196 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/curtisault/glyphplot/spec/schemas/events.schema.json",
+  "title": "Element events",
+  "description": "The events `<glyph-plot>` dispatches (REQ-EVENT-010): bubbling, composed CustomEvents named `plot-…`, each with a `detail` of the shape in `$defs`. A document here is `{ \"type\": \"plot-…\", \"detail\": … }`, the event's type and its detail, as the contract and the Node tests record them. The reader-action events (hover, select, brush, view, legend, cursor) fire only for the reader's actions, never for a property the page set (REQ-VIEW-040), and carry `source`. The wasm module writes these details as one JSON string when its input call reports events pending.",
+  "type": "object",
+  "required": ["type", "detail"],
+  "additionalProperties": false,
+  "properties": {
+    "type": {
+      "description": "The event's type.",
+      "enum": ["plot-ready", "plot-error", "plot-hover", "plot-select", "plot-brush", "plot-view", "plot-legend", "plot-cursor", "plot-data"]
+    },
+    "detail": {
+      "description": "The event's detail, of the shape `type` names."
+    }
+  },
+  "allOf": [
+    { "if": { "properties": { "type": { "const": "plot-ready" } } }, "then": { "properties": { "detail": { "$ref": "#/$defs/plot-ready" } } } },
+    { "if": { "properties": { "type": { "const": "plot-error" } } }, "then": { "properties": { "detail": { "$ref": "#/$defs/plot-error" } } } },
+    { "if": { "properties": { "type": { "const": "plot-hover" } } }, "then": { "properties": { "detail": { "$ref": "#/$defs/plot-hover" } } } },
+    { "if": { "properties": { "type": { "const": "plot-select" } } }, "then": { "properties": { "detail": { "$ref": "#/$defs/plot-select" } } } },
+    { "if": { "properties": { "type": { "const": "plot-brush" } } }, "then": { "properties": { "detail": { "$ref": "#/$defs/plot-brush" } } } },
+    { "if": { "properties": { "type": { "const": "plot-view" } } }, "then": { "properties": { "detail": { "$ref": "#/$defs/plot-view" } } } },
+    { "if": { "properties": { "type": { "const": "plot-legend" } } }, "then": { "properties": { "detail": { "$ref": "#/$defs/plot-legend" } } } },
+    { "if": { "properties": { "type": { "const": "plot-cursor" } } }, "then": { "properties": { "detail": { "$ref": "#/$defs/plot-cursor" } } } },
+    { "if": { "properties": { "type": { "const": "plot-data" } } }, "then": { "properties": { "detail": { "$ref": "#/$defs/plot-data" } } } }
+  ],
+  "$defs": {
+    "source": {
+      "description": "What the reader acted with.",
+      "enum": ["pointer", "touch", "keyboard", "wheel"]
+    },
+    "range": {
+      "description": "A range [low, high] in data units.",
+      "type": "array",
+      "prefixItems": [{ "type": "number" }, { "type": "number" }],
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "datum": {
+      "description": "The datum's row: column name to value, as the data table shows it (numbers stored, timestamps in epoch ms, categories and strings as labels, missing as null).",
+      "type": "object",
+      "additionalProperties": { "type": ["number", "string", "boolean", "null"] }
+    },
+    "x": {
+      "description": "The datum's x in data units (epoch ms for time), or its category label on a band scale.",
+      "type": ["number", "string"]
+    },
+    "plot-ready": {
+      "description": "A chart's first frame was drawn (REQ-EL-120).",
+      "type": "object",
+      "required": ["type", "cols", "rows"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "description": "The chart type.", "type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$" },
+        "cols": { "description": "The grid's width in cells.", "type": "integer", "minimum": 1 },
+        "rows": { "description": "The grid's height in cells.", "type": "integer", "minimum": 1 }
+      }
+    },
+    "plot-error": {
+      "description": "Loading the chart or drawing its first frame failed (REQ-EL-120).",
+      "type": "object",
+      "required": ["type", "message"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "description": "The chart type asked for.", "type": "string" },
+        "message": { "description": "The error's message, as `there is no chart named \"<type>\"`.", "type": "string", "minLength": 1 }
+      }
+    },
+    "plot-hover": {
+      "description": "The datum under the cursor changed (REQ-EVENT-020): at most once an animation frame, null when the cursor leaves the plot.",
+      "type": ["object", "null"],
+      "required": ["source", "series", "index", "x", "y"],
+      "additionalProperties": false,
+      "properties": {
+        "source": { "description": "What the reader acted with.", "$ref": "#/$defs/source" },
+        "series": { "description": "The hovered series' name.", "type": "string" },
+        "index": { "description": "The snapped datum's row in the data as held now.", "type": "integer", "minimum": 0 },
+        "x": { "description": "The snapped datum's x.", "$ref": "#/$defs/x" },
+        "y": { "description": "The snapped datum's y in data units, or null when it is missing.", "type": ["number", "null"] },
+        "datum": { "description": "The snapped datum's row.", "$ref": "#/$defs/datum" },
+        "aggregate": {
+          "description": "When the dot column holds more than one datum, the column's summary of y (REQ-HIT-020); otherwise null.",
+          "type": ["object", "null"],
+          "required": ["count", "first", "last", "min", "max"],
+          "additionalProperties": false,
+          "properties": {
+            "count": { "description": "Data in the dot column.", "type": "integer", "minimum": 2 },
+            "first": { "description": "The y of the column's first datum.", "type": "number" },
+            "last": { "description": "The y of the column's last datum.", "type": "number" },
+            "min": { "description": "The column's least y.", "type": "number" },
+            "max": { "description": "The column's greatest y.", "type": "number" }
+          }
+        },
+        "cell": {
+          "description": "The cell the cursor is in.",
+          "type": "object",
+          "required": ["col", "row"],
+          "additionalProperties": false,
+          "properties": {
+            "col": { "description": "Column, from 0 at the left.", "type": "integer", "minimum": 0 },
+            "row": { "description": "Row, from 0 at the top.", "type": "integer", "minimum": 0 }
+          }
+        }
+      }
+    },
+    "plot-select": {
+      "description": "The reader clicked, tapped or pressed Enter on a datum.",
+      "type": "object",
+      "required": ["source", "series", "index", "x", "y", "selection"],
+      "additionalProperties": false,
+      "properties": {
+        "source": { "description": "What the reader acted with.", "$ref": "#/$defs/source" },
+        "series": { "description": "The selected series' name.", "type": "string" },
+        "index": { "description": "The selected datum's row.", "type": "integer", "minimum": 0 },
+        "x": { "description": "The selected datum's x.", "$ref": "#/$defs/x" },
+        "y": { "description": "The selected datum's y, or null when it is missing.", "type": ["number", "null"] },
+        "datum": { "description": "The selected datum's row.", "$ref": "#/$defs/datum" },
+        "selection": {
+          "description": "The selection after the action.",
+          "type": "object",
+          "required": ["points"],
+          "additionalProperties": false,
+          "properties": {
+            "points": {
+              "description": "Every selected datum.",
+              "type": "array",
+              "items": { "$ref": "view.schema.json#/$defs/point" }
+            }
+          }
+        }
+      }
+    },
+    "plot-brush": {
+      "description": "The reader brushed a range or cleared one; x and y both null is a cleared brush.",
+      "type": "object",
+      "required": ["source", "x", "y", "count", "final"],
+      "additionalProperties": false,
+      "properties": {
+        "source": { "description": "What the reader acted with.", "$ref": "#/$defs/source" },
+        "x": { "description": "The brushed x range, or null.", "anyOf": [{ "$ref": "#/$defs/range" }, { "type": "null" }] },
+        "y": { "description": "The brushed y range, or null.", "anyOf": [{ "$ref": "#/$defs/range" }, { "type": "null" }] },
+        "count": { "description": "Data inside the brush; 0 when cleared.", "type": "integer", "minimum": 0 },
+        "final": { "description": "False while the brush is being dragged, true when it is committed or cleared.", "type": "boolean" }
+      }
+    },
+    "plot-view": {
+      "description": "The reader panned, zoomed, reset or followed (REQ-EVENT-030): at most once an animation frame during a gesture with `final` false, and exactly once with `final` true when it ends.",
+      "type": "object",
+      "required": ["source", "cause", "final", "view"],
+      "additionalProperties": false,
+      "properties": {
+        "source": { "description": "What the reader acted with.", "$ref": "#/$defs/source" },
+        "cause": { "description": "What changed the view.", "enum": ["pan", "zoom", "reset", "brush-zoom", "follow"] },
+        "final": { "description": "True on the gesture's last event (pointer up, wheel idle 150 ms, key up, motion done).", "type": "boolean" },
+        "view": { "description": "The view state after the change; a page may set it on a linked chart as it is.", "$ref": "view.schema.json" }
+      }
+    },
+    "plot-legend": {
+      "description": "The reader toggled a series.",
+      "type": "object",
+      "required": ["source", "series", "visible", "hidden"],
+      "additionalProperties": false,
+      "properties": {
+        "source": { "description": "What the reader acted with.", "$ref": "#/$defs/source" },
+        "series": { "description": "The toggled series' name.", "type": "string" },
+        "visible": { "description": "Whether the series is now shown.", "type": "boolean" },
+        "hidden": { "description": "Every hidden series after the toggle, as the view's `hidden`.", "type": "array", "uniqueItems": true, "items": { "type": "string" } }
+      }
+    },
+    "plot-cursor": {
+      "description": "The reader locked, unlocked or stepped a locked cursor: the event a page listens to for a scrub that drives other content.",
+      "type": "object",
+      "required": ["source", "x", "locked"],
+      "additionalProperties": false,
+      "properties": {
+        "source": { "description": "What the reader acted with.", "$ref": "#/$defs/source" },
+        "x": { "description": "The cursor's x in data units, or null when it is gone.", "type": ["number", "null"] },
+        "locked": { "description": "Whether the cursor is now locked.", "type": "boolean" }
+      }
+    },
+    "plot-data": {
+      "description": "A commit of data took effect (REQ-STREAM-070): after each replace and each frame's coalesced appends.",
+      "type": "object",
+      "required": ["rows", "dropped", "late", "version"],
+      "additionalProperties": false,
+      "properties": {
+        "rows": { "description": "Rows held after the commit.", "type": "integer", "minimum": 0 },
+        "dropped": { "description": "Rows trimmed from the ring by `retain.rows` or `retain.age` in this commit.", "type": "integer", "minimum": 0 },
+        "late": { "description": "Appended rows dropped because their x was less than the last row's (REQ-STREAM-040).", "type": "integer", "minimum": 0 },
+        "version": { "description": "The data version, increasing by one each commit.", "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}

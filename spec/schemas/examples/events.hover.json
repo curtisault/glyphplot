@@ -1,0 +1,23 @@
+{
+  "type": "plot-hover",
+  "detail": {
+    "source": "pointer",
+    "series": "close",
+    "index": 51234,
+    "x": 1760043200000,
+    "y": 212.4,
+    "datum": {
+      "t": 1760043200000,
+      "open": 211.9,
+      "high": 212.8,
+      "low": 211.5,
+      "close": 212.4,
+      "volume": 1820
+    },
+    "aggregate": null,
+    "cell": {
+      "col": 41,
+      "row": 10
+    }
+  }
+}

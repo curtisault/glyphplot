@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/curtisault/glyphplot/spec/schemas/budgets.schema.json",
+  "title": "Module budgets (web/pkg/budgets.json)",
+  "description": "What each wasm module may cost, written by `mise run build:wasm` from each chart's `META.budget` (the family default unless a chart says otherwise) and read by `mise run size`, the budgets test and the benches (REQ-MANIFEST-010, §12). The same object is modules.js's `budgets`. `$defs/budget` is the one budget shape; meta.schema.json and manifest.schema.json refer to it.",
+  "type": "object",
+  "propertyNames": {
+    "description": "A module name: a family in a release build, `all` in the debug build.",
+    "type": "string",
+    "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+  },
+  "additionalProperties": { "$ref": "#/$defs/budget" },
+  "$defs": {
+    "budget": {
+      "description": "What a chart, and so its module, may cost.",
+      "type": "object",
+      "required": ["gzip", "frameMs", "worstMs", "inputMs"],
+      "additionalProperties": false,
+      "properties": {
+        "gzip": {
+          "description": "The module's glyphplot_bg.wasm, gzip -9, in bytes; 204800 by default (REQ-SIZE-010).",
+          "type": "integer",
+          "minimum": 0,
+          "default": 204800
+        },
+        "frameMs": {
+          "description": "The average frame in a native release build, in ms, over the play of REQ-PERF-030; 4 by default.",
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "default": 4
+        },
+        "worstMs": {
+          "description": "The slowest frame over the same play, in ms; 16 by default.",
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "default": 16
+        },
+        "inputMs": {
+          "description": "The average pointer move (hit test, crosshair and readout) over 300 moves at 1,000,000 points, in ms; 0.5 by default (REQ-PERF-050).",
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "default": 0.5
+        }
+      }
+    }
+  }
+}

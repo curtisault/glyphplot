@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/curtisault/glyphplot/spec/schemas/sizes.schema.json",
+  "title": "Module sizes (web/pkg/sizes.json)",
+  "description": "Each wasm module's gzipped size, written by `mise run build:wasm` (gzip -9 of web/pkg/<module>/glyphplot_bg.wasm) (REQ-MANIFEST-010). The site shows a chart's module size on its page; absent, it gets {}.",
+  "type": "object",
+  "propertyNames": {
+    "description": "A module name: a family in a release build.",
+    "type": "string",
+    "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+  },
+  "additionalProperties": {
+    "description": "The module's glyphplot_bg.wasm, gzip -9, in bytes. `mise run size` fails above the module's budget `gzip` (REQ-SIZE-010).",
+    "type": "integer",
+    "minimum": 0
+  }
+}
