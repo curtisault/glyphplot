@@ -4,15 +4,13 @@
 // (REQ-FIX-010), each case compared bitwise as tests/reference.rs compares it.
 //
 // No release export reaches ticks, formats or fixtures, so these run against
-// the debug build through two debug-only exports this file expects:
+// the debug build through two debug-only exports (crates/wasm/src/debug.rs):
 //
 // - `debug_reference(file, line) -> string`: the core's answer to one case
 //   line of tests/fixtures/<file>, written as the file writes its expected
 //   part (numbers as JavaScript's String(x), separated as in the file);
 // - `debug_fixture_digest(name) -> string`: the digest of the fixture the
 //   module generates, as `{:#018x}` (fixtures::digest).
-//
-// Until the boundary has them the tests are todo.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -21,10 +19,8 @@ import { BUILD, ROOT, DEBUG, debugOnly, types, moduleOfType, fixtureIndex } from
 
 const CAPTURES = join(ROOT, "crates/glyphplot/tests/fixtures");
 const { glue } = await moduleOfType(types[0]);
-const reference = typeof glue.debug_reference === "function" ? glue.debug_reference : null;
-const digest = typeof glue.debug_fixture_digest === "function" ? glue.debug_fixture_digest : null;
-const NO_REFERENCE = DEBUG && !reference && "the boundary has no `debug_reference(file, line)` export (debug build only) through which ticks, nice, UTC ticks and formats can be reached in wasm";
-const NO_DIGEST = DEBUG && !digest && "the boundary has no `debug_fixture_digest(name)` export (debug build only) through which fixtures can be generated in wasm";
+const reference = (file, line) => glue.debug_reference(file, line);
+const digest = (name) => glue.debug_fixture_digest(name);
 
 const cases = (file) => readFileSync(join(CAPTURES, file), "utf8").split("\n").filter((l) => l !== "" && !l.startsWith("#"));
 
@@ -54,7 +50,7 @@ for (const [file, reqs] of [
   ["format.txt", "REQ-FMT-010"],
   ["time-format.txt", "REQ-FMT-030"],
 ]) {
-  test(`${BUILD}: ${file} in wasm equals the d3 capture bitwise (${reqs}, REQ-REF-010)`, { skip: debugOnly && "the reference exports are debug-only", todo: NO_REFERENCE }, () => {
+  test(`${BUILD}: ${file} in wasm equals the d3 capture bitwise (${reqs}, REQ-REF-010)`, { skip: debugOnly && "the reference exports are debug-only" }, () => {
     const bad = [];
     const lines = cases(file);
     for (const line of lines) {
@@ -67,8 +63,19 @@ for (const [file, reqs] of [
   });
 }
 
-test(`${BUILD}: every fixture generated in wasm has its native digest (REQ-FIX-010)`, { skip: debugOnly && "the reference exports are debug-only", todo: NO_DIGEST }, () => {
+test(`${BUILD}: every fixture generated in wasm has its native digest (REQ-FIX-010)`, { skip: debugOnly && "the reference exports are debug-only" }, () => {
   const index = fixtureIndex();
   assert.equal(index.fixtures.length, 23, "the plan's 23 fixtures");
   for (const f of index.fixtures) assert.equal(digest(f.name), f.digest, f.name);
+});
+
+test(`${BUILD}: the reference exports are the debug build's alone, and refuse what they do not know (REQ-WASM-060)`, () => {
+  if (!DEBUG) {
+    assert.equal(glue.debug_reference, undefined);
+    assert.equal(glue.debug_fixture_digest, undefined);
+    return;
+  }
+  assert.throws(() => reference("nope.txt", "1 2 3 : 4"), /no capture file/);
+  assert.throws(() => reference("ticks.txt", "spin 0 1 2 : 3"), /unknown case/);
+  assert.throws(() => digest("no-such-fixture"), /no fixture named/);
 });

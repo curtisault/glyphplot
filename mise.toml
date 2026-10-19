@@ -36,12 +36,17 @@ description = "The toolchain mise.toml pins, the npm packages and Playwright's C
 run = ["mise install", "mise run install:web", "mise run install:chromium"]
 
 [tasks."build:wasm"]
-description = "One release wasm module a chart family into web/pkg, with modules.js, budgets.json and sizes.json, staged and swapped in whole"
+description = "One release wasm module a chart family into web/pkg, with modules.js, budgets.json and sizes.json, staged and swapped in whole. web/pkg is shared with dev: this (and test, test:site, size, check) swaps the release build in over dev's debug one, and dev's pages reload onto it until the next change under crates/"
 run = "bash scripts/build-wasm.sh"
 
 [tasks."build:wasm:debug"]
-description = "One debug module, `all` (every family and `debug`), in target/wasm-debug, staged beside web/pkg and swapped in whole (REQ-BUILD-040)"
+description = "One debug module, `all` (every family and `debug`), built in target/wasm-debug, staged beside web/pkg and swapped in whole (REQ-BUILD-040); `-- --out <dir>` builds into <dir> instead"
 run = "bash scripts/build-wasm.sh --debug"
+
+[tasks."build:web-debug"]
+description = "The Node tests' debug build: the debug module straight into target/web-debug/pkg (web/pkg untouched), built beside the release one"
+hide = true
+run = "bash scripts/build-wasm.sh --debug --out target/web-debug/pkg"
 
 [tasks."install:web"]
 description = "The web package's pinned npm packages (TypeScript), skipped while web/package-lock.json is unchanged"
@@ -68,7 +73,7 @@ dir = "site"
 run = "npx vite build --logLevel warn"
 
 [tasks.dev]
-description = "The debug build served with the checklist page (localhost:5310/test.html), the debug wasm rebuilt on a change under crates/ and the page reloaded (REQ-BUILD-080); `-- --host` for a phone"
+description = "The debug build served with the checklist page (localhost:5310/test.html), the debug wasm rebuilt into web/pkg on a change under crates/ and the page reloaded (REQ-BUILD-080); `-- --host` for a phone. It shares web/pkg with build:wasm: test, test:site and check swap the release build in, and the pages play it until the next change under crates/"
 depends = ["install:site", "install:web"]
 raw = true
 run = "bash scripts/dev.sh"
@@ -119,12 +124,20 @@ run = [
 ]
 
 [tasks."test:rust"]
-description = "Every Rust test in the workspace, built with the contract profile (optimised, no LTO)"
-run = "cargo test --workspace --profile contract"
+description = "Every Rust test in the workspace, built with the contract profile (optimised, no LTO), the wasm crate's debug parts included"
+run = "cargo test --workspace --profile contract --features glyphplot-wasm/debug"
 
 [tasks."test:web"]
-description = "The shell's Node tests (web/test/*.test.mjs)"
-run = "node --test 'web/test/*.test.mjs'"
+description = "The shell's Node tests (web/test/*.test.mjs), against the release build in web/pkg, then the debug build in target/web-debug (REQ-TEST-020); the fixtures rewritten into target/fixtures first. Reads web/pkg, never writes it"
+alias = "test:wasm"
+depends = ["install:web", "build:wasm", "build:web-debug"]
+run = [
+  "npm run build --prefix web",
+  "rm -rf target/fixtures && cargo run -q --profile contract -p glyphplot --example fixtures -- write target/fixtures",
+  "rm -rf target/web-debug/dist && cp -R web/dist target/web-debug/dist",
+  "node --test 'web/test/*.test.mjs'",
+  "GLYPHPLOT_WEB=target/web-debug node --test 'web/test/*.test.mjs'",
+]
 
 [tasks."test:site"]
 description = "The browser tests: Playwright in headless Chromium against vite preview of the release build (REQ-E2E-010); `--smoke` runs the smoke set alone (REQ-E2E-070)"

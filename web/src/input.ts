@@ -97,6 +97,7 @@ export function encode(e: InputEvent): Encoded {
       out.x = e.x ?? 0;
       out.y = e.y ?? 0;
       out.a = e.count ?? 1;
+      out.buttons = buttonsOf(0, e.pointer);
       break;
     case "press":
       out.x = e.x ?? 0;
@@ -177,8 +178,21 @@ export class InputQueue {
   }
 }
 
-/** Gesture thresholds: 5 px slop and 500 ms between taps (interaction.md); the long press and double-tap distance are (unverified). */
-export const GESTURE = { slopPx: 5, doubleTapMs: 500, doubleTapPx: 30, longPressMs: 500 } as const;
+/**
+ * Gesture thresholds: 5 px slop and 500 ms between taps (interaction.md); the
+ * long press and double-tap distance are (unverified).
+ *
+ * A two-finger gesture starts a pinch only once the fingers' spread has
+ * changed by more than `pinchPx` or `pinchRatio` of its starting value,
+ * whichever is larger; until then it is a pan. Each finger of a two-finger
+ * drag wanders on its own, and every pointermove changes the spread a little,
+ * so without a threshold a pan fires pinch events and reports `cause: "zoom"`.
+ * 24 px is above two fingers each wandering the 5 px tap slop (10 px) and
+ * above Android's ScaleGestureDetector span slop, twice its 8 dp touch slop
+ * (16 dp) (unverified); 10 % keeps the same proportion for fingers held wide
+ * apart, where the wander grows with the spread.
+ */
+export const GESTURE = { slopPx: 5, doubleTapMs: 500, doubleTapPx: 30, longPressMs: 500, pinchPx: 24, pinchRatio: 0.1 } as const;
 
 /** A pointer sample in CSS pixels relative to the drawing, and its cell position. */
 export interface PointerSample {
@@ -218,7 +232,7 @@ export class Gestures {
   #downs = new Map<number, Down>();
   #pressTimer: unknown = null;
   #pressed = false;
-  #two: { cx: number; cy: number; spread: number; pinched: boolean; samples: { t: number; cx: number }[] } | null = null;
+  #two: { cx: number; cy: number; start: number; spread: number; pinched: boolean; samples: { t: number; cx: number }[] } | null = null;
   #lastTap: { time: number; px: number; py: number } | null = null;
 
   constructor(emit: (e: Encoded) => void, setTimer: (f: () => void, ms: number) => unknown = setTimeout, clearTimer: (h: unknown) => void = (h) => clearTimeout(h as number)) {
@@ -245,13 +259,14 @@ export class Gestures {
     if (!a || !b) return;
     const cx = (a.x + b.x) / 2;
     const cy = (a.y + b.y) / 2;
-    this.#two = { cx, cy, spread: Math.hypot(a.px - b.px, a.py - b.py) || 1, pinched: false, samples: [{ t: a.time, cx }] };
+    const spread = Math.hypot(a.px - b.px, a.py - b.py) || 1;
+    this.#two = { cx, cy, start: spread, spread, pinched: false, samples: [{ t: a.time, cx }] };
   }
 
   #tap(s: PointerSample): void {
     const last = this.#lastTap;
     const double = last !== null && s.time - last.time <= GESTURE.doubleTapMs && Math.hypot(s.px - last.px, s.py - last.py) <= GESTURE.doubleTapPx;
-    this.#send(InputKind.tap, s, double ? 2 : 1);
+    this.#send(InputKind.tap, s, double ? 2 : 1, 0, buttonsOf(0, s.type));
     this.#lastTap = double ? null : { time: s.time, px: s.px, py: s.py };
   }
 
@@ -304,11 +319,13 @@ export class Gestures {
       const dx = cx - this.#two.cx;
       const dy = cy - this.#two.cy;
       if (dx !== 0 || dy !== 0) this.#emit({ kind: InputKind.pan, x: 0, y: 0, a: dx, b: dy, buttons: 0, mods: 0 });
-      const scale = spread / this.#two.spread;
-      if (Math.abs(scale - 1) > 1e-3) {
+      const two = this.#two;
+      // A pinch starts past the threshold, its first scale from the starting spread so the fingers stay on the data.
+      if (!two.pinched && Math.abs(spread - two.start) > Math.max(GESTURE.pinchPx, GESTURE.pinchRatio * two.start)) two.pinched = true;
+      const scale = spread / two.spread;
+      if (two.pinched && Math.abs(scale - 1) > 1e-3) {
         this.#emit({ kind: InputKind.pinch, x: cx, y: cy, a: scale, b: 0, buttons: 0, mods: 0 });
-        this.#two.pinched = true;
-        this.#two.spread = spread;
+        two.spread = spread;
       }
       this.#two.cx = cx;
       this.#two.cy = cy;

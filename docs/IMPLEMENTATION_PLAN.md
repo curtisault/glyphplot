@@ -504,7 +504,7 @@ event; the wasm crate decodes.
 | `wheel` | 4 | position | `dx` | `dy` | 0 |
 | `pinch` | 5 | centre | `scale` | `end` (1 or 0) | 0 |
 | `pan` | 6 | `velocity`, `end` (1 or 0) | `dx` | `dy` | 0 |
-| `tap` | 7 | position | `count` (1 or 2) | 0 | 0 |
+| `tap` | 7 | position | `count` (1 or 2) | 0 | 256 × pointer (mouse 0, pen 1, touch 2) |
 | `press` | 8 | position | 0 | 0 | 0 |
 | `key` | 9 | 0 | key code | 0 | 0 |
 

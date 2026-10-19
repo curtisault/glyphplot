@@ -6,7 +6,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 import type { GlyphPlot } from "glyphplot/element";
-import { addChart, frames, openBlank } from "./helpers.ts";
+import { addChart, domain, frames, openBlank } from "./helpers.ts";
 
 type El = GlyphPlot;
 
@@ -97,6 +97,26 @@ test.describe("on the bare page", () => {
     await expect(slider).toHaveAttribute("aria-valuetext", /^\d+, a -?\d/);
     await page.keyboard.press("Tab");
     await expect(slider).not.toBeFocused();
+  });
+
+  test("the slider's range is the view's x domain in data units, fitted or set (REQ-A11Y-030)", async ({ page }) => {
+    const el = await addChart(page);
+    const slider = el.getByRole("slider");
+    // Fitted: the 200 points' x, 0 to 199.
+    await expect(slider).toHaveAttribute("aria-valuemin", "0");
+    await expect(slider).toHaveAttribute("aria-valuemax", "199");
+    // Zoomed by the reader: the view's own domain, once the accessible text is rewritten (at most once a second).
+    await slider.focus();
+    await page.keyboard.press("+");
+    await expect.poll(() => domain(el)).not.toBeNull();
+    const d = (await domain(el)) as [number, number];
+    expect(d[0]).toBeGreaterThan(0);
+    expect(d[1]).toBeLessThan(199);
+    await expect(slider).toHaveAttribute("aria-valuemin", String(d[0]), { timeout: 3000 });
+    await expect(slider).toHaveAttribute("aria-valuemax", String(d[1]));
+    const now = Number(await slider.getAttribute("aria-valuenow"));
+    expect(now).toBeGreaterThanOrEqual(d[0]);
+    expect(now).toBeLessThanOrEqual(d[1]);
   });
 
   test("a control row shown on focus and hover, with five named buttons", async ({ page }) => {

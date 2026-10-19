@@ -368,6 +368,10 @@ pub enum Input {
         /// 1 for a tap, 2 for a double tap.
         #[serde(default = "one")]
         count: u8,
+        /// The pointer that tapped, so a double-click's reset names the
+        /// mouse.
+        #[serde(default)]
+        pointer: PointerType,
     },
     /// A long press, which starts a brush on touch.
     Press {
@@ -430,7 +434,7 @@ impl Input {
     /// | wheel | 4 | position | dx | dy | 0 |
     /// | pinch | 5 | centre | scale | end (1 or 0) | 0 |
     /// | pan | 6 | velocity, end (1 or 0) | dx | dy | 0 |
-    /// | tap | 7 | position | count (1 or 2) | 0 | 0 |
+    /// | tap | 7 | position | count (1 or 2) | 0 | 256 × pointer (mouse 0, pen 1, touch 2) |
     /// | press | 8 | position | 0 | 0 | 0 |
     /// | key | 9 | 0 | key code | 0 | 0 |
     ///
@@ -453,7 +457,7 @@ impl Input {
             Input::WHEEL => Input::Wheel { t, x, y, dx: a, dy: b, mods },
             Input::PINCH => Input::Pinch { t, x, y, scale: a, end: b != 0.0 },
             Input::PAN => Input::Pan { t, dx: a, dy: b, end: y != 0.0, velocity: x },
-            Input::TAP => Input::Tap { t, x, y, count: if a >= 2.0 { 2 } else { 1 } },
+            Input::TAP => Input::Tap { t, x, y, count: if a >= 2.0 { 2 } else { 1 }, pointer },
             Input::PRESS => Input::Press { t, x, y },
             Input::KEY => Input::Key { t, key: Key::from_code(a as u32).filter(|_| a >= 0.0)?, mods },
             _ => return None,
@@ -536,6 +540,12 @@ mod tests {
             let k = Key::from_code(code).unwrap();
             assert_eq!(Key::from_name(k.name()), k, "code {code}");
         }
+        assert_eq!(
+            Input::decode(7, 1.0, 2.0, 2.0, 0.0, 512, 0, 0.0),
+            Some(Input::Tap { t: 0.0, x: 1.0, y: 2.0, count: 2, pointer: PointerType::Touch }),
+            "a tap's pointer is 256 × its type"
+        );
+        assert_eq!(Input::decode(7, 1.0, 2.0, 1.0, 0.0, 256, 0, 0.0), Some(Input::Tap { t: 0.0, x: 1.0, y: 2.0, count: 1, pointer: PointerType::Pen }));
         assert_eq!(Input::decode(9, 0.0, 0.0, 31.0, 0.0, 0, 0, 0.0), None);
         assert_eq!(Input::decode(10, 0.0, 0.0, 0.0, 0.0, 0, 0, 0.0), None);
     }

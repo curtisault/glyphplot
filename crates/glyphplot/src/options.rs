@@ -2,9 +2,9 @@
 //! declares (REQ-OPT-010, `spec/schemas/options.schema.json`).
 //!
 //! [`Options::parse`] reads the overrides a page, the CLI or a test gives; an
-//! empty string or JSON that is not an object counts as no options, and only
-//! invalid JSON fails, with `options are not a JSON object: <message>`
-//! (REQ-REG-010). [`Options::layered`] puts them over a chart's defaults key
+//! empty string, or only whitespace, counts as no options, and anything but a
+//! JSON object, invalid JSON or JSON of another kind, fails with `options are
+//! not a JSON object: <message>` (REQ-REG-010, REQ-WASM-020). [`Options::layered`] puts them over a chart's defaults key
 //! by key: a key present in the overrides wins, every other default fills
 //! in. The typed getters fall back to the default on a missing key or a
 //! wrong type, a list with one wrong element falling back whole, and record
@@ -36,15 +36,20 @@ impl PartialEq for Options {
     }
 }
 
-/// The JSON object a text holds, `None` for text that is not an object, or
-/// the parser's message for text that is not JSON.
+/// The JSON object a text holds, `None` for empty or blank text, or what is
+/// wrong with any other text: the parser's message for text that is not JSON,
+/// the kind of value for JSON that is not an object.
 fn object(json: &str) -> Result<Option<Map<String, Value>>, String> {
     if json.trim().is_empty() {
         return Ok(None);
     }
     match serde_json::from_str::<Value>(json) {
         Ok(Value::Object(map)) => Ok(Some(map)),
-        Ok(_) => Ok(None),
+        Ok(Value::Array(_)) => Err("an array".into()),
+        Ok(Value::Number(_)) => Err("a number".into()),
+        Ok(Value::String(_)) => Err("a string".into()),
+        Ok(Value::Bool(_)) => Err("a boolean".into()),
+        Ok(Value::Null) => Err("null".into()),
         Err(e) => Err(e.to_string()),
     }
 }
@@ -56,8 +61,8 @@ impl Options {
     }
 
     /// Overrides from their JSON text (REQ-OPT-010): an object's keys; an
-    /// empty string or JSON that is not an object is no options; invalid JSON
-    /// is [`MakeError::Options`].
+    /// empty or blank string is no options; invalid JSON, or JSON that is not
+    /// an object, is [`MakeError::Options`] (REQ-WASM-020).
     pub fn parse(json: &str) -> Result<Options, MakeError> {
         let overrides = object(json).map_err(|message| MakeError::Options { message })?.unwrap_or_default();
         Ok(Options { overrides, ..Options::default() })
@@ -206,14 +211,18 @@ mod tests {
         assert!(o.to_json().contains(r#""extra":true"#));
     }
 
-    /// REQ-OPT-010, REQ-REG-010: no options from empty text or a non-object,
-    /// an error only for invalid JSON.
+    /// REQ-OPT-010, REQ-REG-010, REQ-WASM-020: no options from empty or
+    /// blank text; an error for invalid JSON and for JSON that is not an
+    /// object, naming what it is.
     #[test]
-    fn only_invalid_json_fails() {
-        for none in ["", "  ", "[1,2]", "null", "3", "\"line\""] {
+    fn only_an_object_or_nothing_parses() {
+        for none in ["", "  ", "\n\t"] {
             assert_eq!(Options::parse(none).unwrap(), Options::new(), "{none:?}");
         }
         let e = Options::parse("{\"mode\":").unwrap_err().to_string();
         assert!(e.starts_with("options are not a JSON object: "), "{e}");
+        for (bad, kind) in [("[1,2]", "an array"), ("null", "null"), ("3", "a number"), ("\"line\"", "a string"), (" true ", "a boolean")] {
+            assert_eq!(Options::parse(bad).unwrap_err().to_string(), format!("options are not a JSON object: {kind}"), "{bad:?}");
+        }
     }
 }

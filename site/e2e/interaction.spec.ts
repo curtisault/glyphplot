@@ -210,10 +210,7 @@ test("a double-click resets the view", async ({ page }) => {
 });
 
 test("a double-click's reset names the pointer as its source", async ({ page }) => {
-  // Known failure, boundary side: the input encoding's `tap` carries no
-  // pointer type (only x, y and the count), so the reducer stamps every
-  // double tap's reset `source: "touch"`, a mouse's double-click included.
-  test.fail(true, "tap has no pointer type in the input encoding; the reset says source touch");
+  // The tap carries its pointer type in `buttons` (256 × pointer, mouse 0), so the reset is the mouse's (REQ-INPUT-020).
   const el = await addChart(page);
   await el.evaluate((e) => ((e as unknown as { view: unknown }).view = { x: { domain: [50, 90] } }));
   const b = await drawingBox(el);
@@ -253,10 +250,11 @@ test.describe("touch", () => {
     const d = (await domain(el)) as [number, number];
     expect(d).not.toBeNull();
     expect(d[0]).toBeGreaterThan(0);
-    // The span is (about) kept: the fingers kept their spread.
+    // The span is kept: the fingers kept their spread.
     expect(d[1] - d[0]).toBeCloseTo(199, -1);
     const views = await takeEvents(el, "plot-view");
-    for (const v of views) expect(v.detail?.["source"]).toBe("touch");
+    // Each finger's pointermove changes the spread by a step (20 px) on its own; under the pinch threshold that is a pan, never a zoom.
+    for (const v of views) expect(v.detail).toMatchObject({ source: "touch", cause: "pan" });
     expect(views.filter((v) => v.detail?.["final"] === true)).toHaveLength(1);
   });
 

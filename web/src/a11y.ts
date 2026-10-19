@@ -188,9 +188,8 @@ export function makeParts(doc: Document, onControl: (key: string) => void): A11y
 }
 
 /** Writes the hidden table: a caption, `th scope="col"` headers and a row header a row (REQ-A11Y-020). */
-export function writeTable(box: HTMLElement, t: TableJson, desc: DataObject | null, fmt: Formats): void {
+export function writeTable(box: HTMLElement, t: TableJson, fmt: Formats): void {
   const doc = box.ownerDocument;
-  const types = columnTypes(desc);
   const table = doc.createElement("table");
   table.createCaption().textContent = captionOf(t, fmt);
   const head = table.createTHead().insertRow();
@@ -200,14 +199,12 @@ export function writeTable(box: HTMLElement, t: TableJson, desc: DataObject | nu
     th.textContent = name;
     head.append(th);
   }
-  const timeCols = new Set(t.time ?? []);
   const body = table.createTBody();
   for (const row of t.rows.slice(0, TABLE_ROWS)) {
     const tr = body.insertRow();
     row.forEach((v, i) => {
-      const name = t.columns[i] ?? "";
-      const type = timeCols.has(i) ? { type: "timestamp" } : types.get(name);
-      const text = typeof v === "string" ? v : fmt.value(v, type);
+      // The core's text as it wrote it (REQ-FMT-030).
+      const text = v ?? fmt.value(null);
       if (i === 0) {
         const th = doc.createElement("th");
         th.scope = "row";

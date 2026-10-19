@@ -13,6 +13,8 @@ test("the plan's input encoding table", () => {
   assert.deepEqual(encode({ kind: "pinch", x: 40, y: 12, scale: 1.25, end: true }), { kind: 5, x: 40, y: 12, a: 1.25, b: 1, buttons: 0, mods: 0 });
   assert.deepEqual(encode({ kind: "pan", dx: -2.5, dy: 0, end: true, velocity: -18 }), { kind: 6, x: -18, y: 1, a: -2.5, b: 0, buttons: 0, mods: 0 });
   assert.deepEqual(encode({ kind: "tap", x: 1, y: 1, count: 2 }).a, 2);
+  assert.equal(encode({ kind: "tap", x: 1, y: 1, count: 2 }).buttons, 0, "a tap's pointer: mouse 0");
+  assert.equal(encode({ kind: "tap", x: 1, y: 1, pointer: "touch" }).buttons, 512, "256 × pointer, touch 2");
   assert.equal(encode({ kind: "press", x: 1, y: 1 }).kind, 8);
   assert.equal(encode({ kind: "key", key: "Escape" }).a, 13);
   assert.throws(() => encode({ kind: "key", key: "x" }), /not one the chart takes/);
@@ -88,6 +90,7 @@ test("mouse: down, moves, up; a still click taps; two within 500 ms double-tap",
   r.g.up(sample({ time: 350, px: 3 }));
   assert.deepEqual(r.kinds(), ["move", "down", "up", "tap", "down", "up", "tap"]);
   assert.deepEqual([r.out[3].a, r.out[6].a], [1, 2]);
+  assert.deepEqual([r.out[3].buttons, r.out[6].buttons], [0, 0], "a mouse's taps carry pointer mouse");
   const d = recorder();
   d.g.down(sample({ buttons: 1 }));
   d.g.move(sample({ px: 20, buttons: 1 }));
@@ -112,6 +115,7 @@ test("touch: one finger scrubs with pointer touch; a long press presses; a quick
   q.g.down(t({}));
   q.g.up(t({ time: 100 }));
   assert.deepEqual(q.kinds(), ["down", "up", "tap"]);
+  assert.equal(q.out[2].buttons, 512, "a finger's tap carries pointer touch");
   assert.equal(GESTURE.longPressMs, 500);
   const c = recorder();
   c.g.down(t({}));
@@ -137,4 +141,33 @@ test("touch: two fingers pan and pinch about the centroid, then end with a veloc
   const end = r.out.filter((e) => e.kind === InputKind.pan && e.y === 1);
   assert.equal(end.length, 1);
   assert.equal(pinches[pinches.length - 1].b, 1);
+});
+
+test("touch: a two-finger drag whose spread wanders under the threshold pans and never pinches", () => {
+  const r = recorder();
+  const t = (o) => sample({ type: "touch", ...o });
+  r.g.down(t({ id: 1, px: 0, py: 0, x: 0, y: 0 }));
+  r.g.down(t({ id: 2, px: 100, py: 0, x: 10, y: 0, time: 10 }));
+  // Each finger moves 10 px a step on its own, so the spread wanders by up to 20 px (under 24 px).
+  for (let i = 1; i <= 10; i++) {
+    const wobble = i % 2 === 0 ? 10 : -10;
+    r.g.move(t({ id: 1, px: 10 * i + wobble, py: 2 * i, x: i + wobble / 10, y: 0.2 * i, time: 10 + 20 * i }));
+    r.g.move(t({ id: 2, px: 100 + 10 * i, py: 2 * i, x: 10 + i, y: 0.2 * i, time: 20 + 20 * i }));
+  }
+  r.g.up(t({ id: 1, time: 300 }));
+  r.g.up(t({ id: 2, time: 310 }));
+  const k = r.kinds();
+  assert.ok(!k.includes("pinch"), `no pinch: ${k.join(" ")}`);
+  assert.ok(k.filter((x) => x === "pan").length >= 10, "it pans");
+  // Past the threshold (spread 100 → 130 px, more than 24 px and 10 %) a pinch starts, scaled from the starting spread.
+  const p = recorder();
+  p.g.down(t({ id: 1, px: 0, py: 0, x: 0, y: 0 }));
+  p.g.down(t({ id: 2, px: 100, py: 0, x: 10, y: 0, time: 10 }));
+  p.g.move(t({ id: 2, px: 120, py: 0, x: 12, y: 0, time: 20 }));
+  assert.ok(!p.kinds().includes("pinch"), "20 px: a pan");
+  p.g.move(t({ id: 2, px: 130, py: 0, x: 13, y: 0, time: 30 }));
+  const pinch = p.out.find((e) => e.kind === InputKind.pinch);
+  assert.ok(pinch && Math.abs(pinch.a - 1.3) < 1e-9, `30 px: a pinch of 1.3 (${pinch?.a})`);
+  assert.equal(GESTURE.pinchPx, 24);
+  assert.equal(GESTURE.pinchRatio, 0.1);
 });

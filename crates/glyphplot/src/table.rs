@@ -8,12 +8,13 @@
 //! written by the core's formatters (REQ-FMT-030). The shell builds the light-DOM
 //! `<table>` from it at most once a second, on `final` view changes and
 //! data commits, and sets the drawing's label to [`Table::summary`] and the
-//! slider's `aria-valuetext` to [`Table::value`].
+//! slider's `aria-valuetext` to [`Table::value`], its `aria-valuemin` and
+//! `aria-valuemax` to [`Table::domain`].
 
 use serde::Serialize;
 
 /// The accessible text of a chart's view.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize)]
 pub struct Table {
     /// The table's caption: what the rows are, with no count; the shell adds
     /// how many points the view holds when it holds more than the rows
@@ -34,6 +35,11 @@ pub struct Table {
     /// there, up to four, then `and N more`; `None` with no cursor
     /// (REQ-A11Y-030).
     pub value: Option<String>,
+    /// The x domain drawn, in data units (epoch ms for timestamps), fitted
+    /// or not: the slider's `aria-valuemin` and `aria-valuemax`, the range
+    /// its cursor moves in before the view pans (REQ-A11Y-030). `None` with
+    /// no x domain to report.
+    pub domain: Option<[f64; 2]>,
 }
 
 /// The hidden table as the shell reads it (`TableJson` in web/src/api.ts).
@@ -43,6 +49,8 @@ struct Shown<'a> {
     columns: &'a [String],
     rows: Vec<Vec<Option<&'a str>>>,
     total: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    domain: Option<[f64; 2]>,
 }
 
 impl Table {
@@ -52,12 +60,13 @@ impl Table {
     }
 
     /// The table as the wasm boundary's `table_json(max_rows)` returns it:
-    /// `{caption, columns, rows, total}`, each cell the text the core wrote,
-    /// an empty cell `null` (no value) (`TableJson` in web/src/api.ts,
-    /// REQ-A11Y-020).
+    /// `{caption, columns, rows, total, domain}`, each cell the text the core
+    /// wrote, an empty cell `null` (no value), `domain` left out when `None`
+    /// or not finite (`TableJson` in web/src/api.ts, REQ-A11Y-020).
     pub fn to_shell_json(&self) -> String {
         let rows = self.rows.iter().map(|r| r.iter().map(|c| Some(c.as_str()).filter(|c| !c.is_empty())).collect()).collect();
-        serde_json::to_string(&Shown { caption: &self.caption, columns: &self.columns, rows, total: self.total }).unwrap_or_default()
+        let domain = self.domain.filter(|d| d[0].is_finite() && d[1].is_finite());
+        serde_json::to_string(&Shown { caption: &self.caption, columns: &self.columns, rows, total: self.total, domain }).unwrap_or_default()
     }
 }
 
@@ -130,5 +139,8 @@ mod tests {
     fn shell_json_has_null_for_no_value() {
         let t = Table { caption: "c".into(), columns: vec!["x".into(), "y".into()], rows: vec![vec!["1".into(), String::new()]], total: 7, ..Table::default() };
         assert_eq!(t.to_shell_json(), r#"{"caption":"c","columns":["x","y"],"rows":[["1",null]],"total":7}"#);
+        let t = Table { domain: Some([0.5, 99.0]), ..t };
+        assert_eq!(t.to_shell_json(), r#"{"caption":"c","columns":["x","y"],"rows":[["1",null]],"total":7,"domain":[0.5,99.0]}"#);
+        assert!(!Table { domain: Some([f64::NAN, 1.0]), ..t }.to_shell_json().contains("domain"));
     }
 }

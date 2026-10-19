@@ -87,7 +87,7 @@ fn script(cols: usize, rows: usize) -> Vec<Input> {
         Input::Key { t: 1.3, key: Key::Home, mods: none },
         Input::Key { t: 1.4, key: Key::End, mods: none },
         Input::Key { t: 1.5, key: Key::Escape, mods: none },
-        Input::Tap { t: 1.6, x: cx, y: cy, count: 2 },
+        Input::Tap { t: 1.6, x: cx, y: cy, count: 2, pointer: PointerType::Touch },
         pointer("move", 1.7, w * 0.7, h * 0.6, 0, none),
         Input::Leave { t: 1.8 },
     ]

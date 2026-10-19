@@ -192,19 +192,21 @@ export const PALETTE_LEN = 255;
  * What `table_json(max_rows)` returns: the data in the current view, at
  * most `max_rows` rows (downsampled, each bucket's minimum and maximum kept),
  * for the hidden table (REQ-A11Y-020). The first column is the row header
- * (x). Values are numbers as stored (timestamps in epoch ms), labels as
- * strings, missing as null; a string value is shown as it is.
+ * (x). Every cell is the text the core's formatters wrote in the chart's
+ * locale (REQ-FMT-030), what a screen reader reads; a cell with no value is
+ * null. Numbers in data units are in `domain`, not in the cells.
  */
 export interface TableJson {
   /** The caption's text, without the count. */
   caption: string;
   /** Column headings, x first. */
   columns: string[];
-  /** Which columns hold epoch-ms timestamps, by index; optional. */
-  time?: number[];
-  rows: (number | string | boolean | null)[][];
+  /** The cells, as the core formatted them; null where a series has no value. */
+  rows: (string | null)[][];
   /** Data points the view holds; the caption states it when more than `rows.length`. */
   total: number;
+  /** The x domain drawn, fitted or not, in data units (epoch ms for timestamps): the slider's `aria-valuemin` and `aria-valuemax`. Absent when the chart has none. */
+  domain?: [number, number];
 }
 
 /** One event the module reports (events.schema.json). */
@@ -222,7 +224,8 @@ export interface WasmEvent {
  *   frame's other events; a move queued before a `down`, `up` or `leave` in
  *   the same frame is dropped, so `up` carries the drag's last position; a press and release within 5 px is followed by
  *   `tap` (count 1, or 2 within 500 ms and 30 px of the last tap: the
- *   double-click reset). Hover is `move` with buttons 0. `leave` on
+ *   double-click reset), its `buttons` 256 × the pointer type, so the
+ *   reset names the mouse or pen. Hover is `move` with buttons 0. `leave` on
  *   pointerleave and on blur.
  * - Wheel: only with Ctrl or ⌘ held, or with the option `wheel: "zoom"`;
  *   otherwise the page scrolls and nothing is sent. Deltas in lines, summed
@@ -233,9 +236,11 @@ export interface WasmEvent {
  *   tap). A vertical swipe scrolls the page (`touch-action: pan-y`): the
  *   browser cancels the pointer and the shell sends `up`.
  * - Touch, two fingers: the first finger's `up`, then `pan` (centroid
- *   movement in cells) and `pinch` (spread ratio about the centroid) until a
- *   finger lifts, which sends `pan` with end 1 and the release velocity in
- *   cells a second, and `pinch` with end 1 if the spread changed.
+ *   movement in cells) until a finger lifts; once the spread has changed by
+ *   more than 24 px or 10 % of its start, whichever is larger, also `pinch`
+ *   (spread ratio about the centroid, the first from the starting spread).
+ *   Lifting a finger sends `pan` with end 1 and the release velocity in
+ *   cells a second, and `pinch` with end 1 if a pinch started.
  * - Keys on the focused cursor: `key` for the keys of {@link KEYS} below 25,
  *   with mods. The control row's buttons send the keys `-`, `+`, `0`,
  *   `ArrowLeft` and `ArrowRight`.

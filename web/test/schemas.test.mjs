@@ -59,9 +59,9 @@ const TABLE = {
   properties: {
     caption: { type: "string" },
     columns: { type: "array", items: { type: "string" } },
-    time: { type: "array", items: { type: "integer", minimum: 0 } },
-    rows: { type: "array", items: { type: "array", items: { type: ["number", "string", "boolean", "null"] } } },
+    rows: { type: "array", items: { type: "array", items: { type: ["string", "null"] } } },
     total: { type: "integer", minimum: 0 },
+    domain: { type: "array", items: { type: "number" }, minItems: 2, maxItems: 2 },
   },
 };
 
@@ -98,6 +98,7 @@ test(`${BUILD}: each module's charts_json, meta_json, default options, view_json
       check(table, t, `${type} table_json(${n})`);
       assert.ok(t.rows.length <= Math.max(n, 0), `${type} table_json(${n}) holds at most ${n} rows`);
       assert.equal(t.total, 1000);
+      assert.deepEqual(t.domain, [0, 999], `${type} table_json(${n}): the fitted x domain in data units`);
     }
     c.input(4, 40.5, 12.5, 0, -3, 0, 2, 0);
     c.input(0, 30.5, 12.5, 0, 0, 0, 0, 0);

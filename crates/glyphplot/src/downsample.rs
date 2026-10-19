@@ -187,10 +187,22 @@ pub fn view_rows(xs: &[f64], lo: f64, hi: f64) -> Range<usize> {
 /// and marks a gap, unless `span_gaps`, when it is skipped (REQ-LINE-030).
 pub fn m4(xs: &[f64], ys: &[f64], rows: Range<usize>, edges: &Edges, span_gaps: bool) -> M4 {
     let mut out = M4::default();
+    m4_into(xs, ys, rows, edges, span_gaps, &mut out);
+    out
+}
+
+/// As [`m4`], into `out`, whose buckets' memory is reused: a frame after a
+/// data change allocates nothing new for its M4 once one was made at the
+/// width (REQ-MEM-030).
+pub fn m4_into(xs: &[f64], ys: &[f64], rows: Range<usize>, edges: &Edges, span_gaps: bool, out: &mut M4) {
+    out.buckets.clear();
+    out.gap_after = false;
     let dots = edges.dots();
     if dots == 0 {
-        return out;
+        return;
     }
+    // One bucket a dot column without gaps: allocated at its size.
+    out.buckets.reserve(dots.min(rows.len()));
     let e = edges.values();
     let (lo, hi) = (e[0], e[dots]);
     let mut col = 0usize;
@@ -224,7 +236,6 @@ pub fn m4(xs: &[f64], ys: &[f64], rows: Range<usize>, edges: &Edges, span_gaps: 
     }
     out.buckets.extend(cur);
     out.gap_after = gap;
-    out
 }
 
 /// What a [`Cache`] keeps its result by: the data version, the x range and
@@ -275,6 +286,22 @@ impl Cache {
         &self.value
     }
 
+    /// The M4 of `n` series for `key`: the kept result when the key is the
+    /// one it was made for, else `fill`'s, each series filled into the M4
+    /// kept before, so its memory is reused (REQ-SAMPLE-020, REQ-MEM-030).
+    pub fn get_into(&mut self, key: CacheKey, n: usize, mut fill: impl FnMut(usize, &mut M4)) -> &[M4] {
+        if self.key != Some(key) {
+            self.value.truncate(n);
+            self.value.resize_with(n, M4::default);
+            for (s, m) in self.value.iter_mut().enumerate() {
+                fill(s, m);
+            }
+            self.key = Some(key);
+            self.scans += 1;
+        }
+        &self.value
+    }
+
     /// The kept result for `key`, if it is the one kept.
     pub fn peek(&self, key: CacheKey) -> Option<&[M4]> {
         (self.key == Some(key)).then_some(&self.value[..])
@@ -284,6 +311,12 @@ impl Cache {
     /// the kept one.
     pub fn scans(&self) -> u64 {
         self.scans
+    }
+
+    /// Forgets the kept result's key, keeping its memory for the next
+    /// [`Cache::get_into`] and the count of scans: for data that is replaced.
+    pub fn invalidate(&mut self) {
+        self.key = None;
     }
 }
 
@@ -387,5 +420,24 @@ mod tests {
             cache.get(changed, Vec::new);
         }
         assert_eq!(cache.scans(), 4);
+    }
+
+    /// REQ-SAMPLE-020, REQ-MEM-030: `get_into` gives `m4`'s result, refills
+    /// only on a new key, and an invalidated key refills into the memory kept.
+    #[test]
+    fn get_into_refills_in_place() {
+        let (xs, ys) = series(5, 10_000);
+        let edges = Edges::new(&Axis::x(0.0, 2000.0, 80, 2));
+        let mut cache = Cache::new();
+        let key = CacheKey::new(1, [0.0, 2000.0], 160, false);
+        let want = m4(&xs, &ys, 0..xs.len(), &edges, false);
+        assert_eq!(cache.get_into(key, 1, |_, m| m4_into(&xs, &ys, 0..xs.len(), &edges, false, m)), std::slice::from_ref(&want));
+        let at = cache.peek(key).unwrap()[0].buckets.as_ptr();
+        cache.get_into(key, 1, |_, _| unreachable!("an unchanged key reads no data"));
+        cache.invalidate();
+        assert!(cache.peek(key).is_none());
+        let again = cache.get_into(key, 1, |_, m| m4_into(&xs, &ys, 0..xs.len(), &edges, false, m));
+        assert_eq!((again, again[0].buckets.as_ptr()), (std::slice::from_ref(&want), at), "the same result in the same memory");
+        assert_eq!(cache.scans(), 2);
     }
 }

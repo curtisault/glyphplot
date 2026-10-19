@@ -679,18 +679,19 @@ pub fn reduce(view: &mut View, g: &mut Gesture, input: &Input, scene: &dyn Scene
             }
             s.view_event(Source::Touch, Cause::Pan, end);
         }
-        Input::Tap { x, y, count, .. } => {
+        Input::Tap { x, y, count, pointer, .. } => {
             let at = CellPos::new(x, y);
+            let source = pointer_source(pointer);
             if count >= 2 {
                 s.settle_motion(true);
                 if s.scene.plot().is_some_and(|p| p.contains(at)) {
-                    s.reset(Source::Touch);
+                    s.reset(source);
                 }
             } else if let Some(i) = s.scene.legend_at(at) {
-                s.toggle(i, Source::Touch);
+                s.toggle(i, source);
             } else if s.scene.plot().is_some_and(|p| p.contains(at)) {
                 if let Some(h) = s.scene.snap(s.view, at) {
-                    s.select(h, Source::Touch);
+                    s.select(h, source);
                 }
             }
         }

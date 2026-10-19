@@ -193,28 +193,59 @@ test(`${BUILD}: the module holds an ns column given as offsets from an origin (R
   c.free();
 });
 
-test(`${BUILD}: the shell keeps an ns column's origin (REQ-DATA-020)`, {
-  todo: "web/src/data.ts drops `origin` (COLUMN_KEYS lacks it), so the binary form's offsets reach the chart as whole ns values near 0 (1970)",
-}, () => {
+test(`${BUILD}: the shell keeps an ns column's origin (REQ-DATA-020)`, () => {
   const p = shell.data.prepare({
     descriptor: { tables: { d: { columns: [{ name: "t", type: "timestamp", time_unit: "ns", origin: Number(ORIGIN) }, { name: "y", type: "f64" }] } } },
     columns: { t: Float64Array.of(1, 2, 3, 4), y: Float64Array.of(1, 3, 2, 4) },
   });
-  assert.match(shell.data.descriptorJson(p), /"origin":1792281600000000000/);
+  assert.match(shell.data.descriptorJson(p), /"origin":1792281600000000000[,}]/);
+  assert.deepEqual([...shell.data.materialise(p.sources[0])], [1, 2, 3, 4], "the offsets as given");
+  const q = shell.data.prepare({
+    descriptor: { tables: { d: { columns: [{ name: "t", type: "timestamp", time_unit: "ns", origin: ORIGIN + 1n }, { name: "y", type: "f64" }] } } },
+    columns: { t: Float64Array.of(0, 1, 2, 3), y: Float64Array.of(1, 3, 2, 4) },
+  });
+  assert.match(shell.data.descriptorJson(q), /"origin":1792281600000000001[,}]/, "a bigint origin is written exactly");
+  assert.throws(() => shell.data.prepare({ descriptor: { tables: { d: { columns: [{ name: "t", type: "timestamp", time_unit: "ns", origin: 1.5 }] } } }, columns: { t: Float64Array.of(1) } }), /`origin` must be an integer/);
 });
 
-test(`${BUILD}: ns timestamps past 2^53 reach the chart exactly (REQ-DATA-020)`, {
-  todo: "web/src/data.ts converts a BigInt64Array and an RFC 3339 string with nanoseconds to one f64 of ns since the epoch (resolution 256 ns near 2026), and sends no origin; it should send an origin and offsets",
-}, () => {
+test(`${BUILD}: ns and us timestamps past 2^53 cross as an origin and offsets and round-trip exactly (REQ-DATA-020)`, async () => {
   const want = [1n, 2n, 3n, 4n].map((d) => ORIGIN + d);
-  for (const t of [BigInt64Array.from(want), want.map((v) => `2026-10-18T00:00:00.00000000${v - ORIGIN}Z`)]) {
+  const given = {
+    "a BigInt64Array": BigInt64Array.from(want),
+    "integer strings": want.map(String),
+    "RFC 3339 strings with nanoseconds": want.map((v) => `2026-10-18T00:00:00.00000000${v - ORIGIN}Z`),
+    "a reversed BigInt64Array": BigInt64Array.from(want.slice().reverse()),
+  };
+  const { glue, memory } = await instantiate(moduleFor(TYPE));
+  for (const [what, t] of Object.entries(given)) {
     const p = shell.data.prepare({ descriptor: { tables: { d: { columns: [{ name: "t", type: "timestamp", time_unit: "ns" }, { name: "y", type: "f64" }] } } }, columns: { t, y: Float64Array.of(1, 3, 2, 4) } });
     const json = shell.data.descriptorJson(p);
     const m = /"origin":(-?\d+)/.exec(json);
-    assert.ok(m, `an origin in ${json}`);
+    assert.ok(m, `${what}: an origin in ${json}`);
+    assert.equal(BigInt(m[1]), want[0], `${what}: the origin is the least value`);
     const offsets = shell.data.materialise(p.sources[0]);
-    assert.deepEqual([...offsets].map((o) => BigInt(m[1]) + BigInt(o)), want);
+    const back = [...offsets].map((o) => BigInt(m[1]) + BigInt(o));
+    assert.deepEqual(what.startsWith("a reversed") ? back.reverse() : back, want, what);
+    // The module takes the descriptor and the offsets.
+    const c = new glue.Chart(TYPE, "{}");
+    commitColumns(c, memory, json, [offsets, shell.data.materialise(p.sources[1])]);
+    c.frame(0, false);
+    assert.match(c.summary(), /2026-10-1[78].*4 points in view/, what);
+    c.free();
   }
+  // Microseconds, with a missing value, and sub-microsecond digits dropped.
+  const us = shell.data.prepare({
+    descriptor: { tables: { d: { columns: [{ name: "t", type: "timestamp", time_unit: "us" }] } } },
+    columns: { t: ["2026-10-18T00:00:00.000002999Z", null, "1792281600000001"] },
+  });
+  assert.match(shell.data.descriptorJson(us), /"origin":1792281600000001[,}]/);
+  const uo = shell.data.materialise(us.sources[0]);
+  assert.deepEqual([uo[0], Number.isNaN(uo[1]), uo[2]], [1, true, 0]);
+  // Appends to a column with an origin are offsets from it.
+  const ns = shell.data.prepare({ descriptor: { tables: { d: { columns: [{ name: "t", type: "timestamp", time_unit: "ns" }, { name: "y", type: "f64" }] } } }, columns: { t: BigInt64Array.from(want), y: Float64Array.of(1, 3, 2, 4) } });
+  const more = shell.data.appendTo(ns, [{ t: String(ORIGIN + 9n), y: 5 }]);
+  assert.deepEqual([...shell.data.materialise(more.sources[0])], [0, 1, 2, 3, 8]);
+  assert.equal(shell.data.describe(more).tables.d.columns[0].origin, undefined, "the data getter leaves out how values crossed");
 });
 
 test(`${BUILD}: M4 over 1,000,000 rows in view at 640 dot columns takes at most 8 ms, median of 7 (REQ-SAMPLE-030)`, async () => {

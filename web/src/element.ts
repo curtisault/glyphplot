@@ -579,13 +579,14 @@ export class GlyphPlot extends Base {
       const summary = c.summary();
       this.#drawing?.setAttribute("aria-label", summary);
       const table = c.table(TABLE_ROWS);
-      const desc = c.data;
-      writeTable(parts.tableBox, table, desc, this.#fmt);
+      writeTable(parts.tableBox, table, this.#fmt);
       if (!this.getAttribute("label")) this.setAttribute("aria-label", figureName(c.type, table.columns.slice(1)));
-      const xs = table.rows.map((r) => r[0]).filter((v): v is number => typeof v === "number" && Number.isFinite(v));
-      if (xs.length > 0) {
-        const lo = Math.min(...xs);
-        const hi = Math.max(...xs);
+      // The slider's range is the view's x domain in data units: the view's own when set, else the fitted one the table reports.
+      const set = (c.view["x"] as { domain?: unknown } | null | undefined)?.domain;
+      const domain = Array.isArray(set) && set.length === 2 ? set : table.domain;
+      const lo = Number(domain?.[0]);
+      const hi = Number(domain?.[1]);
+      if (Number.isFinite(lo) && Number.isFinite(hi)) {
         parts.cursor.setAttribute("aria-valuemin", String(lo));
         parts.cursor.setAttribute("aria-valuemax", String(hi));
         const now = Number(parts.cursor.getAttribute("aria-valuenow"));

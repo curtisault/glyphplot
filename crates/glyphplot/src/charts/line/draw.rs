@@ -76,12 +76,15 @@ fn neighbours(xs: &[f64], ys: &[f64], rows: &Range<usize>, span: bool) -> (Optio
 }
 
 /// The path of series `s` over `rows` (the rows in view), from its M4 or
-/// from every row.
-fn path(data: &Prepared, s: usize, rows: &Range<usize>, m4: Option<&M4>, geom: &Geom, edges: &Edges, span: bool) -> Vec<Pt> {
+/// from every row, into `out`, whose memory is reused.
+#[allow(clippy::too_many_arguments)]
+fn path(data: &Prepared, s: usize, rows: &Range<usize>, m4: Option<&M4>, geom: &Geom, edges: &Edges, span: bool, out: &mut Vec<Pt>) {
     let (x, y) = (&geom.x, &geom.y);
     let (xs, ys) = (data.xs(s), data.ys(s));
     let (before, after) = neighbours(xs, ys, rows, span);
-    let mut out = Vec::new();
+    // At most four points a bucket, or a point a row, and the two neighbours.
+    out.clear();
+    out.reserve(m4.map_or(rows.len(), |m| 4 * m.buckets.len()) + 2);
     let mut push = |xv: f64, yv: f64, gap: bool| {
         if let (Some(px), Some(py)) = (x_dot(x, edges, xv), y.dot(yv)) {
             out.push(Pt { x: px, y: py, gap });
@@ -116,7 +119,14 @@ fn path(data: &Prepared, s: usize, rows: &Range<usize>, m4: Option<&M4>, geom: &
     if let Some(a) = after {
         push(xs[a], ys[a], gap);
     }
-    out
+}
+
+/// What drawing the base reuses from frame to frame, so a frame after a data
+/// change allocates no new memory for it (REQ-MEM-030).
+#[derive(Clone, Debug, Default)]
+pub(super) struct Scratch {
+    /// A series' path.
+    pts: Vec<Pt>,
 }
 
 /// Calls `plot` for every dot of the path in `mode`, clipped to `w × h`.
@@ -178,7 +188,7 @@ pub(super) fn series_ink(s: usize) -> u8 {
 }
 
 /// Draws the base (data, axes, labels, legend) into `grid` (REQ-TEXT-020).
-pub(super) fn base(grid: &mut Grid, canvas: &mut ColorCanvas, cache: &mut Cache, data: &Prepared, input: &BaseInput) {
+pub(super) fn base(grid: &mut Grid, canvas: &mut ColorCanvas, cache: &mut Cache, scratch: &mut Scratch, data: &Prepared, input: &BaseInput) {
     let BaseInput { cfg, geom, view, version, rows, mono, ground } = *input;
     let plot = geom.plot;
     let mut f = Frame::new(grid, ground);
@@ -196,7 +206,7 @@ pub(super) fn base(grid: &mut Grid, canvas: &mut ColorCanvas, cache: &mut Cache,
         let m4s: Option<&[M4]> = if cfg.sample_none {
             None
         } else {
-            Some(cache.get(key, || (0..data.series.len()).map(|s| crate::downsample::m4(data.xs(s), data.ys(s), rows[s].clone(), &edges, span)).collect()))
+            Some(cache.get_into(key, data.series.len(), |s, m| crate::downsample::m4_into(data.xs(s), data.ys(s), rows[s].clone(), &edges, span, m)))
         };
         canvas.resize(plot.w, plot.h);
         let (w, h) = (canvas.width() as i64, canvas.height() as i64);
@@ -208,11 +218,12 @@ pub(super) fn base(grid: &mut Grid, canvas: &mut ColorCanvas, cache: &mut Cache,
         order.extend(shown.iter().copied().filter(|&s| raised.contains(&data.series[s].name.as_str())));
         let base_dot = geom.y.dot(cfg.baseline).unwrap_or(h);
         for s in order {
-            let pts = path(data, s, &rows[s], m4s.map(|m| &m[s]), geom, &edges, span);
+            path(data, s, &rows[s], m4s.map(|m| &m[s]), geom, &edges, span, &mut scratch.pts);
+            let pts = &scratch.pts;
             let ink = series_ink(s);
             if cfg.mode == Mode::Area {
                 let (mut top, mut bot) = (vec![i64::MAX; w as usize], vec![i64::MIN; w as usize]);
-                walk(&pts, Mode::Line, cfg.step, w, h, |x, y| {
+                walk(pts, Mode::Line, cfg.step, w, h, |x, y| {
                     top[x as usize] = top[x as usize].min(y);
                     bot[x as usize] = bot[x as usize].max(y);
                 });
@@ -226,7 +237,7 @@ pub(super) fn base(grid: &mut Grid, canvas: &mut ColorCanvas, cache: &mut Cache,
                     }
                 }
             } else {
-                walk(&pts, cfg.mode, cfg.step, w, h, |x, y| {
+                walk(pts, cfg.mode, cfg.step, w, h, |x, y| {
                     if !patterned || mono::lit(s, x, origin) {
                         canvas.set(x, y, ink);
                     }

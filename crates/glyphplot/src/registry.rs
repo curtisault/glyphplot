@@ -60,8 +60,8 @@ pub fn charts_json() -> String {
 }
 
 /// A fresh chart of the type named `slug`, its options the JSON object
-/// `options_json` layered on its defaults (REQ-REG-010): an empty text or
-/// JSON that is not an object is no options. Fails with `there is no chart
+/// `options_json` layered on its defaults (REQ-REG-010): an empty or blank
+/// text is no options. Fails with `there is no chart
 /// named "<type>"`, `options are not a JSON object: <message>`, or an error
 /// naming the valid modes (REQ-CHART-030).
 pub fn make(slug: &str, options_json: &str) -> Result<(&'static Meta, Box<dyn Chart>), MakeError> {
@@ -138,7 +138,11 @@ mod tests {
         assert_eq!(make("line", r#"{"mode":"zigzag"}"#).err().unwrap().to_string(), "there is no mode \"zigzag\": the modes are line, step, area");
         let (meta, _) = make("line", r#"{"mode":"area"}"#).unwrap();
         assert_eq!(meta.slug, "line");
-        assert!(make("line", "[1]").is_ok(), "not an object: no options");
+        for bad in ["[1]", "1", "null", "\"s\""] {
+            let e = make("line", bad).err().unwrap().to_string();
+            assert!(e.starts_with("options are not a JSON object: "), "{bad}: {e}");
+        }
+        assert!(make("line", " ").is_ok(), "blank: no options");
         let v: serde_json::Value = serde_json::from_str(&charts_json()).unwrap();
         assert_eq!(v[0]["slug"], "line");
     }

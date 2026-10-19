@@ -23,7 +23,7 @@ const moduleNames = Object.keys(manifest.imports);
 test(`${BUILD}: each module exports exactly the boundary's members (REQ-WASM-010, REQ-WASM-060)`, async () => {
   for (const name of moduleNames) {
     const { glue } = await instantiate(name);
-    const want = DEBUG ? [...MODULE_FUNCTIONS, "start"] : MODULE_FUNCTIONS;
+    const want = DEBUG ? [...MODULE_FUNCTIONS, "start", "debug_reference", "debug_fixture_digest"] : MODULE_FUNCTIONS;
     assert.deepEqual(Object.keys(glue).sort(), [...want].sort(), `${name}: module functions`);
     const own = Object.getOwnPropertyNames(glue.Chart.prototype).filter((k) => !GLUE_MEMBERS.includes(k));
     assert.deepEqual(own.sort(), [...CHART_MEMBERS].sort(), `${name}: Chart members`);
@@ -136,11 +136,15 @@ test(`${BUILD}: making a chart throws the boundary's messages, and the module ke
   await assert.rejects(ch.ready, { message: 'there is no chart named "no-such-chart"' });
 });
 
-test(`${BUILD}: options that are JSON but not an object throw (REQ-WASM-020)`, {
-  todo: "the core's Options::parse reads any JSON that is not an object as no options, so `new Chart(\"line\", \"[1]\")` (and \"1\", \"null\", '\"s\"') makes a chart; the message `options are not a JSON object` says it should throw. Core or spec: decide which",
-}, async () => {
+test(`${BUILD}: options that are JSON but not an object throw, and blank options are none (REQ-WASM-020)`, async () => {
   const { glue } = await moduleOfType(types[0]);
-  for (const bad of ["[1]", "1", "null", '"s"']) assert.throws(() => new glue.Chart(types[0], bad), /^options are not a JSON object: /, bad);
+  for (const bad of ["[1]", "1", "null", '"s"']) {
+    assert.throws(() => new glue.Chart(types[0], bad), { message: /^options are not a JSON object: ./ }, bad);
+    const c = new glue.Chart(types[0], "{}");
+    assert.throws(() => c.set_options(bad), { message: /^options are not a JSON object: ./ }, bad);
+    c.free();
+  }
+  for (const none of ["", "  ", "\n"]) new glue.Chart(types[0], none).free();
 });
 
 test(`${BUILD}: a release build has no debug chart and no panic hook (REQ-WASM-060)`, { skip: releaseOnly }, async () => {

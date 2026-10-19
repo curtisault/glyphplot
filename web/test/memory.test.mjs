@@ -7,6 +7,13 @@
 // first replace of a chart needs room for both, one more copy of the
 // columns, which REQ-DATA-070 allows (at most 1.1 times their bytes).
 // REQ-MEM-030's "no growth" is tested from the second replace on.
+//
+// The old columns leave a hole of their size when a replace is committed.
+// The line chart reuses its M4 and path memory, so a frame after the replace
+// allocates nothing new in that hole and the next replace fits in it. A
+// chart whose first frame comes after its first replace still makes its
+// frame memory there, so its second replace grows by one column (measured
+// 8,060,928 B at 1M rows) and later ones grow nothing.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { BUILD, types, moduleFor, instantiate, series, commitColumns } from "./support/wasm.mjs";
@@ -85,9 +92,7 @@ test(`${BUILD}: replaces of the same or smaller size after the first grow nothin
   c.free();
 });
 
-test(`${BUILD}: replaces of the same size after the first grow nothing, a frame after each (REQ-MEM-030)`, {
-  todo: "the second replace grows by one column (8,060,928 B at 1M rows): the frame after the first replace allocates in the hole the old columns left, so the next pair of columns no longer fits it (allocator fragmentation in the module; from the third replace on it grows nothing)",
-}, async () => {
+test(`${BUILD}: replaces of the same size after the first grow nothing, a frame after each (REQ-MEM-030)`, async () => {
   const { bytes, make, set } = await fresh();
   const c = make();
   set(c, a);
@@ -103,4 +108,23 @@ test(`${BUILD}: replaces of the same size after the first grow nothing, a frame 
   }
   c.free();
   assert.deepEqual(growth, [0, 0, 0, 0]);
+});
+
+test(`${BUILD}: with no frame before the first replace, the second replace grows at most one column and later ones nothing (REQ-MEM-030)`, async () => {
+  const { bytes, make, set } = await fresh();
+  const c = make();
+  set(c, a);
+  set(c, b); // the first replace, before any frame
+  c.frame(0, false); // the first frame's memory lands in the hole a's columns left
+  const before = bytes();
+  const growth = [];
+  for (const s of [a, b, a, b]) {
+    set(c, s);
+    c.frame(0, false);
+    growth.push(bytes() - before);
+  }
+  c.free();
+  console.log(`# REQ-MEM-030 ${BUILD}: growth after replaces 2 to 5 with no frame before the first: ${growth.join(", ")} B`);
+  assert.ok(growth[0] <= a.xs.byteLength + MiB, `the second replace grew ${growth[0]} B, more than one column`);
+  assert.deepEqual(growth.slice(1), [growth[0], growth[0], growth[0]], "the third replace on grows nothing");
 });

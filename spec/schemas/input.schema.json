@@ -117,7 +117,8 @@
         "kind": { "description": "tap.", "const": "tap" },
         "x": { "description": "Column in cells.", "$ref": "#/$defs/x" },
         "y": { "description": "Row in cells.", "$ref": "#/$defs/y" },
-        "count": { "description": "1 for a tap, 2 for a double tap (which resets the view); default 1.", "enum": [1, 2] }
+        "count": { "description": "1 for a tap, 2 for a double tap (which resets the view); default 1.", "enum": [1, 2] },
+        "pointer": { "description": "The pointer that tapped, as PointerEvent.pointerType, so a double-click's reset names the mouse; default mouse.", "enum": ["mouse", "pen", "touch"] }
       }
     },
     "press": {

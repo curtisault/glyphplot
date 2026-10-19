@@ -708,15 +708,19 @@ fn touch_gestures() {
     assert!(matches!(ch.events.last(), Some(Event::View(v)) if v.cause == Cause::Zoom && v.done));
     let after = c.view().x.domain.unwrap();
     assert!(((after[1] - after[0]) * 2.0 - (before[1] - before[0])).abs() < 1e-6);
-    let ch = c.input(&Input::Tap { t: 0.3, x: 40.0, y: 10.0, count: 2 });
-    assert!(matches!(ch.events.last(), Some(Event::View(v)) if v.cause == Cause::Reset));
+    let ch = c.input(&Input::Tap { t: 0.3, x: 40.0, y: 10.0, count: 2, pointer: PointerType::Touch });
+    assert!(matches!(ch.events.last(), Some(Event::View(v)) if v.cause == Cause::Reset && v.source == Source::Touch));
     assert_eq!(c.view().x.domain, None);
+    // A mouse's double-click resets as the pointer (REQ-INPUT-020: the tap carries its pointer type).
+    c.set_view(&ViewPatch::from_json(r#"{"x":{"domain":[100,400]}}"#).unwrap());
+    let ch = c.input(&Input::decode(Input::TAP, 40.0, 10.0, 2.0, 0.0, 0, 0, 0.35).unwrap());
+    assert!(matches!(ch.events.last(), Some(Event::View(v)) if v.cause == Cause::Reset && v.source == Source::Pointer));
     let ch = c.input(&Input::Press { t: 0.4, x: 20.0, y: 10.0 });
     assert_eq!(names(&ch), ["plot-brush"]);
     c.input(&touch(Input::MOVE, 50.0, 1));
     let ch = c.input(&touch(Input::UP, 50.0, 0));
     assert!(matches!(ch.events.last(), Some(Event::Brush(b)) if b.done && b.count > 0));
-    let ch = c.input(&Input::Tap { t: 0.5, x: 30.0, y: 10.0, count: 1 });
+    let ch = c.input(&Input::Tap { t: 0.5, x: 30.0, y: 10.0, count: 1, pointer: PointerType::Touch });
     assert!(names(&ch).contains(&"plot-select"));
     let mut k = chart("sine-1k", r#"{"motion":true}"#);
     draw(&mut k, 80, 24, 0.0);
@@ -880,7 +884,7 @@ fn legend_clicks_toggle() {
     assert_eq!(g.ink(span.x + 2, span.y), palette::MUTED, "a hidden series' name is muted");
     c.input(&Input::Down { t: 0.0, x, y, pointer: PointerType::Touch, buttons: 1, mods: Mods::NONE });
     assert!(c.input(&Input::Up { t: 0.0, x, y, pointer: PointerType::Touch, buttons: 0, mods: Mods::NONE }).events.is_empty());
-    let ch = c.input(&Input::Tap { t: 0.0, x, y, count: 1 });
+    let ch = c.input(&Input::Tap { t: 0.0, x, y, count: 1, pointer: PointerType::Touch });
     assert!(matches!(ch.events.as_slice(), [Event::Legend(l)] if l.visible && l.source == Source::Touch));
     assert!(c.view().hidden.is_empty());
 }

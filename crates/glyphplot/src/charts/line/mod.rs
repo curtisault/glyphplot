@@ -228,6 +228,7 @@ pub struct LineChart {
     view: View,
     gesture: Gesture,
     m4: Cache,
+    scratch: draw::Scratch,
     extents: RefCell<Extents2>,
     geom: Option<(GeomKey, Geom, Vec<Range<usize>>)>,
     ctx: Option<FrameCtx>,
@@ -256,6 +257,7 @@ impl LineChart {
             view: View::default(),
             gesture: Gesture::default(),
             m4: Cache::new(),
+            scratch: draw::Scratch::default(),
             extents: RefCell::new(Extents2::default()),
             geom: None,
             ctx: None,
@@ -563,7 +565,17 @@ impl LineChart {
     fn take_data(&mut self, data: Data) -> Result<Accepted, DataError> {
         data.shape(META.shapes, &self.cfg.encode)?;
         let table = data.into_tables().into_iter().next().map(|(_, t)| t);
-        self.data = table.map_or_else(Prepared::empty, |t| Prepared::new(t, &self.cfg.encode));
+        let prepared = table.map_or_else(Prepared::empty, |t| Prepared::new(t, &self.cfg.encode));
+        // The old data's layout goes before the old data does, and the M4
+        // and path memory is kept for reuse, so the next frame's allocations
+        // take the room the old ones leave, not the old columns': a replace
+        // of the same size then fits where the old columns were
+        // (REQ-MEM-030, web/test/memory.test.mjs).
+        self.geom = None;
+        self.m4.invalidate();
+        *self.extents.get_mut() = Extents2::default();
+        self.base_key = None;
+        self.data = prepared;
         self.data_version += 1;
         self.resnap();
         Ok(Accepted { rows: self.data.rows(), version: self.data_version, warnings: self.data.warnings.as_slice().to_vec() })
@@ -750,7 +762,7 @@ impl Chart for LineChart {
                 self.base.resize(cols, rows);
             }
             let input = BaseInput { cfg: &self.cfg, geom, view: &self.view, version: self.data_version, rows: in_view, mono: env.mono, ground };
-            draw::base(&mut self.base, &mut self.canvas, &mut self.m4, &self.data, &input);
+            draw::base(&mut self.base, &mut self.canvas, &mut self.m4, &mut self.scratch, &self.data, &input);
             self.base_key = Some(bkey);
             self.base_draws += 1;
         }
@@ -797,7 +809,7 @@ impl Chart for LineChart {
         // when the view holds more (REQ-A11Y-020).
         let name = if self.cfg.title.is_empty() { "line chart" } else { self.cfg.title.as_str() };
         let caption = if out.len() < total { format!("{name}, each bucket's least and greatest kept") } else { name.to_string() };
-        Table { caption, columns, rows: out, total: total as u64, summary: self.summary(), value: self.value_text() }
+        Table { caption, columns, rows: out, total: total as u64, summary: self.summary(), value: self.value_text(), domain: Some(d) }
     }
 }
 

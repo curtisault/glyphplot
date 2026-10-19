@@ -6,7 +6,10 @@
 // with one copy and a JSON array with none in between (REQ-MEM-020,
 // REQ-DATA-050). Shorthand types are inferred as the schema and the core's
 // reader infer them. Label text is NFC-normalised here, before it crosses
-// (REQ-I18N-050). Pure: no DOM, no wasm.
+// (REQ-I18N-050). A `us` or `ns` timestamp column given exactly (a
+// BigInt64Array, integer strings, RFC 3339 strings) crosses as an `origin`,
+// its least value, and f64 offsets from it, so a span under 2^53 units
+// arrives exactly (REQ-DATA-020). Pure: no DOM, no wasm.
 
 import { ColumnKind } from "./api.ts";
 
@@ -38,6 +41,12 @@ export interface ColumnDesc {
   scale?: number;
   offset?: number;
   time_unit?: TimeUnit;
+  /**
+   * For a `us` or `ns` timestamp column given as a buffer: the instant, in
+   * `time_unit`, its values are offsets from (REQ-DATA-020). A number must be
+   * a whole one; a bigint holds any i64.
+   */
+  origin?: number | bigint;
   zone?: string;
   categories?: string[];
   values?: ValuesInput;
@@ -182,6 +191,21 @@ export function stampIn(s: string, unit: TimeUnit): number | null {
 
 const UNIT_MS: Record<TimeUnit, number> = { s: 1000, ms: 1, us: 1e-3, ns: 1e-6 };
 
+/** Whether a timestamp in `unit` crosses as an origin and offsets (REQ-DATA-020). */
+const hasOrigin = (unit: TimeUnit | undefined): unit is "us" | "ns" => unit === "us" || unit === "ns";
+
+const INTEGER = /^[+-]?\d+$/;
+const I64_MIN = -(1n << 63n);
+const I64_MAX = (1n << 63n) - 1n;
+
+/** An RFC 3339 date-time, exactly, as a whole number of `unit` since the epoch (sub-unit digits dropped toward the past). */
+export function exactStamp(s: string, unit: "us" | "ns"): bigint | null {
+  const p = parseRfc3339(s);
+  if (!p) return null;
+  const [secs, nanos] = p;
+  return unit === "ns" ? BigInt(secs) * 1_000_000_000n + BigInt(nanos) : BigInt(secs) * 1_000_000n + BigInt(Math.floor(nanos / 1000));
+}
+
 // ---------------------------------------------------------------- writers
 
 class DataError extends Error {
@@ -251,6 +275,75 @@ function jsonCodes(column: string, values: ArrayLike<unknown>, length: number, c
       }
     },
   };
+}
+
+/** Whether `values` must cross exactly: a BigInt array, or JSON values with a string or a bigint among them. */
+function wantsExact(values: ValuesInput, length: number): boolean {
+  if (isTyped(values)) return isBig(values);
+  for (let i = 0; i < length; i++) {
+    const v = (values as ArrayLike<unknown>)[i];
+    if (typeof v === "string" || typeof v === "bigint") return true;
+  }
+  return false;
+}
+
+/**
+ * A `us` or `ns` timestamp column's values as whole units, exactly, each
+ * `base` plus its value; null where missing. Integers, integer strings,
+ * RFC 3339 strings, bigints and Dates are read; anything else is an error.
+ */
+function exactValues(column: string, unit: "us" | "ns", values: ValuesInput, length: number, base: bigint): (bigint | null)[] {
+  const out = new Array<bigint | null>(length);
+  const perMs = unit === "ns" ? 1_000_000n : 1_000n;
+  for (let i = 0; i < length; i++) {
+    const v = (values as ArrayLike<unknown>)[i];
+    let t: bigint | null;
+    if (v === null || v === undefined || (typeof v === "number" && Number.isNaN(v))) t = null;
+    else if (typeof v === "bigint") t = v;
+    else if (typeof v === "number" && Number.isInteger(v)) t = BigInt(v);
+    else if (typeof v === "string" && INTEGER.test(v)) t = BigInt(v);
+    else if (typeof v === "string") {
+      t = exactStamp(v, unit);
+      if (t === null) throw bad(column, i, "an integer, an RFC 3339 string or null");
+    } else if (v instanceof Date && !Number.isNaN(v.getTime())) t = BigInt(v.getTime()) * perMs;
+    else throw bad(column, i, "an integer, an RFC 3339 string or null");
+    if (t !== null) {
+      t += base;
+      if (t < I64_MIN || t > I64_MAX) throw bad(column, i, "an instant within an i64");
+    }
+    out[i] = t;
+  }
+  return out;
+}
+
+/** The least of `stamps`, or 0 when every one is missing. */
+function leastOf(stamps: readonly (bigint | null)[]): bigint {
+  let least: bigint | null = null;
+  for (const t of stamps) if (t !== null && (least === null || t < least)) least = t;
+  return least ?? 0n;
+}
+
+/** A writer of `stamps` as f64 offsets from `origin` (NaN where missing): exact while each offset is under 2^53. */
+function offsetSource(stamps: readonly (bigint | null)[], origin: bigint): Source {
+  return {
+    kind: ColumnKind.F64,
+    length: stamps.length,
+    write(dst) {
+      for (let i = 0; i < stamps.length; i++) {
+        const t = stamps[i];
+        dst[i] = t === null || t === undefined ? NaN : Number(t - origin);
+      }
+    },
+  };
+}
+
+/** A column's `origin` as a bigint: 0 when absent; an error unless whole. */
+function originOf(c: ColumnDesc): bigint {
+  const o = c.origin;
+  if (o === undefined) return 0n;
+  if (typeof o === "bigint") return o;
+  if (typeof o === "number" && Number.isInteger(o)) return BigInt(o);
+  throw new DataError(`column \`${c.name}\`: \`origin\` must be an integer`);
 }
 
 /** A writer that writes `a` then `b`. */
@@ -389,7 +482,7 @@ function shorthand(columns: Record<string, ValuesInput>): Prepared {
 
 // ---------------------------------------------------------------- the full form
 
-const COLUMN_KEYS = ["role", "unit", "scale", "offset", "time_unit", "zone"] as const;
+const COLUMN_KEYS = ["role", "unit", "scale", "offset", "time_unit", "origin", "zone"] as const;
 const NUMERIC: ReadonlySet<ColumnType> = new Set(["f64", "f32", "i64", "u32", "bool", "timestamp", "duration"]);
 
 function full(data: DataObject, binary: Record<string, ValuesInput> | null): Prepared {
@@ -437,7 +530,14 @@ function full(data: DataObject, binary: Record<string, ValuesInput> | null): Pre
         } else if (c.type === "category") {
           if (!out.categories) throw new DataError(`column \`${c.name}\` is a category column without \`categories\``);
           source = isTyped(v) ? typedSource(ColumnKind.U32, v, n) : jsonCodes(c.name, v as ArrayLike<unknown>, n, out.categories.length);
+        } else if (c.type === "timestamp" && hasOrigin(c.time_unit) && wantsExact(v, n)) {
+          // Exact instants: the least is the origin, the rest offsets from it (REQ-DATA-020).
+          const stamps = exactValues(c.name, c.time_unit, v, n, originOf(c));
+          const origin = leastOf(stamps);
+          out.origin = origin;
+          source = offsetSource(stamps, origin);
         } else if (NUMERIC.has(c.type)) {
+          if (c.origin !== undefined) out.origin = originOf(c);
           source = isTyped(v) ? typedSource(ColumnKind.F64, v, n) : jsonF64(c.name, c.type, c.time_unit ?? "ms", v as ArrayLike<unknown>, n);
         } else {
           throw new DataError(`column \`${c.name}\`: unknown type \`${String(c.type)}\``);
@@ -510,20 +610,30 @@ export function emptyLike(like: DataObject | null): DataObject {
   };
 }
 
-/** The descriptor and lengths a `data` getter returns: no values at all (REQ-EL-070). */
+/**
+ * The descriptor and lengths a `data` getter returns: no values at all
+ * (REQ-EL-070), and no `origin`, which says how values crossed, not what
+ * they are, so the result can describe new values.
+ */
 export function describe(p: Prepared): DataObject {
   const tables: Record<string, TableDesc> = {};
   for (const [name, t] of Object.entries(p.descriptor.tables)) {
-    tables[name] = { ...t, columns: t.columns.map((c) => { const { values: _drop, ...rest } = c; void _drop; return { ...rest }; }) };
+    tables[name] = { ...t, columns: t.columns.map((c) => { const { values: _drop, origin: _origin, ...rest } = c; void _drop; void _origin; return { ...rest }; }) };
   }
   const out: DataObject = { version: 1, tables };
   if (p.descriptor.matrices) out.matrices = { ...p.descriptor.matrices };
   return out;
 }
 
-/** The descriptor as `commit` takes it. */
+/** The descriptor as `commit` takes it: a bigint `origin` written as the integer it is (REQ-DATA-020). */
 export function descriptorJson(p: Prepared): string {
-  return JSON.stringify(p.descriptor);
+  let big = false;
+  const json = JSON.stringify(p.descriptor, (_k, v: unknown) => {
+    if (typeof v !== "bigint") return v;
+    big = true;
+    return `\u0000glyphplot-i64:${v}`;
+  });
+  return big ? json.replace(/"\\u0000glyphplot-i64:(-?\d+)"/g, "$1") : json;
 }
 
 // ---------------------------------------------------------------- appends (until staging arrives in v0.6.0)
@@ -590,6 +700,11 @@ export function appendTo(prev: Prepared, batch: AppendInput): Prepared {
       }
       out.categories = labels;
       tail = typedSource(ColumnKind.U32, codes);
+    } else if (c.type === "timestamp" && hasOrigin(c.time_unit) && c.origin !== undefined) {
+      // Offsets from the column's origin, as its head holds them (REQ-DATA-020).
+      const origin = originOf(c);
+      // Appended values are instants, read exactly when they can be.
+      tail = offsetSource(exactValues(c.name, c.time_unit, wantsExact(v, added) ? v : roundedOrMissing(v, added), added, 0n), origin);
     } else {
       tail = isTyped(v) ? typedSource(ColumnKind.F64, v) : jsonF64(c.name, c.type, c.time_unit ?? "ms", v as ArrayLike<unknown>, added);
     }
@@ -601,6 +716,14 @@ export function appendTo(prev: Prepared, batch: AppendInput): Prepared {
   });
   const descriptor: DataObject = { ...prev.descriptor, tables: { ...prev.descriptor.tables, [tname]: { ...table, length: n + added, columns } } };
   return { descriptor, sources };
+}
+
+/** Numbers as whole units (rounded), anything not a finite number missing: the inexact values a plain array or a Float64Array holds. */
+function roundedOrMissing(v: ValuesInput, length: number): (number | null)[] {
+  return Array.from({ length }, (_, i) => {
+    const x = (v as ArrayLike<unknown>)[i];
+    return typeof x === "number" && Number.isFinite(x) ? Math.round(x) : null;
+  });
 }
 
 function missingSource(kind: 0 | 1, length: number): Source {

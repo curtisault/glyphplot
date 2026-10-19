@@ -11,24 +11,50 @@
 # It is built with the release profile, so a panic traps as it does in
 # release (REQ-WASM-040).
 #
-# Either way the modules are built into a staging folder beside web/pkg and
-# swapped in whole once everything has built, so a failed build leaves the
-# last good web/pkg (REQ-BUILD-040).
+# `--out <dir>` (relative to the repository root) builds into <dir> instead
+# of web/pkg: `mise run test:web` builds its debug modules into
+# target/web-debug/pkg so the tests never touch web/pkg, which `size`, the
+# site and `mise run dev` read.
+#
+# Either way the modules are built into a staging folder beside the output
+# folder and swapped in whole once everything has built, so a failed build
+# leaves the last good one (REQ-BUILD-040).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 root=$PWD
 
+usage() {
+  echo "usage: build-wasm.sh [--debug] [--out <dir>]" >&2
+  exit 2
+}
 debug=false
-case "${1:-}" in
-  "") ;;
-  --debug) debug=true ;;
-  *) echo "usage: build-wasm.sh [--debug]" >&2; exit 2 ;;
+out=web/pkg
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --debug) debug=true ;;
+    --out)
+      [ $# -ge 2 ] && [ -n "$2" ] || usage
+      out=${2%/}
+      shift
+      ;;
+    *) usage ;;
+  esac
+  shift
+done
+case "$out" in
+  /*) ;;
+  *) out=$root/$out ;;
 esac
+parent=$(dirname "$out")
+mkdir -p "$parent"
 
-stage=$root/web/.pkg-stage.$$
-old=$root/web/.pkg-old.$$
+stage=$parent/.$(basename "$out")-stage.$$
+old=$parent/.$(basename "$out")-old.$$
 rm -rf "$stage" "$old"
 trap 'rm -rf "$stage" "$old"' EXIT
+# A task runner stopping the build (mise does when a sibling task fails) still removes the stage.
+trap 'exit 130' INT
+trap 'exit 143' TERM
 mkdir -p "$stage"
 
 # build <module> <features>: one module into the staging folder.
@@ -50,10 +76,10 @@ else
 fi
 node scripts/size.mjs --write --pkg "$stage"
 
-# The swap: the old web/pkg out, the new one in, the old one gone.
-if [ -d web/pkg ]; then
-  mv web/pkg "$old"
+# The swap: the old folder out, the new one in, the old one gone.
+if [ -d "$out" ]; then
+  mv "$out" "$old"
 fi
-mv "$stage" web/pkg
+mv "$stage" "$out"
 rm -rf "$old"
-echo "build-wasm: web/pkg holds $(cd web/pkg && ls -d */ | tr -d / | tr '\n' ' ')$($debug && echo '(debug)')"
+echo "build-wasm: ${out#"$root"/} holds $(cd "$out" && ls -d */ | tr -d / | tr '\n' ' ')$($debug && echo '(debug)')"
