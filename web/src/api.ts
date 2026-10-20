@@ -72,8 +72,8 @@ export interface WasmChart {
   commit(descriptor_json: string): number;
   /** The locale pack (spec/schemas/locale.schema.json). */
   set_locale(json: string): void;
-  /** The zone table (spec/schemas/zone.schema.json). v0.5.0: optional until then. */
-  set_zone?(json: string): void;
+  /** The zone table (spec/schemas/zone.schema.json), from v0.5.0. Throws `zone: …` and keeps the table it had. */
+  set_zone(json: string): void;
   /** The whole view state (spec/schemas/view.schema.json). */
   view_json(): string;
   /** A whole or partial view, merged key by key; a key set to null returns to its default. */

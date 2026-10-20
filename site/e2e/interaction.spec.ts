@@ -1,10 +1,37 @@
 // REQ-E2E-020: pointer hover with its event, drag pan, wheel zoom, keyboard
 // cursor, pan, zoom, reset and Escape, a brush, and touch scrub, pan and
 // pinch through CDP Input.dispatchTouchEvent; with them REQ-EVENT-010 to 030,
-// REQ-INPUT-040, REQ-KEY-010, REQ-TOUCH-010 and 020, REQ-A11Y-040.
+// REQ-INPUT-040, REQ-KEY-010, REQ-TOUCH-010 and 020, REQ-A11Y-040; and the
+// v0.5.0 events, `plot-brush` and `plot-legend`, in events.schema.json's
+// shapes.
 
 import { expect, test } from "@playwright/test";
-import { addChart, consoleErrors, domain, drawingBox, frames, openBlank, takeEvents, Touch } from "./helpers.ts";
+import { addChart, consoleErrors, domain, drawingBox, frames, openBlank, sine, takeEvents, text, Touch } from "./helpers.ts";
+
+const SOURCES = ["pointer", "touch", "keyboard", "wheel"];
+const isRange = (v: unknown): boolean => Array.isArray(v) && v.length === 2 && v.every((n) => typeof n === "number");
+
+/** events.schema.json's `plot-brush` detail: exactly its keys, of its types. */
+function expectBrush(d: Record<string, unknown> | null): void {
+  expect(d).not.toBeNull();
+  expect(Object.keys(d ?? {}).sort()).toEqual(["count", "final", "source", "x", "y"]);
+  expect(SOURCES).toContain(d?.["source"]);
+  expect(d?.["x"] === null || isRange(d?.["x"])).toBe(true);
+  expect(d?.["y"] === null || isRange(d?.["y"])).toBe(true);
+  expect(Number.isInteger(d?.["count"]) && (d?.["count"] as number) >= 0).toBe(true);
+  expect(typeof d?.["final"]).toBe("boolean");
+}
+
+/** events.schema.json's `plot-legend` detail: exactly its keys, of its types. */
+function expectLegend(d: Record<string, unknown> | null): void {
+  expect(d).not.toBeNull();
+  expect(Object.keys(d ?? {}).sort()).toEqual(["hidden", "series", "source", "visible"]);
+  expect(SOURCES).toContain(d?.["source"]);
+  expect(typeof d?.["series"]).toBe("string");
+  expect(typeof d?.["visible"]).toBe("boolean");
+  const hidden = d?.["hidden"] as unknown[];
+  expect(Array.isArray(hidden) && hidden.every((h) => typeof h === "string") && new Set(hidden).size === hidden.length).toBe(true);
+}
 
 test.beforeEach(async ({ page }) => {
   await openBlank(page);
@@ -157,6 +184,9 @@ test("a brush: Shift+drag, and Shift+Enter twice from the keyboard", async ({ pa
   await frames(page, 3);
   let brushes = await takeEvents(el, "plot-brush");
   expect(brushes.length).toBeGreaterThan(0);
+  for (const b of brushes) expectBrush(b.detail);
+  expect(brushes.every((b) => b.detail?.["source"] === "pointer")).toBe(true);
+  expect(brushes.at(-1)?.detail?.["count"]).toBeGreaterThan(0);
   expect(brushes.filter((e) => e.detail?.["final"] === true)).toHaveLength(1);
   const x = brushes.at(-1)?.detail?.["x"] as [number, number];
   expect(x[0]).toBeLessThan(x[1]);
@@ -173,7 +203,57 @@ test("a brush: Shift+drag, and Shift+Enter twice from the keyboard", async ({ pa
   await page.keyboard.press("Shift+Enter");
   await frames(page, 2);
   brushes = await takeEvents(el, "plot-brush");
+  for (const b of brushes) expectBrush(b.detail);
   expect(brushes.at(-1)?.detail).toMatchObject({ source: "keyboard", final: true, count: 4 });
+  // Escape clears the brush: x and y null, count 0, final.
+  await page.keyboard.press("Escape");
+  await frames(page, 2);
+  brushes = await takeEvents(el, "plot-brush");
+  expect(brushes).toHaveLength(1);
+  expectBrush(brushes[0]?.detail ?? null);
+  expect(brushes[0]?.detail).toEqual({ source: "keyboard", x: null, y: null, count: 0, final: true });
+});
+
+test("plot-legend: a key toggles the nth series, a click on its legend entry toggles it", async ({ page }) => {
+  const errors = consoleErrors(page);
+  const el = await addChart(page, { data: sine(100, true) });
+  await el.locator(".gp-cursor").focus();
+  await page.keyboard.press("2");
+  await frames(page, 2);
+  let legends = await takeEvents(el, "plot-legend");
+  expect(legends).toHaveLength(1);
+  expectLegend(legends[0]?.detail ?? null);
+  expect(legends[0]?.detail).toEqual({ source: "keyboard", series: "b", visible: false, hidden: ["b"] });
+  expect(await el.evaluate((e) => (e as unknown as { view: { hidden: string[] } }).view.hidden)).toEqual(["b"]);
+  await page.keyboard.press("2");
+  await frames(page, 2);
+  expect((await takeEvents(el, "plot-legend"))[0]?.detail).toEqual({ source: "keyboard", series: "b", visible: true, hidden: [] });
+  expect(errors).toEqual([]);
+});
+
+// Fails until the core's fix: a mouse click on a legend entry toggles its
+// series twice, once on release (reduce.rs `end_drag`, DragKind::Legend) and
+// again on the tap the shell sends after a still click (reduce.rs
+// `Input::Tap`, which toggles for every pointer), so the series ends shown.
+test("plot-legend: a click on a legend entry toggles its series once", async ({ page }) => {
+  test.fail(true, "the core toggles a mouse click's series on release and again on its tap");
+  const errors = consoleErrors(page);
+  const el = await addChart(page, { data: sine(100, true) });
+  // The legend's first row: "─ a  ─ b"; a click on the cell holding "a".
+  const first = (await text(el)).split("\n")[0] ?? "";
+  const col = first.indexOf("a");
+  expect(col).toBeGreaterThanOrEqual(0);
+  const cols = await el.evaluate((e) => (e as unknown as { cols: number }).cols);
+  const b = await drawingBox(el);
+  const cell = b.width / cols;
+  await page.mouse.click(b.x + (col + 0.5) * cell, b.y + cell); // row 0 is one cell wide and two tall: its middle
+  await frames(page, 2);
+  const legends = await takeEvents(el, "plot-legend");
+  expectLegend(legends[0]?.detail ?? null);
+  expect(legends[0]?.detail).toEqual({ source: "pointer", series: "a", visible: false, hidden: ["a"] });
+  expect(errors).toEqual([]);
+  // The expected failure: a second plot-legend, {series: "a", visible: true, hidden: []}, from the tap.
+  expect(legends).toHaveLength(1);
 });
 
 test("the control row zooms, steps and resets with single clicks", async ({ page }) => {

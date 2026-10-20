@@ -58,3 +58,11 @@ test("palette helpers", () => {
   assert.equal(seriesOf(bytes)[0], "#fafafa");
   assert.equal(lowContrastSeries({ series: ["#fafafa", "#000000"] }, bytes).length, 1);
 });
+
+test("up and down are tokens: --glyphplot-up and --glyphplot-down, the theme object over them (REQ-THEME-060)", () => {
+  const t = themeFromStyle(style({ "--glyphplot-up": "#0784ff", "--glyphplot-down": "rgb(179, 92, 0)" }));
+  assert.deepEqual(t, { up: "#0784ff", down: "#b35c00" });
+  const choice = chooseTheme(t, { down: "#ff0000" }, "dark", null);
+  assert.equal(choice.theme.up, "#0784ff");
+  assert.equal(choice.theme.down, "#ff0000");
+});

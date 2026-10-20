@@ -11,6 +11,13 @@
 //
 // The owner measures both on Chrome and Safari and the plan records the
 // choice; until then `text` is the default.
+//
+// A frame whose cells carry back colours (a heatmap's fills) is drawn, when
+// every cell is redrawn, as one image of cols × 2·rows pixels, each cell's
+// back two pixels tall so the image's pixels are square like the cell's
+// halves, scaled to the canvas without smoothing, with the glyphs over it
+// (REQ-RENDER-040). A frame that changes more than half its cells is redrawn
+// whole when it has backs.
 
 import { NO_BACK, PALETTE_LEN, Token, WIDE_TAIL } from "./api.ts";
 import { fillBlock, isBlock } from "./blocks.ts";
@@ -26,6 +33,48 @@ export const FONT_STACK = '"glyphplot mono", ui-monospace, monospace';
 export interface DrawStats {
   cells: number;
   full: boolean;
+  /** The backs were drawn as one image (REQ-RENDER-040). */
+  backImage: boolean;
+}
+
+/** Whether any cell of `backs` has a back colour. */
+export function hasBacks(backs: Uint8Array): boolean {
+  for (let i = 0; i < backs.length; i++) if (backs[i] !== NO_BACK) return true;
+  return false;
+}
+
+/**
+ * Writes `backs` (cols × rows palette indices) into `px`, the RGBA pixels of a
+ * cols × 2·rows image: each cell's back colour in its two pixels, transparent
+ * where it has none. Pure, for tests.
+ */
+export function backPixels(backs: Uint8Array, cols: number, rgba: Uint8Array, px: Uint8ClampedArray | Uint8Array): void {
+  const rows = Math.floor(backs.length / Math.max(1, cols));
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const b = backs[r * cols + c] ?? NO_BACK;
+      const top = (2 * r * cols + c) * 4;
+      const bottom = top + cols * 4;
+      if (b === NO_BACK) {
+        px.fill(0, top, top + 4);
+        px.fill(0, bottom, bottom + 4);
+      } else {
+        const src = rgba.subarray(b * 4, b * 4 + 4);
+        px.set(src, top);
+        px.set(src, bottom);
+      }
+    }
+  }
+}
+
+type Canvas2D = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
+
+/** A canvas off the page: an OffscreenCanvas where there is one. */
+function offscreen(w: number, h: number): { canvas: HTMLCanvasElement | OffscreenCanvas; ctx: Canvas2D } {
+  const canvas = typeof OffscreenCanvas === "function" ? new OffscreenCanvas(w, h) : Object.assign(document.createElement("canvas"), { width: w, height: h });
+  const ctx = canvas.getContext("2d") as Canvas2D | null;
+  if (!ctx) throw new Error("glyphplot: no 2D canvas context for the backs");
+  return { canvas, ctx };
 }
 
 /** Marks cell `i` and, around double-width glyphs, its partner. */
@@ -73,6 +122,10 @@ abstract class Base {
   protected stale = false;
   protected baseline = 0;
   protected fontPx = 13;
+  /** The cols × 2·rows image the backs are drawn from, made on the first frame that has backs. */
+  #backs: { canvas: HTMLCanvasElement | OffscreenCanvas; ctx: Canvas2D; img: ImageData } | null = null;
+  /** Back images drawn since the renderer was made: a test reads it. */
+  backImages = 0;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -97,6 +150,7 @@ abstract class Base {
     // The em box centred in the cell.
     this.baseline = Math.round((this.ch - (asc + desc)) / 2 + asc);
     this.prev = null;
+    this.#backs = null;
     this.onResize();
   }
 
@@ -122,14 +176,52 @@ abstract class Base {
 
   /** Draws the changed cells of `g` and keeps a copy of it for the next diff. */
   draw(g: GridViews): DrawStats {
-    const full = this.stale || this.prev === null || g.cols !== this.cols || g.rows !== this.rows;
+    let full = this.stale || this.prev === null || g.cols !== this.cols || g.rows !== this.rows;
     this.stale = false;
     const dirty = diffCells(g, this.prev, full);
     let count = 0;
     for (let i = 0; i < dirty.length; i++) if (dirty[i]) count++;
-    if (count > 0) this.paint(g, dirty, full);
+    const backs = hasBacks(g.backs);
+    if (!full && backs && count * 2 > dirty.length) {
+      // Most cells changed (a pan over a heatmap): one image is cheaper than a fill a cell.
+      full = true;
+      dirty.fill(1);
+      count = dirty.length;
+    }
+    let backImage = false;
+    if (count > 0) {
+      backImage = full && backs;
+      if (backImage) this.paintBacks(g);
+      this.paint(g, dirty, full, backImage);
+    }
     this.prev = { cells: g.cells.slice(), colors: g.colors.slice(), backs: g.backs.slice() };
-    return { cells: count, full };
+    return { cells: count, full, backImage };
+  }
+
+  /**
+   * Clears the canvas, paints the ground, and draws every back as one cols ×
+   * 2·rows image scaled without smoothing (REQ-RENDER-040).
+   */
+  protected paintBacks(g: GridViews): void {
+    const { cols, rows } = this;
+    const ctx = this.ctx;
+    const w = cols * this.cw;
+    const h = rows * this.ch;
+    ctx.clearRect(0, 0, w, h);
+    if (this.ground) {
+      ctx.fillStyle = this.ground;
+      ctx.fillRect(0, 0, w, h);
+    }
+    let b = this.#backs;
+    if (!b || b.img.width !== cols || b.img.height !== 2 * rows) {
+      const { canvas, ctx: bctx } = offscreen(Math.max(1, cols), Math.max(1, 2 * rows));
+      b = this.#backs = { canvas, ctx: bctx, img: bctx.createImageData(Math.max(1, cols), Math.max(1, 2 * rows)) };
+    }
+    backPixels(g.backs, cols, this.rgba, b.img.data);
+    b.ctx.putImageData(b.img, 0, 0);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(b.canvas, 0, 0, cols, 2 * rows, 0, 0, w, h);
+    this.backImages++;
   }
 
   /** Redraws the last frame with the current palette, drawing no new frame (REQ-THEME-030). */
@@ -140,7 +232,8 @@ abstract class Base {
     this.draw({ cols: this.cols, rows: this.rows, cells: p.cells, colors: p.colors, backs: p.backs });
   }
 
-  protected abstract paint(g: GridViews, dirty: Uint8Array, full: boolean): void;
+  /** Draws the dirty cells; with `backsDrawn` the canvas is cleared and its backs drawn already. */
+  protected abstract paint(g: GridViews, dirty: Uint8Array, full: boolean, backsDrawn: boolean): void;
 
   /** Clears a cell and fills its ground and back. */
   protected backOf(x: number, y: number, back: number): void {
@@ -159,11 +252,11 @@ abstract class Base {
 
 /** fillText per changed cell (the default renderer). */
 export class TextRenderer extends Base {
-  protected paint(g: GridViews, dirty: Uint8Array): void {
+  protected paint(g: GridViews, dirty: Uint8Array, _full: boolean, backsDrawn: boolean): void {
     const ctx = this.ctx;
     const { cols, cw, ch } = this;
     // Backs first, so a wide glyph drawn into its tail's cell is not cleared after it.
-    for (let i = 0; i < dirty.length; i++) {
+    for (let i = 0; i < dirty.length && !backsDrawn; i++) {
       if (!dirty[i]) continue;
       this.backOf((i % cols) * cw, Math.floor(i / cols) * ch, g.backs[i] ?? NO_BACK);
     }
@@ -282,7 +375,7 @@ export class AtlasRenderer extends Base {
     this.#atlas = new MaskAtlas(this.cw, this.ch, this.fontPx, this.baseline);
   }
 
-  protected paint(g: GridViews, dirty: Uint8Array): void {
+  protected paint(g: GridViews, dirty: Uint8Array, _full: boolean, backsDrawn: boolean): void {
     const mctx = this.#mctx;
     const tctx = this.#tctx;
     const ictx = this.#ictx;
@@ -330,7 +423,7 @@ export class AtlasRenderer extends Base {
       const x = c0 * cw;
       const y = r * ch;
       const w = (c1 - c0 + 1) * cw;
-      for (let c = c0; c <= c1; c++) {
+      for (let c = c0; c <= c1 && !backsDrawn; c++) {
         const i = r * cols + c;
         if (dirty[i]) this.backOf(c * cw, y, g.backs[i] ?? NO_BACK);
       }

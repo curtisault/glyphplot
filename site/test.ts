@@ -4,7 +4,7 @@
 // pass as Markdown. Plain TypeScript over the shell's own modules: no Elm.
 
 import * as gp from "glyphplot";
-import { config, type GlyphPlot } from "glyphplot/element";
+import { config, define, type GlyphPlot } from "glyphplot/element";
 
 declare global {
   interface Window {
@@ -70,7 +70,7 @@ function daily(n: number, seed: number, a = "north", b = "south"): Record<string
 
 // ------------------------------------------------------------ the environment and the pass
 
-const STORE = "glyphplot-checklist-v0.3.0";
+const STORE = "glyphplot-checklist-v0.5.0";
 type Mark = { state: "" | "pass" | "fail" | "na"; note: string };
 const marks: Record<string, Mark> = (() => {
   try {
@@ -154,7 +154,7 @@ function addMarks(): void {
 /** The pass as Markdown (REQ-TEST-040). */
 export function markdown(): string {
   const cell = (s: string): string => s.replace(/\|/g, "\\|").replace(/\n/g, " ");
-  const lines = [`### glyphplot v0.3.0 checklist, ${new Date().toISOString().slice(0, 10)}`, ""];
+  const lines = [`### glyphplot v0.5.0 checklist, ${new Date().toISOString().slice(0, 10)}`, ""];
   for (const [k, v] of env()) lines.push(`- ${k}: ${cell(v)}`);
   lines.push("", "| # | Case | Result | Note |", "|---|---|---|---|");
   let i = 0;
@@ -196,7 +196,7 @@ function logger(box: HTMLElement): (line: string) => void {
   };
 }
 
-const EVENTS = ["plot-ready", "plot-error", "plot-hover", "plot-select", "plot-view", "plot-cursor", "plot-brush"] as const;
+const EVENTS = ["plot-ready", "plot-error", "plot-hover", "plot-select", "plot-view", "plot-cursor", "plot-brush", "plot-legend"] as const;
 
 function short(type: string, d: unknown): string {
   if (d === null) return `${type} null`;
@@ -211,7 +211,9 @@ function short(type: string, d: unknown): string {
     case "plot-hover":
       return `${type} ${String(o["source"])} ${String(o["series"])}[${String(o["index"])}] x=${num(o["x"])} y=${num(o["y"])}`;
     case "plot-brush":
-      return `${type} ${String(o["source"])} x=${Array.isArray(o["x"]) ? (o["x"] as unknown[]).map(num).join("…") : "—"} final=${String(o["final"])}`;
+      return `${type} ${String(o["source"])} x=${Array.isArray(o["x"]) ? (o["x"] as unknown[]).map(num).join("…") : "—"} count=${String(o["count"])} final=${String(o["final"])}`;
+    case "plot-legend":
+      return `${type} ${String(o["source"])} ${String(o["series"])} visible=${String(o["visible"])} hidden=${JSON.stringify(o["hidden"])}`;
     default:
       return `${type} ${JSON.stringify(d).slice(0, 160)}`;
   }
@@ -459,6 +461,167 @@ function lazy(): void {
   });
 }
 
+/** Case 18: a tag made by define(), its type fixed whatever its attribute says. */
+function alias(): void {
+  define("line-plot", { type: "line" });
+  const el = $<GlyphPlot>("#alias-chart");
+  el.data = waves(80, ["a", "b"], 53);
+  const show = (): void => {
+    $("#alias-status").textContent = `type attribute "${el.getAttribute("type") ?? ""}", chart type "${el.type}", drawn: ${el.chart ? "yes" : "no"}`;
+  };
+  el.addEventListener("plot-ready", show);
+  $("#alias-type").addEventListener("click", () => {
+    el.setAttribute("type", "bar");
+    requestAnimationFrame(show);
+  });
+}
+
+/** Case 19: a type change carrying the data and view, or warning and drawing empty. */
+function typeChange(): void {
+  const el = plot("type-chart");
+  const out = $("#type-status");
+  el.data = waves(120, ["a", "b"], 59);
+  const show = (what: string): void => {
+    const d = el.data;
+    const rows = d ? Object.values(d.tables)[0]?.length : null;
+    out.textContent = `${what}: type ${el.type}; data rows ${rows ?? "none"}; x domain ${JSON.stringify((el.view["x"] as { domain?: unknown } | undefined)?.domain ?? null)}`;
+  };
+  el.addEventListener("plot-ready", () => show("ready"));
+  el.addEventListener("plot-error", (e) => show(`plot-error (${(e as CustomEvent<{ message: string }>).detail.message})`));
+  for (const b of document.querySelectorAll<HTMLButtonElement>("[data-type]")) {
+    b.addEventListener("click", () => el.setAttribute("type", b.dataset["type"] ?? "line"));
+  }
+}
+
+/** Case 20: fit width and contain. */
+function fit(): void {
+  const w = plot("fit-width");
+  const c = plot("fit-contain");
+  const out = $("#fit-status");
+  for (const el of [w, c]) el.data = waves(100, ["a", "b"], 61);
+  const show = (): void => {
+    out.textContent = [w, c]
+      .map((el) => {
+        const f = el.querySelector<HTMLElement>(".gp-frame")?.getBoundingClientRect();
+        return `${el.id}: fit ${el.getAttribute("fit") ?? "none"}, ${el.cols} × ${el.rows} cells, drawn ${Math.round(f?.width ?? 0)} × ${Math.round(f?.height ?? 0)} px`;
+      })
+      .join("; ");
+  };
+  for (const el of [w, c]) new ResizeObserver(() => requestAnimationFrame(show)).observe(el);
+  for (const b of document.querySelectorAll<HTMLButtonElement>("[data-fit]")) {
+    b.addEventListener("click", () => {
+      const on = b.dataset["fit"] !== "";
+      w.toggleAttribute("fit", on);
+      c.toggleAttribute("fit", on);
+      if (on) {
+        w.setAttribute("fit", "width");
+        c.setAttribute("fit", "contain");
+      }
+      requestAnimationFrame(show);
+    });
+  }
+  for (const b of document.querySelectorAll<HTMLButtonElement>("[data-fit-width]")) {
+    b.addEventListener("click", () => {
+      for (const box of document.querySelectorAll<HTMLElement>(".fit-box")) box.style.width = b.dataset["fitWidth"] ?? "";
+    });
+  }
+}
+
+/** Case 21: two linked charts of different widths. */
+function link(): void {
+  const log = logger($("#link-log"));
+  for (const id of ["link-a", "link-b"]) {
+    const el = plot(id);
+    el.data = daily(300, 67);
+    for (const t of ["plot-view", "plot-hover", "plot-cursor"]) el.addEventListener(t, (e) => log(`${id}: ${short(t, (e as CustomEvent).detail)}`));
+  }
+}
+
+/** Case 22: brush and legend events. */
+function brushLegend(): void {
+  const el = plot("events-chart");
+  el.data = daily(200, 71, "inside", "outside");
+  const log = logger($("#events-log"));
+  for (const t of ["plot-brush", "plot-legend"]) el.addEventListener(t, (e) => log(short(t, (e as CustomEvent).detail)));
+}
+
+/** Case 23: the timeZone attribute and the table the core was given. */
+function timeZone(): void {
+  const el = plot("zone-chart");
+  const out = $("#zone-status");
+  const t: Date[] = [];
+  const y: number[] = [];
+  for (let i = 0; i < 72; i++) {
+    t.push(new Date(Date.UTC(2026, 2, 7) + i * 3_600_000));
+    y.push(Math.round(Math.sin(i / 6) * 100) / 10);
+  }
+  el.data = { t, y };
+  const show = (): void => {
+    const z = el.chart?.zone;
+    if (!z) return;
+    const changes = z.transitions.map((x) => `${new Date(x.at).toISOString().slice(0, 16)}Z ${x.offset >= 0 ? "+" : "−"}${Math.abs(x.offset)} min`).join(", ");
+    out.textContent = `page zone ${gp.pageZone()}; table "${z.name}": ${changes}; covering ${new Date(z.covering[0]).toISOString().slice(0, 10)} to ${new Date(z.covering[1]).toISOString().slice(0, 10)}`;
+  };
+  el.addEventListener("plot-ready", show);
+  el.addEventListener("plot-view", () => requestAnimationFrame(show));
+  $<HTMLSelectElement>("#zone-pick").addEventListener("change", (e) => {
+    const v = (e.target as HTMLSelectElement).value;
+    if (v) el.setAttribute("timeZone", v);
+    else el.removeAttribute("timeZone");
+    requestAnimationFrame(show);
+  });
+}
+
+/** Case 24: a heatmap-like frame of back colours through both renderers. */
+async function backs(): Promise<void> {
+  const c = gp.chart("line");
+  await c.ready;
+  const palette = c.palette(pageTheme());
+  c.free();
+  const cols = 48;
+  const rows = 12;
+  const n = cols * rows;
+  const dpr = devicePixelRatio || 1;
+  const cw = Math.round(0.6 * 13 * dpr);
+  const grid = { cols, rows, cells: new Uint32Array(n).fill(32), colors: new Uint8Array(n), backs: new Uint8Array(n) };
+  let shift = 0;
+  const fill = (): void => {
+    for (let r = 0; r < rows; r++) {
+      for (let k = 0; k < cols; k++) {
+        const i = r * cols + k;
+        grid.backs[i] = 32 + Math.round(63.5 + 63.5 * Math.sin((k + shift) / 6) * Math.cos(r / 3));
+        grid.cells[i] = i % 4 === 0 ? 0x2580 : 32;
+      }
+    }
+  };
+  fill();
+  const renderers: [ReturnType<typeof gp.makeRenderer>, HTMLOutputElement | null][] = [];
+  for (const canvas of document.querySelectorAll<HTMLCanvasElement>("[data-backs]")) {
+    const name = canvas.dataset["backs"] === "atlas" ? "atlas" : "text";
+    const r = gp.makeRenderer(name, canvas);
+    r.setPalette(palette, false);
+    r.resize(cols, rows, cw);
+    Object.assign(canvas.style, { width: `${(cols * cw) / dpr}px`, height: `${(rows * cw * 2) / dpr}px` });
+    renderers.push([r, document.querySelector<HTMLOutputElement>(`[data-backs-stats="${name}"]`)]);
+  }
+  const draw = (): void => {
+    for (const [r, out] of renderers) {
+      const s = r.draw(grid);
+      if (out) out.textContent = `last draw: ${s.cells} cells, ${s.backImage ? "the backs as one image" : "cell by cell"}`;
+    }
+  };
+  draw();
+  $("#backs-shift").addEventListener("click", () => {
+    shift += 7;
+    fill();
+    draw();
+  });
+  $("#backs-one").addEventListener("click", () => {
+    grid.backs[cols + 1] = grid.backs[cols + 1] === 159 ? 32 : 159;
+    draw();
+  });
+}
+
 // ------------------------------------------------------------ start
 
 showEnv();
@@ -480,6 +643,13 @@ resize();
 script();
 interaction();
 lazy();
+alias();
+typeChange();
+fit();
+link();
+brushLegend();
+timeZone();
+void backs().catch((e: unknown) => console.error(`test.html: back colours case: ${String(e)}`));
 void mounts().catch((e: unknown) => console.error(`test.html: mount cases: ${String(e)}`));
 void panic().catch((e: unknown) => console.error(`test.html: panic case: ${String(e)}`));
 window.gpReady = true;

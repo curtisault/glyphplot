@@ -2,15 +2,16 @@
 
 The font is a subset of Iosevka Fixed Extended 34.9.0, Regular (SIL OFL 1.1),
 renamed to the family "glyphplot mono": the base ranges as Iosevka has them,
-plus tier A of the plan's font section. The script
+plus tiers A and B of the plan's font section. The script
 
 1. downloads Iosevka's release zip and its licence once into target/font/ and
    checks each against a SHA-256 pinned below;
 2. extracts the Fixed Extended Regular face, subsets it, draws its composite
    glyphs whole and renames it;
 3. checks the woff2 it wrote, and fails on any glyph not 600 units wide, any
-   tier A code point missing other than the eight Iosevka lacks, a kept name
-   record still naming Iosevka, or more than 32,768 bytes;
+   tier A code point missing other than the eight Iosevka lacks, any tier B
+   code point missing, a kept name record still naming Iosevka, or more than
+   32,768 bytes;
 4. writes web/fonts/glyphplot-mono.woff2, web/fonts/unicode-range.txt (the
    CSS unicode-range, from the font's own cmap) and web/fonts/OFL.txt.
 
@@ -120,6 +121,13 @@ TIER_A = [
 # Spesmilo, Nordic mark).
 TIER_A_ABSENT = {0x2072, 0x2073, 0x20A0, 0x20A2, 0x20B0, 0x20B6, 0x20B7, 0x20BB}
 
+# Tier B, inclusive: Western European letters, Latin-1's letters and Latin
+# Extended-A (REQ-FONT-020). Iosevka 34.9.0 has every one, read from its cmap.
+TIER_B = [
+    (0x00C0, 0x00FF),
+    (0x0100, 0x017F),
+]
+
 # The name records kept, and what the renamed ones say. 0 (copyright), 2, 5, 8,
 # 9, 13 and 14 (designer, licence) keep Iosevka's text; 10 (Iosevka's
 # description), 16, 17, 21, 22 (typographic and WWS names, the same as 1 and 2
@@ -203,7 +211,7 @@ def decompose(font):
 def build(ttf):
     """The woff2 bytes of the subset of `ttf`, the source face's bytes."""
     opts = options()
-    unicodes = code_points(BASE) | code_points(TIER_A)
+    unicodes = code_points(BASE) | code_points(TIER_A) | code_points(TIER_B)
     font = TTFont(io.BytesIO(ttf), recalcTimestamp=False, recalcBBoxes=True)
     for _ in range(2):
         # The second pass drops the parts the first pass's composites used.
@@ -239,10 +247,13 @@ def check(woff2, source_cmap):
     gaps = sorted((code_points(TIER_A) - TIER_A_ABSENT) - cmap.keys())
     if gaps:
         fail(f"the font lacks tier A code points: {' '.join(u(cp) for cp in gaps)}")
+    gaps = sorted(code_points(TIER_B) - cmap.keys())
+    if gaps:
+        fail(f"the font lacks tier B code points: {' '.join(u(cp) for cp in gaps)}")
     gaps = sorted(code_points(BASE_REQUIRED) - cmap.keys())
     if gaps:
         fail(f"the font lacks base code points: {' '.join(u(cp) for cp in gaps)}")
-    wanted = (code_points(BASE) | code_points(TIER_A)) & source_cmap.keys()
+    wanted = (code_points(BASE) | code_points(TIER_A) | code_points(TIER_B)) & source_cmap.keys()
     if set(cmap) != wanted:
         extra = sorted(set(cmap) - wanted)
         lost = sorted(wanted - set(cmap))
