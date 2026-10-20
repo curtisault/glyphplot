@@ -529,9 +529,19 @@ sends no other key:
 `modules.d.ts`, `budgets.json` and `sizes.json`
 ([manifest.schema.json](../spec/schemas/manifest.schema.json)): `charts`
 (every type's meta), `modules` (type → module: `line` and `sparkline` →
-`line`), `imports`, `fallback` (`null` in release, `"all"` in the debug
-build) and `budgets` (REQ-MANIFEST-010). `wasm.ts` imports a module once a
-page and shares it (REQ-LOAD-010), as unicel's does.
+`line`), `imports` (module → a function importing its glue,
+`./<module>/glyphplot.js`), `wasm` (module → a function returning
+`new URL("./<module>/glyphplot_bg.wasm", import.meta.url)`, a literal a
+bundler rewrites and emits once, as it does the glue's own), `fallback`
+(`null` in release, `"all"` in the debug build) and `budgets`
+(REQ-MANIFEST-010). `wasm.ts` imports modules.js statically, so a bundler
+puts it in the shell's chunk and the page makes no request for it, and
+imports a module once a page and shares it (REQ-LOAD-010), as unicel's does.
+To load a module it starts the wasm's fetch and the glue's import together
+and hands wasm-bindgen's init the pending `Response`, so a page's first
+frame waits on three requests in turn (the page, the shell, then the glue and
+the wasm together) rather than five, with no preload hints (REQ-PERF-080); in
+Node it reads the file instead.
 
 <a id="element-attributes"></a>
 ### The element

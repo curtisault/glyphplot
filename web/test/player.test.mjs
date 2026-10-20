@@ -5,8 +5,9 @@
 // free (REQ-WASM-050).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { BUILD, DEBUG, PKG, debugOnly, releaseOnly, manifest, types, moduleFor, instantiate, moduleOfType, shell, views, textOf, series, commitColumns } from "./support/wasm.mjs";
 
 /** The plan's boundary table, v0.3.0 members, plus set_zone (v0.5.0, exported early). */
@@ -37,6 +38,11 @@ test(`${BUILD}: the manifest maps every type to the module that plays exactly it
   assert.deepEqual(Object.keys(manifest.budgets).sort(), Object.keys(manifest.imports).sort());
   assert.deepEqual(JSON.parse(readFileSync(join(PKG, "budgets.json"), "utf8")), manifest.budgets, "budgets.json equals the manifest's budgets");
   assert.deepEqual(Object.keys(JSON.parse(readFileSync(join(PKG, "sizes.json"), "utf8"))).sort(), Object.keys(manifest.imports).sort());
+  assert.deepEqual(Object.keys(manifest.wasm).sort(), Object.keys(manifest.imports).sort(), "wasm gives a URL for every module");
+  for (const [name, url] of Object.entries(manifest.wasm)) {
+    assert.equal(url().href, pathToFileURL(join(PKG, name, "glyphplot_bg.wasm")).href, `${name}: wasm names the module's own file`);
+    assert.ok(existsSync(url()), `${name}: its wasm exists`);
+  }
   if (DEBUG) {
     assert.equal(manifest.fallback, "all");
     for (const t of types) assert.equal(manifest.modules[t], "all", t);

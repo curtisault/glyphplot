@@ -9,7 +9,10 @@
 //!
 //! `charts` is every type's meta in registry order and `modules` maps each
 //! type to its family's module, which plays exactly the types the manifest
-//! gives it; `fallback` is `null`. The debug build maps every type to `all`
+//! gives it; `imports` imports each module's glue and `wasm` gives the URL of
+//! its `glyphplot_bg.wasm` as a literal `new URL(…, import.meta.url)`, so the
+//! shell fetches it alongside the glue and a bundler emits it once, the file
+//! the glue names too; `fallback` is `null`. The debug build maps every type to `all`
 //! and falls back to it (REQ-MANIFEST-020).
 
 use std::path::Path;
@@ -63,13 +66,16 @@ fn modules_json(debug: bool) -> String {
 fn modules_js(debug: bool) -> String {
     let names: Vec<&str> = if debug { vec![ALL] } else { FAMILIES.iter().map(|f| f.name).collect() };
     let imports: Vec<String> = names.iter().map(|n| format!("  \"{n}\": () => import(\"./{n}/glyphplot.js\"),\n")).collect();
+    // A literal `new URL`, the one form bundlers rewrite and emit (Vite, webpack 5, Parcel).
+    let wasm: Vec<String> = names.iter().map(|n| format!("  \"{n}\": () => new URL(\"./{n}/glyphplot_bg.wasm\", import.meta.url),\n")).collect();
     let fallback = if debug { format!("\"{ALL}\"") } else { "null".into() };
     format!(
-        "{HEAD}export const charts = {};\nexport const modules = {};\nexport const fallback = {fallback};\nexport const budgets = {};\nexport const imports = {{\n{}}};\n",
+        "{HEAD}export const charts = {};\nexport const modules = {};\nexport const fallback = {fallback};\nexport const budgets = {};\nexport const imports = {{\n{}}};\nexport const wasm = {{\n{}}};\n",
         charts_json(),
         modules_json(debug),
         budgets_json(debug).trim_end(),
-        imports.concat()
+        imports.concat(),
+        wasm.concat()
     )
 }
 
@@ -84,7 +90,8 @@ fn modules_d_ts() -> String {
          export declare const modules: Readonly<Record<string, string>>;\n\
          export declare const fallback: string | null;\n\
          export declare const budgets: Readonly<Record<string, Budget>>;\n\
-         export declare const imports: Readonly<Record<string, () => Promise<unknown>>>;\n"
+         export declare const imports: Readonly<Record<string, () => Promise<unknown>>>;\n\
+         export declare const wasm: Readonly<Record<string, () => URL>>;\n"
     )
 }
 

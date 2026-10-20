@@ -72,6 +72,8 @@ test(`${BUILD}: the manifest, budgets.json and sizes.json validate (REQ-MANIFEST
   check(await schema("sizes"), read(join(PKG, "sizes.json")), "sizes.json");
   assert.equal(typeof manifest.imports, "object");
   for (const [name, f] of Object.entries(manifest.imports)) assert.equal(typeof f, "function", name);
+  assert.equal(typeof manifest.wasm, "object");
+  for (const [name, f] of Object.entries(manifest.wasm)) assert.ok(f() instanceof URL, name);
 });
 
 test(`${BUILD}: each module's charts_json, meta_json, default options, view_json and table_json validate (REQ-CHART-020, REQ-VIEW-010, REQ-A11Y-020)`, async () => {

@@ -31,6 +31,13 @@ export interface Manifest {
   readonly modules: Readonly<Record<string, string>>;
   /** Module name → a function importing `./<module>/glyphplot.js`. */
   readonly imports: Readonly<Record<string, () => Promise<unknown>>>;
+  /**
+   * Module name → a function returning the URL of `./<module>/glyphplot_bg.wasm`,
+   * written as `new URL("<literal>", import.meta.url)` so a bundler emits the
+   * file and rewrites it. A browser fetches it alongside the glue; a manifest
+   * without it (the Node tests' `setManifest`) lets the glue fetch its own.
+   */
+  readonly wasm?: Readonly<Record<string, () => URL>>;
   /** The module for a type `modules` does not list: `all` in the debug build, null in release. */
   readonly fallback: string | null;
   /** Each module's budgets. */

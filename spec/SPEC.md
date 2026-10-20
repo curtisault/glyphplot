@@ -524,10 +524,10 @@ refuses further calls on that chart.
 
 ### 9.3 Manifest and loading
 
-`web/pkg/modules.js` carries charts, modules, imports, fallback and budgets;
-the debug build maps every type to `all`.
+`web/pkg/modules.js` carries charts, modules, imports, wasm, fallback and
+budgets; the debug build maps every type to `all`.
 
-- REQ-MANIFEST-010: `web/pkg/modules.js` MUST export `charts` (every chart's meta, in registry order), `modules` (type → module), `imports` (module → a function importing `./<module>/glyphplot.js`), `fallback` and `budgets` (module → `{gzip, frameMs, worstMs, inputMs}`), of the shape of [manifest.schema.json](schemas/manifest.schema.json); the same budgets MUST be in `web/pkg/budgets.json` and the gzipped sizes in `web/pkg/sizes.json` ([sizes.schema.json](schemas/sizes.schema.json)). Note: (v0.3.0)
+- REQ-MANIFEST-010: `web/pkg/modules.js` MUST export `charts` (every chart's meta, in registry order), `modules` (type → module), `imports` (module → a function importing `./<module>/glyphplot.js`), `wasm` (module → a function returning `new URL("./<module>/glyphplot_bg.wasm", import.meta.url)`, written as that literal so a bundler emits the file and rewrites the URL), `fallback` and `budgets` (module → `{gzip, frameMs, worstMs, inputMs}`), of the shape of [manifest.schema.json](schemas/manifest.schema.json); the same budgets MUST be in `web/pkg/budgets.json` and the gzipped sizes in `web/pkg/sizes.json` ([sizes.schema.json](schemas/sizes.schema.json)). Note: (v0.3.0)
 - REQ-MANIFEST-020: In the release build every type MUST map to the module of its family, which plays exactly the types the manifest gives it, and `fallback` MUST be `null`; the debug build MUST map every type to `all`. Note: (v0.3.0)
 - REQ-LOAD-010: `chart(type, init)` MUST return its `Chart` at once (so calls can queue, REQ-LOAD-030), load the type's module at most once a page, share it with every later caller, reject its `ready` with `there is no chart named "<type>"` for a type no module plays, and try a failed load again on the next call. Note: (v0.3.0)
 - REQ-LOAD-020: The element MUST load nothing until it first comes within one screen height of the viewport (IntersectionObserver, `rootMargin: "100% 0px"`), unless `loading="eager"` or there is no IntersectionObserver. Note: (v0.3.0)
