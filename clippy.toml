@@ -1,0 +1,9 @@
+# Methods `mise run lint` refuses (clippy's `disallowed-methods`).
+disallowed-methods = [
+  # Panics when a bound is NaN or the bounds cross, which data can make
+  # happen; write the comparison out (REQ-LINT-040).
+  { path = "f64::clamp", reason = "panics on NaN or crossed bounds; compare explicitly (REQ-LINT-040)" },
+  { path = "f32::clamp", reason = "panics on NaN or crossed bounds; compare explicitly (REQ-LINT-040)" },
+  # The core reads no clock: time comes in as `t` and as data (REQ-TZ-010).
+  { path = "std::time::SystemTime::now", reason = "the core reads no clock (REQ-TZ-010)" },
+]

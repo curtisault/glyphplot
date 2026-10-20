@@ -25,9 +25,10 @@ TypeScript shell, and in the terminal by a CLI. Every chart draws data the page
 or the terminal gives it. It is the sibling of unicel (`../animate-unicode`)
 and follows its architecture (ADR-003), sharing no code with it (ADR-013).
 
-**Status: v0.1.0, the toolchain.** The crates, an empty `line` family and the
-mise tasks are built; no chart is drawn yet. The next session builds Phase 1,
-the core.
+**Status: v0.2.0, the core.** The toolchain, the grid and canvases, palette
+and themes, data and fixtures, scales, ticks and formats checked against d3,
+layout and text, and the font are built; no chart is drawn yet. The next
+session builds Phase 2, the line chart end to end.
 
 | Path | What |
 |---|---|
@@ -57,6 +58,8 @@ mise is the only entry point (`mise tasks` lists them all).
 - `mise run signoff [rev]`: the CI, run locally: `check` on a committed tree.
 - `mise run lint`, `mise run fmt`, `mise run test`, `mise run build:wasm`,
   `mise run size` (`WASM_GZ_LIMIT=<bytes>` overrides every budget).
+- `mise run fixtures` (the d3 captures), `mise run build:font` (the font;
+  `-- --check` compares).
 - `mise run bench` and `mise run snap` arrive with the phases that need them.
 
 ## Conventions

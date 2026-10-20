@@ -17,10 +17,10 @@ glyphplot candles --from feed.csv
 tail -f metrics.csv | glyphplot line
 ```
 
-**Status: v0.1.0, the toolchain.** The workspace builds, lints, tests and
-measures an empty chart family; no chart is drawn yet. Neither the element
-nor the CLI above works yet, and nothing is published. The next phase builds
-the core.
+**Status: v0.2.0, the core.** The grid, canvases, palette, data, scales,
+ticks, formats, layout and font are built and tested; no chart is drawn yet.
+Neither the element nor the CLI above works yet, and nothing is published.
+The next phase builds the line chart end to end.
 
 glyphplot is the sibling of [unicel](../animate-unicode) (animated Unicode
 art) and follows its architecture, but it is a separate, independent

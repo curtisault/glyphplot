@@ -12,3 +12,12 @@ repository.workspace = true
 default = ["all"]
 all = ["line"]
 line = []
+
+# The core's only normal dependencies (REQ-ARCH-010).
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+unicode-width = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }

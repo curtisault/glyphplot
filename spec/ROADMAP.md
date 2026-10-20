@@ -6,7 +6,7 @@ This document holds every requirement of glyphplot not yet built, grouped by
 area, each naming the milestone that ships it. When a milestone lands, its
 requirements move into [SPEC.md](SPEC.md) with their IDs unchanged, a line
 in their old section says where they went, and the milestone's row in §20
-says when it was built. v0.1.0 has shipped. IDs go up in tens within an area so a requirement
+says when it was built. v0.1.0 and v0.2.0 have shipped. IDs go up in tens within an area so a requirement
 can be added between two others (`REQ-DATA-045`); an ID is never reused,
 even after its requirement is removed.
 
@@ -68,7 +68,7 @@ REQ-VENDOR-010 and REQ-VENDOR-020 were withdrawn on 2026-10-18 by ADR-013, befor
 
 - Shipped in v0.1.0 and moved to [SPEC.md](SPEC.md) §16.1: REQ-BUILD-010, REQ-BUILD-020, REQ-BUILD-030, REQ-BUILD-050, REQ-BUILD-060.
 - REQ-BUILD-040: `mise run build:wasm:debug` MUST build one module, `all`, with every family and the `debug` feature, in its own cargo target dir, staged beside `web/pkg` and swapped in whole, so a failed build leaves the last good `web/pkg`. (v0.3.0)
-- REQ-BUILD-070: `mise run test:rust` MUST run `cargo test --workspace --profile contract`, a profile inheriting `release` with LTO off, 16 codegen units and `opt-level = 3`. [ADR-127](adr/127-test-profile-without-lto.md) (v0.2.0)
+- Shipped in v0.2.0 and moved to [SPEC.md](SPEC.md) §16.1: REQ-BUILD-070.
 - REQ-BUILD-080: `mise run dev` MUST serve the debug build with the checklist page and rebuild the debug wasm when a file under `crates/` changes, reloading the page. (v0.3.0)
 - REQ-BUILD-090: `mise run check` SHOULD finish in under five minutes from a warm cache on the reference machine. (v0.4.0)
 
@@ -76,7 +76,7 @@ REQ-VENDOR-010 and REQ-VENDOR-020 were withdrawn on 2026-10-18 by ADR-013, befor
 
 - Shipped in v0.1.0 and moved to [SPEC.md](SPEC.md) §16.2: REQ-LINT-010, REQ-LINT-030.
 - REQ-LINT-020: From the milestone each lands in, `mise run lint` MUST also run `tsc --noEmit` for `web` (v0.3.0) and `site` (v0.7.0) and `elm-format --validate` on `site/src` and `site/tests` (v0.7.0). (v0.3.0)
-- REQ-LINT-040: `clippy.toml` MUST list `f64::clamp` and `f32::clamp` under `disallowed-methods`, so a call fails `mise run lint`. (v0.2.0)
+- Shipped in v0.2.0 and moved to [SPEC.md](SPEC.md) §16.2: REQ-LINT-040.
 
 ### 1.5 Local CI (CI)
 
@@ -89,19 +89,11 @@ REQ-VENDOR-010 and REQ-VENDOR-020 were withdrawn on 2026-10-18 by ADR-013, befor
 
 ### 2.1 Grid (GRID)
 
-- REQ-GRID-010: A `Grid` MUST hold `cols × rows` cells row-major, each a `u32` code point, a `u8` ink index and a `u8` back index, with the constants `BLANK = 0x20` (a space), `WIDE_TAIL = 0` (the right half of a double-width glyph, never a real code point) and `NO_BACK = 255` (no colour behind a cell). [ADR-004](adr/004-unicels-frame-buffer.md) (v0.2.0)
-- REQ-GRID-020: `Grid::resize(cols, rows)` MUST give a grid of the new size with every cell `BLANK`, colour 0 and `NO_BACK`, reusing its allocation when it is large enough, and MUST panic on a zero width or height. (v0.2.0)
-- REQ-GRID-030: A new grid MUST start every cell `BLANK` in colour 0 with `NO_BACK` and MUST panic on a zero width or height; `clear` MUST reset every cell so, and `fill` MUST set every cell's glyph and ink and leave backs as they are. (v0.2.0)
-- REQ-GRID-040: Every drawing method (put a glyph, write text, fill a rectangle, draw a Bresenham line including both ends, set a back colour) MUST clip: off-grid coordinates are ignored, so marks may overhang the edges. (v0.2.0)
-- REQ-GRID-050: Writing a double-width glyph MUST put it at `x` and `WIDE_TAIL` at `x + 1`, both in the given colour, and only when both cells are on the grid; a debug build MUST assert the glyph is two columns wide. (v0.2.0)
-- REQ-GRID-060: `text()` MUST return `rows` lines joined by `\n`, leaving out `WIDE_TAIL` cells and writing any invalid code point as U+FFFD. (v0.2.0)
-- REQ-GRID-070: The grid MUST expose its code points, inks and backs as row-major slices for the boundary and for hot loops, and its indexed getters MUST panic off the grid. (v0.2.0)
+- Shipped in v0.2.0 and moved to [SPEC.md](SPEC.md) §3.1: REQ-GRID-010, REQ-GRID-020, REQ-GRID-030, REQ-GRID-040, REQ-GRID-050, REQ-GRID-060, REQ-GRID-070.
 
 ### 2.2 Sub-cell canvases and cell mapping (CANVAS)
 
-- REQ-CANVAS-010: The core MUST provide sub-cell canvases at 2 × 4 dots a cell (braille, octants), 2 × 3 (sextants) and 2 × 2 (quadrants), with dots set, cleared and read, Bresenham lines and midpoint circles in dot coordinates, all clipping; drawing a canvas onto the grid MUST set only cells that have dots, so canvases layer over text and each other. (v0.2.0)
-- REQ-CANVAS-020: The core MUST have one module of cell mappings (data value to column and dot, column and dot to data value) that frames, hit tests, readouts, reducers and the contract all call; a property test MUST show that the x at a column's left edge maps back into that column for 1 to 2,000 points over 40 to 640 columns. (v0.2.0)
-- REQ-CANVAS-030: Glyphs MUST follow the Unicode Standard: braille by its dot numbering (left column dots 1, 2, 3, 7, right 4, 5, 6, 8; bits 0x01, 0x02, 0x04, 0x40 and 0x08, 0x10, 0x20, 0x80 over U+2800); sextants by the BLOCK SEXTANT names of U+1FB00–1FB3B with the four masks they omit drawn as space, `▌`, `▐` and `█`; quadrants by U+2596–259F and `▀ ▄ ▌ ▐ █`; octants by a 256-entry table that `scripts/octants.py` generates from Unicode 16's `UnicodeData.txt` by character name. A cell with no dots MUST be a space. Unit tests MUST pin code points against their Unicode names. (v0.2.0)
+- Shipped in v0.2.0 and moved to [SPEC.md](SPEC.md) §3.2: REQ-CANVAS-010, REQ-CANVAS-020, REQ-CANVAS-030.
 - REQ-CANVAS-040: A colour canvas cell MUST take the colour of the series highest in z-order among its lit dots (REQ-CHART-060). (v0.3.0)
 
 ### 2.3 Charsets (CHAR)
@@ -111,10 +103,7 @@ REQ-VENDOR-010 and REQ-VENDOR-020 were withdrawn on 2026-10-18 by ADR-013, befor
 
 ### 2.4 Colour (COLOR)
 
-- REQ-COLOR-010: A cell's ink and back MUST be indices 0–254 into the chart's palette, or `NO_BACK` (255) for the back. [ADR-102](adr/102-semantic-palette-of-255.md) (v0.2.0)
-- REQ-COLOR-020: The palette MUST have a fixed layout: indices 0–31 are theme tokens in the order of the plan's [palette](../docs/IMPLEMENTATION_PLAN.md#palette) table (ink, muted, rule, accent, ground, up, down, selection, series 1–8, the rest reserved), 32–159 a 128-step scale ramp, and 160–254 reserved; a frame MUST write indices only, never colours. (v0.2.0)
-- REQ-COLOR-030: The core MUST resolve a theme object to the 255 RGBA entries in one function, `theme::resolve`, which the shell, the CLI and the exports all call; a change of theme MUST NOT draw a new frame (a test counts `frame` calls: zero). (v0.2.0)
-- REQ-COLOR-040: The scale ramp MUST interpolate the theme's scale stops in Oklab over 128 steps, and no two neighbouring steps of a default scale MUST differ by more than ΔE76 2.5. (v0.2.0)
+- Shipped in v0.2.0 and moved to [SPEC.md](SPEC.md) §3.4: REQ-COLOR-010, REQ-COLOR-020, REQ-COLOR-030, REQ-COLOR-040.
 - REQ-COLOR-050: The CLI MUST map the resolved palette to xterm-256 or 16 colours once per palette for `--color 256` and `--color 16`, never per cell. (v0.8.0)
 
 ---
@@ -123,19 +112,12 @@ REQ-VENDOR-010 and REQ-VENDOR-020 were withdrawn on 2026-10-18 by ADR-013, befor
 
 ### 3.1 The data contract (DATA)
 
-- REQ-DATA-010: Every chart MUST accept data in the shape of [data.schema.json](schemas/data.schema.json): named tables of columns typed `f64`, `f32`, `i64`, `u32`, `bool`, `timestamp`, `duration`, `category` or `string`, and named matrices; the schema MUST validate the examples in `spec/schemas/examples/`. (v0.2.0)
-- REQ-DATA-020: A chart MUST hold numeric, timestamp and duration columns as `f64`; timestamps as epoch milliseconds; and a column whose `time_unit` is `us` or `ns` as offsets from an `i64` origin, so `ns` values spanning under 2^53 ns round-trip exactly (tested with 1792281600000000001 to 1792281600000000004). [ADR-104](adr/104-typed-columns-cross-the-boundary.md) (v0.2.0)
-- REQ-DATA-030: JSON `null`, an empty CSV field, NaN and a cleared Arrow validity bit MUST all read as missing: NaN for numbers and times, `u32::MAX` for categories. A missing y MUST break a line or area into separate runs, and a row with a missing x MUST NOT be drawn. (v0.2.0)
-- REQ-DATA-040: A chart MUST check on load that its x column is non-decreasing; when it is not, it MUST draw a stably sorted copy and warn once, and its frame MUST equal the frame of the sorted data. (v0.2.0)
+- Shipped in v0.2.0 and moved to [SPEC.md](SPEC.md) §4.1: REQ-DATA-010, REQ-DATA-020, REQ-DATA-030, REQ-DATA-040, REQ-DATA-080, REQ-DATA-090, REQ-DATA-110, REQ-DATA-130.
 - REQ-DATA-050: The wasm boundary MUST take column values only as typed arrays (a `Vec<f64>` argument, or a buffer the chart reserved and the shell filled) plus a descriptor without `values`; no chart module MUST contain a CSV or JSON data parser, which `mise run size --charts` checks by symbol. (v0.3.0)
 - REQ-DATA-060: The shell MUST read `memory.buffer` only after the call that returns a buffer's address; a Node test MUST fill a reserved 1,000,000-row column across a memory growth and check its sum. (v0.3.0)
 - REQ-DATA-070: Replacing a chart's data with two 1,000,000-row `Float64Array` columns MUST take at most 10 ms (median of 5) in Node on the reference machine and grow wasm memory by at most 1.1 times the columns' bytes. (v0.3.0)
-- REQ-DATA-080: A chart MUST find each channel (x, y, open, …) by the option `encode`, then by a column's `role`, then by a column of the channel's name; when none matches it MUST draw its empty-data frame and warn once naming the channel. (v0.2.0)
-- REQ-DATA-090: Timestamp values MUST be UTC instants; a column's `zone` MUST decide only tick placement and labels, and no frame MUST depend on the host's time zone (equal frames under `TZ=UTC` and `TZ=Asia/Tokyo`). (v0.2.0)
 - REQ-DATA-100: `unit`, `scale` and `offset` MUST apply to ticks, readouts and the data table and MUST NOT change stored values: a readout of stored 18240 with `scale: 0.01` shows `182.40`. (v0.5.0)
-- REQ-DATA-110: Data of a shape the chart does not accept MUST give an error naming the shape it expected, never a panic. (v0.2.0)
 - REQ-DATA-120: The element MUST accept, as the `data` property or attribute, the data object, the columns shorthand (`{"t": […], "close": […]}`) and the rows shorthand (`[{…}, …]`); the shell MUST parse JSON with `JSON.parse` and infer shorthand types as the schema says. [ADR-104](adr/104-typed-columns-cross-the-boundary.md) (v0.3.0)
-- REQ-DATA-130: Data changes MUST take effect at once; a frame MUST be a function of the data as it is, never of an easing between versions. [ADR-106](adr/106-data-applies-at-once.md) (v0.2.0)
 - REQ-DATA-140: The core MUST read an Arrow IPC stream (uncompressed; Float64, Float32, Int32, Int64, UInt32, Timestamp, Bool, Utf8 and Dictionary<Int32, Utf8> columns with validity bitmaps) with its own reader, adding at most 8 KB gzipped to a chart module; the element's `data` property and the CLI MUST accept it. [ADR-105](adr/105-hand-written-arrow-reader.md) (v0.6.0)
 - REQ-DATA-150: The element MUST take `src`, a URL of CSV, JSON, NDJSON or Arrow, fetched once per change and parsed in the shell (type from `Content-Type` or the extension), and given as `data`. (v0.6.0)
 - REQ-DATA-160: Graph data MUST be `nodes` and `edges` tables whose `source` and `target` are `u32` indices into `nodes` or strings equal to `nodes.id`, and matrices MUST be row-major `rows × cols`; an edge naming no node MUST be dropped with one warning. (v0.9.0)
@@ -166,9 +148,7 @@ REQ-VENDOR-010 and REQ-VENDOR-020 were withdrawn on 2026-10-18 by ADR-013, befor
 
 ### 4.1 Scales (SCALE)
 
-- REQ-SCALE-010: The core MUST provide linear and time scales that map a domain value to a continuous cell coordinate and back; `invert(map(v))` MUST equal `v` within 1e-9 relative for finite `v` in the domain. [ADR-110](adr/110-scales-and-formats-ported-from-d3.md) (v0.2.0)
-- REQ-SCALE-020: A scale's domain MUST be `"data"`, `"view"`, a fixed `[a, b]` or `{"follow": seconds}`, and MUST be a pure function of the data, the options and the view state. (v0.2.0)
-- REQ-SCALE-030: `nice` MUST give the domain d3-scale 4.0.2's `linear().nice(count)` gives for every case of the captured fixture file, including leaving unchanged a domain that does not settle in ten rounds. (v0.2.0)
+- Shipped in v0.2.0 and moved to [SPEC.md](SPEC.md) §5.1: REQ-SCALE-010, REQ-SCALE-020, REQ-SCALE-030.
 - REQ-SCALE-040: The core MUST provide log scales (any base above 1) and band scales; a band scale MUST give every category the same whole number of cells. (v0.5.0)
 - REQ-SCALE-050: The core SHOULD provide a symlog scale whose ticks are 0 and ± powers of ten within the domain. (v0.5.0)
 - REQ-SCALE-060: The core MUST provide an index time scale on which bars sit at consecutive indices whatever the time between them, labelled from each bar's timestamp; a fixture with weekend gaps MUST draw no empty columns. [ADR-131](adr/131-index-time-scale-for-session-gaps.md) (v0.5.0)
@@ -177,19 +157,14 @@ REQ-VENDOR-010 and REQ-VENDOR-020 were withdrawn on 2026-10-18 by ADR-013, befor
 
 ### 4.2 Ticks (TICK)
 
-- REQ-TICK-010: Linear ticks MUST equal d3-array 3.2.4's `ticks(a, b, count)` exactly for every case of the captured fixture file, natively and in wasm. (v0.2.0)
-- REQ-TICK-020: UTC time ticks MUST equal d3-time 3.1.0's `utcTicks(a, b, count)` exactly for every case of the captured fixture file. (v0.2.0)
-- REQ-TICK-030: For any axis from 4 to 400 cells and any finite domain, placed ticks MUST lie in the domain, increase strictly in value and never decrease in cell, and their labels MUST lie within the axis and be separated by at least the label gap (default two cells on x, one row on y). [ADR-111](adr/111-ticks-fit-by-lowering-the-count.md) (v0.2.0)
-- REQ-TICK-040: A tick mark MUST be drawn in the cell nearest its continuous position, and a gridline at the braille dot nearest it. (v0.2.0)
+- Shipped in v0.2.0 and moved to [SPEC.md](SPEC.md) §5.2: REQ-TICK-010, REQ-TICK-020, REQ-TICK-030, REQ-TICK-040.
 - REQ-TICK-050: A y axis with `snap: "rows"` MUST place every tick on a row exactly with a nice step per row; it MUST be the default for bar and candlestick y axes under 20 rows. (v0.5.0)
 - REQ-TICK-060: Log axes MUST label only powers of the base and MAY mark other integer multiples without labels. (v0.5.0)
 - REQ-TICK-070: A time axis SHOULD draw a context row with the date at each day boundary when its span is under two days and the layout has the row. (v0.5.0)
 
 ### 4.3 Formatting (FMT)
 
-- REQ-FMT-010: Tick labels MUST default to d3-scale's `tickFormat` behaviour (one format for the axis, precision from the step, one SI prefix from the larger end of the domain for `s`) and MUST equal d3's labels for every case of the captured fixture file. (v0.2.0)
-- REQ-FMT-020: The number formatter MUST accept the d3-format subset `[sign][$][,][.precision][~][type]` with types `f`, `s`, `%`, `e`, `d` and `auto`, and MUST reject any other specifier with an error naming the option. (v0.2.0)
-- REQ-FMT-030: Tick labels, readouts, legends and table cells MUST be produced by the core's formatters, never by `core::fmt` on floats; no label MUST read `NaN`, `inf` or `-0`. (v0.2.0)
+- Shipped in v0.2.0 and moved to [SPEC.md](SPEC.md) §5.3: REQ-FMT-010, REQ-FMT-020, REQ-FMT-030.
 - REQ-FMT-040: The core MUST format SI units, IEC bytes (`KiB`, `MiB`), bits a second (`kb/s`, `Mb/s`), durations from nanoseconds to days, prices to a tick size (0.01, 0.25, 1/32) and signed percentages, each covered by a table test. (v0.5.0)
 - REQ-FMT-050: Date labels MUST accept the strftime subset `%Y %m %d %e %H %I %M %S %L %p %a %A %b %B %j %Z`, and MUST default to 24-hour multi-scale labels unless the locale's hour cycle is 12-hour. (v0.5.0)
 - REQ-FMT-060: The minus sign MUST be U+2212 in the browser and `-` in the CLI by default, switchable in the locale pack; a group separator given as U+2009, U+202F or U+00A0 MUST be drawn as one plain space cell. (v0.3.0)
@@ -197,30 +172,26 @@ REQ-VENDOR-010 and REQ-VENDOR-020 were withdrawn on 2026-10-18 by ADR-013, befor
 
 ### 4.4 Time zones and locales (TZ, I18N)
 
-- REQ-TZ-010: Time scales MUST default to UTC, and the core MUST NOT read a clock, a zone or tzdata. [ADR-112](adr/112-zones-and-locales-from-the-shell.md) (v0.2.0)
+- Shipped in v0.2.0 and moved to [SPEC.md](SPEC.md) §5.3: REQ-TZ-010.
 - REQ-TZ-020: The element MUST accept `timeZone` as `UTC`, a fixed offset or an IANA name, and MUST give the core a table of offset transitions covering the data's time extent and the view, computed with `Intl.DateTimeFormat`. (v0.5.0)
 - REQ-TZ-030: Local-time ticks over the table MUST equal d3-scale's `scaleTime().ticks()` run under `TZ=<zone>` for every captured case, across daylight-saving changes. (v0.5.0)
 - REQ-TZ-040: The CLI MUST build the same table from the system's tzdata, and a frame drawn by the CLI and by the element from the same data, options, view and zone MUST be identical. (v0.8.0)
 - REQ-TZ-050: The element MUST default its time zone to the page's (`Intl.DateTimeFormat().resolvedOptions().timeZone`), resolved to an IANA name and passed to the core explicitly; the core, the CLI and the tests MUST default to UTC. [ADR-112](adr/112-zones-and-locales-from-the-shell.md) (v0.5.0)
 - REQ-I18N-010: The element's locale MUST be its `locale` attribute, else the `lang` of its nearest ancestor that has one, else `navigator.language`. (v0.3.0)
 - REQ-I18N-020: The shell MUST build a locale pack (decimal and group separators, grouping sizes, minus sign, percent pattern, the ten digits, month and weekday names, date and time patterns, direction) from `Intl` with the Gregorian calendar forced, once per locale, and pass it to wasm; no wasm module MUST link a locale database. (v0.3.0)
-- REQ-I18N-030: Without a pack, formatting MUST use `.` as the decimal, `,` as the group, groups of three, ASCII digits and `-`. (v0.2.0)
-- REQ-I18N-040: Label layout MUST count cells by `unicode-width` 0.2 a code point in release builds and draw width-2 glyphs with `set_wide`. (v0.2.0)
+- Shipped in v0.2.0 and moved to [SPEC.md](SPEC.md) §5.3: REQ-I18N-030, REQ-I18N-040.
 - REQ-I18N-050: The shell MUST NFC-normalise label text before it crosses into wasm; zero-width code points MUST take no cell; a grapheme cluster of several scalars MUST be drawn as its first scalar; the accessible name, summary and table MUST keep the original text. (v0.3.0)
 - REQ-I18N-060: Labels with right-to-left runs MUST be reordered by UAX #9 before layout, and an RTL locale MUST put the y axis and the legend on the right. (v0.9.0)
 - REQ-I18N-070: The CLI MUST accept a locale pack as a JSON file (`--locale-file`). (v0.8.0)
 
 ### 4.5 Layout and text (LAYOUT, TEXT, AXIS, ANNOT)
 
-- REQ-LAYOUT-010: Layout MUST be computed in whole cells in the order title, legend, x axis, panes, y gutters, x ticks, annotations, and MUST be a pure function of cols, rows, options, the data's extent and the view. (v0.2.0)
-- REQ-LAYOUT-020: When cols < 16 or rows < 5 a chart MUST draw no axis, title or legend; it MUST draw no title below 10 rows and no x labels below 6 rows. (v0.2.0)
-- REQ-LAYOUT-030: Y labels MUST be dropped, the right axis first, when the gutters would take more than a third of the columns. (v0.2.0)
+- Shipped in v0.2.0 and moved to [SPEC.md](SPEC.md) §5.4: REQ-LAYOUT-010, REQ-LAYOUT-020, REQ-LAYOUT-030.
 - REQ-LAYOUT-040: Every chart MUST draw a frame without panicking at every size from 1 × 1 to 320 × 120 with every fixture it accepts. (v0.3.0)
 - REQ-LAYOUT-050: Panes MUST split rows by weight with at least three rows each, share the x scale, and align their plot areas to the same gutters. (v0.5.0)
 - REQ-LAYOUT-060: A legend at `position: "auto"` MUST go outside in one row when it fits and rows ≥ 12, else inside the first pane when it takes at most a third of its width and height, else be left out of the frame (it stays in the table and the events). (v0.5.0)
 - REQ-LAYOUT-070: Each chart's meta MUST declare its minimum useful size with axes; the contract and the site MUST use it. (v0.3.0)
-- REQ-TEXT-010: A label MUST occupy whole cells; no two labels MUST share a cell; a label MUST clear the cells under it to the ground before it is drawn, so no label shares a cell with data; the contract MUST check this on every fixture at 80 × 24 and 320 × 120. (v0.2.0)
-- REQ-TEXT-020: Draw order MUST be the z-order: data, gridlines on empty cells only, axes, labels, annotations, the crosshair, the readout last. (v0.2.0)
+- Shipped in v0.2.0 and moved to [SPEC.md](SPEC.md) §5.4: REQ-TEXT-010, REQ-TEXT-020.
 - REQ-AXIS-010: A pane MUST support a left and a right y axis bound to different scales, with gridlines from one axis only. (v0.5.0)
 - REQ-ANNOT-010: The core MUST draw `hline`, `vline`, `band`, `label` and `marker` annotations in data coordinates, clipped to their pane; an annotation label on an axis MUST hide the tick labels it overlaps. (v0.5.0)
 
@@ -290,7 +261,7 @@ REQ-VENDOR-010 and REQ-VENDOR-020 were withdrawn on 2026-10-18 by ADR-013, befor
 - REQ-CONTRACT-040: Appending a fixture in the batches 1, 7, ⌊n/3⌋ and the rest, with frames drawn between, MUST end on the frame and view that replacing with the same rows gives; with a ring of capacity c < n, on replacing with the last c rows (rule 14). (v0.6.0)
 - REQ-CONTRACT-050: Time budgets (rule 30) MUST be checked in `tests/budgets.rs`, a test binary of its own, only without debug assertions; a chart over budget MUST be timed twice more, and the lowest average and the lowest worst count. [ADR-126](adr/126-correctness-and-timing-apart.md) (v0.4.0)
 - REQ-CONTRACT-060: A `contract-selftest` feature MUST register three broken charts (non-deterministic, outside its charset, keeping state across appends), and a test MUST assert that the contract rejects each with the matching message. (v0.4.0)
-- REQ-FIX-010: Fixture datasets MUST be generated by `crates/glyphplot/src/fixtures.rs` from SplitMix64 with a fixed seed each, MUST include the 23 fixtures of the plan's [fixtures](../docs/IMPLEMENTATION_PLAN.md#fixtures) table, and two generations MUST be bitwise equal on every target. [ADR-128](adr/128-fixtures-generated-from-seeds.md) (v0.2.0)
+- Shipped in v0.2.0 and moved to [SPEC.md](SPEC.md) §6.5: REQ-FIX-010, REQ-REF-010, REQ-PROP-010.
 - REQ-FIX-020: Real datasets checked in under `crates/glyphplot/tests/data/` MUST each be under 100 KB, public domain or MIT-compatible, named with source and licence in that directory's README. (v0.5.0)
 
 ### 6.3 Snapshots, references and properties (SNAP, REF, PROP)
@@ -299,8 +270,6 @@ REQ-VENDOR-010 and REQ-VENDOR-020 were withdrawn on 2026-10-18 by ADR-013, befor
 - REQ-SNAP-020: A snapshot's colour and back layers MUST write each palette index as two lowercase hex digits (`..` for `NO_BACK`), each run followed by its length when more than one. [ADR-129](adr/129-snapshot-colours-in-hex.md) (v0.3.0)
 - REQ-SNAP-030: `mise run snap [type …]` MUST rewrite snapshots; a chart without one MUST fail the contract; `web/test/snapshot.test.mjs` MUST compare every chart's wasm frame for every fixture at 80 × 24 with the native snapshot. (v0.3.0)
 - REQ-SNAP-040: A commit that changes a snapshot MUST say why in its message. (v0.3.0)
-- REQ-REF-010: Each port of d3-array, d3-scale, d3-time, d3-format or the LTTB reference MUST be compared bitwise with output captured from the pinned original by `mise run fixtures`, in `tests/reference.rs` and in `web/test/reference.test.mjs`. (v0.2.0)
-- REQ-PROP-010: The core MUST hold proptest properties (lean features) for scale inversion, tick order and count, reduction bounds, merged reductions equalling the whole, LTTB's ends and order, cell-mapping agreement and label non-overlap, with regression files checked in. [ADR-130](adr/130-proptest.md) (v0.2.0)
 
 ---
 
@@ -411,7 +380,7 @@ element's `type` names.
 
 ### 9.4 Font (FONT)
 
-- REQ-FONT-010: The bundled font MUST be a subset of Iosevka Fixed Extended 34.9.0 (SIL OFL 1.1), family `glyphplot mono`, covering U+0020–007E, U+00B0, U+00B7, U+2022, U+2190–21FF, U+2500–25FF, U+2800–28FF, U+1CD00–1CDE5, U+1CEA0–1CEAF and U+1FB00–1FBFF (as Iosevka has them) plus tier A (the plan's [font](../docs/IMPLEMENTATION_PLAN.md#font) tier A: U+00A0–00BF, U+00D7, U+00F7, U+2007–200A, U+2010–2015, U+2018–201F, U+2026, U+202F, U+2030, U+2032–2033, U+2070–209F, the currency signs, U+2116, U+2122, U+2212, U+221E, U+2248, U+2260, U+2264–2265, Δ Σ Ω μ σ, U+2713, U+2717, U+2605–2606, U+FFFD), every glyph 0.6 em, at most 32 KB, built only by `mise run build:font` with the repository's own `scripts/font.py` from Iosevka's upstream release, pinned by SHA-256. [ADR-121](adr/121-extend-the-bundled-font.md) (v0.2.0)
+- Shipped in v0.2.0 and moved to [SPEC.md](SPEC.md) §3.3: REQ-FONT-010.
 - REQ-FONT-020: The font SHOULD also cover U+00C0–00FF and U+0100–017F (tier B). (v0.5.0)
 - REQ-FONT-030: `@font-face` MUST load the font from `new URL("../fonts/glyphplot-mono.woff2", import.meta.url)` with `font-display: swap`, and every surface (the `<pre>`, the canvas, the SVG export) MUST put `"glyphplot mono"` first in its font stack. (v0.3.0)
 
@@ -470,7 +439,7 @@ default), and reaches `mise run size`, the contract and the benches through
 
 - Shipped in v0.1.0 and moved to [SPEC.md](SPEC.md) §16.3: REQ-SIZE-010, REQ-SIZE-020, REQ-SIZE-030, REQ-SIZE-040.
 - REQ-SIZE-050: `mise run size --charts` MUST list, for each module, the gzipped share of the chart's own code, the core, serde and serde_json, and the rest (std, alloc, wasm-bindgen), from an unstripped build. (v0.4.0)
-- REQ-SIZE-060: No wasm module's dependency tree MUST hold chrono, time, jiff, chrono-tz, num-format, any `icu_` crate, arrow, arrow2 or vsop87, which `mise run lint` checks with `cargo tree -e normal --target wasm32-unknown-unknown`. (v0.2.0)
+- Shipped in v0.2.0 and moved to [SPEC.md](SPEC.md) §16.3: REQ-SIZE-060.
 - REQ-SIZE-070: A pack module MUST stay under 32 KB gzipped. (v0.10.0)
 
 ### 12.2 Time (PERF)
@@ -611,7 +580,7 @@ command verifies; real-browser checks are the owner's (REQ-TEST-030).
 | Version | Phase | Areas it ships | Acceptance (plan) |
 |---|---|---|---|
 | v0.1.0 (built 2026-10-18) | 0 · Toolchain green | ARCH-010, 040, 060, 070; INDEP-010–020; BUILD-010–030, 050, 060; LINT-010, 030; CI-010; SIZE-010–040; TEST-010; PKG-040 | `mise run check` exits 0 on an empty family; `mise run size` prints the empty module |
-| v0.2.0 | 1 · Core | GRID, CANVAS, COLOR-010–040, DATA-010–040, 080–090, 110, 130, SCALE-010–030, TICK-010–040, FMT-010–030, TZ-010, I18N-030–040, LAYOUT-010–030, TEXT, FIX-010, REF-010, PROP-010, FONT-010, BUILD-070, LINT-040, SIZE-060 | `mise run test:rust`: reference fixtures 0 differ; properties pass; `fixtures` regenerates bitwise |
+| v0.2.0 (built 2026-10-18) | 1 · Core | GRID, CANVAS, COLOR-010–040, DATA-010–040, 080–090, 110, 130, SCALE-010–030, TICK-010–040, FMT-010–030, TZ-010, I18N-030–040, LAYOUT-010–030, TEXT, FIX-010, REF-010, PROP-010, FONT-010, BUILD-070, LINT-040, SIZE-060 | `mise run test:rust`: reference fixtures 0 differ; properties pass; `fixtures` regenerates bitwise |
 | v0.3.0 | 2 · Line end to end | the `line` type; VIEW-010–050; INPUT; HIT-010–020; OVERLAY; EVENT-010–030; KEY; TOUCH; CHART; OPT; REG; CONTRACT-010–020; SNAP; WASM; MANIFEST; LOAD; EL (most); MOUNT; JS; RENDER-010–030, 050; FONT-030; THEME-010–050, 070; MONO-010, 040; A11Y-010–070; PERF-010–020; MEM; DATA-050–070, 120; STREAM-060; SAMPLE-010–030; I18N-010–020, 050; FMT-060; CANVAS-040; EL-085; LAYOUT-040, 070; CHAR; TEST-020–040; E2E-010–040, 070; BUILD-040, 080; LINT-020; ARCH-020–050 | `mise run check`; `mise run test:site` (interaction, element, resize, axe) |
 | v0.4.0 | 3 · Contract and budgets | CONTRACT-030, 050, 060; PERF-030–060, 080; SIZE-050; BENCH; CI-020; BUILD-090 | `cargo test --profile contract --test contract --test budgets`; `mise run bench`; `mise run signoff` on the branch |
 | v0.5.0 | 4 · Candles, bar, sparkline | CANDLE-010–050; BAR-010–020; SPARK-010; SCALE-040–060; TICK-050–070; FMT-040–050; TZ-020–030, 050; LAYOUT-050–060; AXIS; ANNOT; LINK; EL-030, 050, 110; EVENT-010 (`plot-brush`, `plot-legend`); SAMPLE-040, 060; DATA-100; THEME-060, 065; MONO-020–030; RENDER-040; FONT-020; FIX-020 | contract and snapshots for the three types; the owner's candlestick on the checklist page |
