@@ -25,8 +25,9 @@ TypeScript shell, and in the terminal by a CLI. Every chart draws data the page
 or the terminal gives it. It is the sibling of unicel (`../animate-unicode`)
 and follows its architecture (ADR-003), sharing no code with it (ADR-013).
 
-**Status: nothing is built.** Discovery, the plan and the spec are written; the
-next session builds Phase 0.
+**Status: v0.1.0, the toolchain.** The crates, an empty `line` family and the
+mise tasks are built; no chart is drawn yet. The next session builds Phase 1,
+the core.
 
 | Path | What |
 |---|---|
@@ -50,14 +51,13 @@ next session builds Phase 0.
 
 ## Commands
 
-mise is the only entry point (`mise tasks` lists them all). Until Phase 0
-lands, `mise install` is the only one that does anything.
+mise is the only entry point (`mise tasks` lists them all).
 
-- `mise run check`: lint, test, build. Green before every commit, once there
-  is code.
-- `mise run signoff`: the CI, run locally, as unicel's (from Phase 0).
-- `mise run test`, `mise run lint`, `mise run fmt`, `mise run size`,
-  `mise run bench`, `mise run snap`: as the plan's Phase 0 defines them.
+- `mise run check`: lint, test, build and size. Green before every commit.
+- `mise run signoff [rev]`: the CI, run locally: `check` on a committed tree.
+- `mise run lint`, `mise run fmt`, `mise run test`, `mise run build:wasm`,
+  `mise run size` (`WASM_GZ_LIMIT=<bytes>` overrides every budget).
+- `mise run bench` and `mise run snap` arrive with the phases that need them.
 
 ## Conventions
 

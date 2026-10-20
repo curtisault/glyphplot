@@ -977,6 +977,34 @@ rest of the rules and the budgets.
 <a id="phase-0"></a>
 ### Phase 0 · Toolchain green (v0.1.0)
 
+Done 2026-10-18. Built as listed, with these differences:
+- The core's registry is `glyphplot::FAMILIES`, a family with its `Budget`;
+  `Budget::DEFAULT` holds the 350 KB gate. The wasm crate exports
+  `version()` and `families()`; the `line` module loads in Node 26 and
+  returns `["line"]`.
+- `manifest write` already writes all of `modules.js`, `modules.d.ts` and
+  `budgets.json`, with `charts` and `modules` empty; `scripts/size.mjs
+  --write` writes `sizes.json`. The generated files validate against their
+  schemas.
+- `lint` also runs three checks the conformance table plans: each family
+  alone (`cargo check --no-default-features --features <family>`), the
+  core's dependency list (REQ-ARCH-010) and tracked generated output
+  (REQ-BUILD-060, `scripts/generated.sh`). `scripts/deps.sh` holds the
+  dependency checks: the core's list, git sources and unicel.
+- `size` measures with the system's `gzip -9` reading stdin, as discovery
+  measured. The empty `line` module is 15,742 B raw and 7,052 B gzipped; its
+  JS glue is 7,016 B and 2,016 B (`mise run size`, 2026-10-18).
+  `WASM_GZ_LIMIT=1000` fails, naming `line`.
+- `signoff` runs `check` on a committed tree (HEAD or a named revision),
+  checked out as a detached git worktree in `target/ci/tree`, so the checks
+  that list files with `git ls-files` see that commit's. It took 9.0 s
+  (`time`). It posts no commit status before REQ-CI-020 (v0.4.0).
+- A test edit that adds `../animate-unicode` as a path dependency fails
+  `lint`, and so does one that adds a dependency to the core outside its
+  list. `cargo metadata` counts 0 git sources.
+- `mise run check` takes 0.9 s warm on the reference machine (`time`, load
+  not taken).
+
 Tasks:
 1. Workspace members: `crates/glyphplot` (the core; features `all` and
    `line`, no charts yet), `crates/wasm` (`glyphplot-wasm`, `publish =

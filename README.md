@@ -17,9 +17,10 @@ glyphplot candles --from feed.csv
 tail -f metrics.csv | glyphplot line
 ```
 
-**Status: nothing is built.** Neither the element nor the CLI above exists
-yet, and nothing is published. Discovery, the implementation plan and the
-specification are written; the next session builds Phase 0.
+**Status: v0.1.0, the toolchain.** The workspace builds, lints, tests and
+measures an empty chart family; no chart is drawn yet. Neither the element
+nor the CLI above works yet, and nothing is published. The next phase builds
+the core.
 
 glyphplot is the sibling of [unicel](../animate-unicode) (animated Unicode
 art) and follows its architecture, but it is a separate, independent
