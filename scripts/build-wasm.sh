@@ -58,8 +58,11 @@ trap 'exit 143' TERM
 mkdir -p "$stage"
 
 # build <module> <features>: one module into the staging folder.
+# Paths compiled into a module (panic locations, debug names) are written
+# relative to the home directory, so a published module names no one's
+# machine.
 build() {
-  wasm-pack --quiet build crates/wasm --target web --release --no-pack \
+  RUSTFLAGS="--remap-path-prefix=$HOME=~ ${RUSTFLAGS:-}" wasm-pack --quiet build crates/wasm --target web --release --no-pack \
     --out-dir "$stage/$1" --out-name glyphplot \
     -- --no-default-features --features "$2"
   rm -f "$stage/$1/.gitignore"

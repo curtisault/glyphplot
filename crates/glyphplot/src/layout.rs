@@ -393,15 +393,17 @@ fn shares(total: usize, w: &[u128]) -> Vec<usize> {
     }
     let t = total as u128;
     let mut out: Vec<usize> = w.iter().map(|&wi| (t * wi / sum) as usize).collect();
-    let mut left = total - out.iter().sum::<usize>();
-    let mut order: Vec<usize> = (0..w.len()).collect();
-    order.sort_by_key(|&i| (std::cmp::Reverse(t * w[i] % sum), i));
-    for &i in &order {
-        if left == 0 {
-            break;
-        }
+    let left = total - out.iter().sum::<usize>();
+    // The `left` largest remainders get one more each, the earlier pane on a
+    // tie: picked one at a time rather than sorted, since a slice sort keyed
+    // on u128 is about 10 KB of the wasm module and there are a few panes.
+    let rem: Vec<u128> = w.iter().map(|&wi| t * wi % sum).collect();
+    let mut given = vec![false; w.len()];
+    for _ in 0..left {
+        let best = (0..w.len()).filter(|&i| !given[i]).fold(None, |best: Option<usize>, i| if best.is_none_or(|b| rem[i] > rem[b]) { Some(i) } else { best });
+        let Some(i) = best else { break };
+        given[i] = true;
         out[i] += 1;
-        left -= 1;
     }
     out
 }
@@ -905,5 +907,29 @@ mod tests {
         assert_eq!(split_rows(0, 4, &[1, 1]), [(0, 2), (2, 2)], "under the floor, by weight alone");
         assert_eq!(split_rows(0, 1, &[1, 0, 1]), [(0, 1), (1, 0), (1, 0)]);
         assert!(split_rows(0, 10, &[]).is_empty());
+    }
+
+    proptest! {
+        /// `shares` gives what the largest-remainder split by a stable sort
+        /// on (remainder descending, pane) gives, which it replaced to keep a
+        /// slice sort out of the wasm module.
+        #[test]
+        fn shares_match_a_sorted_largest_remainder(total in 0usize..400, w in proptest::collection::vec(0u128..1000, 0..12)) {
+            let sum: u128 = w.iter().sum();
+            let expected = if sum == 0 {
+                vec![0; w.len()]
+            } else {
+                let t = total as u128;
+                let mut out: Vec<usize> = w.iter().map(|&wi| (t * wi / sum) as usize).collect();
+                let left = total - out.iter().sum::<usize>();
+                let mut order: Vec<usize> = (0..w.len()).collect();
+                order.sort_by_key(|&i| (std::cmp::Reverse(t * w[i] % sum), i));
+                for &i in order.iter().take(left) {
+                    out[i] += 1;
+                }
+                out
+            };
+            prop_assert_eq!(shares(total, &w), expected);
+        }
     }
 }

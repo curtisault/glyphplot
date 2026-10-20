@@ -98,6 +98,14 @@ description = "Rewrite the snapshots of every chart, or of the types given (REQ-
 usage = 'arg "[type]..." help="chart types; every chart when none"'
 run = 'CHART="${usage_type:-}" SNAP=write cargo test -q -p glyphplot --profile contract --test contract every_chart_matches_its_snapshots -- --exact --nocapture'
 
+[tasks.bench]
+description = "The native bench: load average, then each type × fixture (1k, 100k, 1M) × grid (80 × 24, 320 × 120), and its 1M pointer move, against budget; exits 1 when a row is OVER (REQ-BENCH-010)"
+run = "cargo run -q -p glyphplot --profile contract --example bench --"
+
+[tasks."test:budgets"]
+description = "Contract rule 30 alone, its table and load average (REQ-CONTRACT-050); test:rust runs it too"
+run = "cargo test -q -p glyphplot --profile contract --test budgets -- --nocapture"
+
 [tasks.build]
 description = "Everything check builds: the wasm modules"
 depends = ["build:wasm"]
@@ -159,7 +167,7 @@ description = "Every test: Rust, the shell's Node tests, and the browser tests' 
 depends = ["test:rust", "test:web", "test:site:smoke"]
 
 [tasks.size]
-description = "Each module's wasm and JS, raw and gzip -9, against its budget; WASM_GZ_LIMIT overrides it"
+description = "Each module's wasm and JS, raw and gzip -9, against its budget; WASM_GZ_LIMIT overrides it; `--charts`: each module by owner (REQ-SIZE-050)"
 depends = ["build:wasm"]
 run = "node scripts/size.mjs"
 
