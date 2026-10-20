@@ -4,7 +4,7 @@
 #
 #   mise install          the toolchain
 #   mise run check        lint, test, build and size: green before every commit
-#   mise run signoff      the CI, run locally on a committed tree
+#   mise run signoff      the CI, run locally: each open pull request, or a revision
 #
 # `mise tasks` lists every task.
 
@@ -61,13 +61,13 @@ outputs = ["site/node_modules/.package-lock.json"]
 run = "npm ci --prefix site"
 
 [tasks."install:chromium"]
-description = "Playwright's headless Chromium for the browser tests and bench:render (a no-op once installed)"
+description = "Playwright's headless Chromium for the browser tests and the benches (a no-op once installed)"
 depends = ["install:site"]
 dir = "site"
 run = "npx playwright install chromium"
 
 [tasks."build:site"]
-description = "site/ built by Vite into site/dist over the release wasm in web/pkg: test.html, blank.html, bench/render.html"
+description = "site/ built by Vite into site/dist over the release wasm in web/pkg: test.html, blank.html, the bench pages (bench/render.html, web.html, load.html)"
 depends = ["install:site", "build:wasm"]
 dir = "site"
 run = "npx vite build --logLevel warn"
@@ -79,11 +79,23 @@ raw = true
 run = "bash scripts/dev.sh"
 
 [tasks."bench:render"]
-description = "The renderer bench: serves bench/render.html for Chrome and Safari (`-- --host` for the network); `-- --headless` runs it once in headless Chromium and prints the table (REQ-RENDER-010, 050)"
+description = "The renderer bench: serves bench/render.html for Chrome and Safari (`-- --host` for the network); `-- --headless` runs it once in headless Chromium and prints the table with the load average (REQ-RENDER-010, 050, REQ-BENCH-020)"
 depends = ["install:chromium"]
 dir = "site"
 raw = true
 run = "node bench/run.mjs"
+
+[tasks."bench:web"]
+description = "Frames and pointer moves in headless Chromium over the release build: every chart, 300 frames panning a 1M-point fixture at 80 × 24 and 320 × 120 against 8 / 16 ms, 300 moves against 0.5 / 2 ms; prints the load average and exits 1 over budget (REQ-PERF-050, 060, REQ-BENCH-020); `-- <type>…` for some charts"
+depends = ["build:site", "install:chromium"]
+dir = "site"
+run = "node bench/web.mjs"
+
+[tasks."bench:load"]
+description = "First frame of a one-chart page over the release build, 7 cold loads in headless Chromium: 170 ms / 9 Mbps gated at a 1.0 s median, Lighthouse 12's slow 4G reported (REQ-PERF-080, REQ-BENCH-020)"
+depends = ["build:site", "install:chromium"]
+dir = "site"
+run = "node bench/load.mjs"
 
 [tasks."build:font"]
 description = "The bundled font: Iosevka's release subset to web/fonts/glyphplot-mono.woff2 (`-- --check` compares instead)"
@@ -176,6 +188,7 @@ description = "lint, test, build and size: green before every commit"
 depends = ["lint", "test", "build", "size"]
 
 [tasks.signoff]
-description = "The CI, run locally: check on a committed tree (HEAD, or the revision given), with all of test:site (REQ-E2E-070)"
+description = "The CI, run locally (REQ-CI-020): each open pull request's head (or the PRs named, `-- 5 6`) checked out under target/ci, npm ci, check (all of test:site), bench:web, bench:load and test:budgets with PROPTEST_CASES=4096, a `signoff` commit status posted; `-- <rev>` checks a local revision and posts nothing; `-- --list` shows the queue"
 env = { GLYPHPLOT_SIGNOFF = "1" }
+raw = true
 run = "bash scripts/signoff.sh"
