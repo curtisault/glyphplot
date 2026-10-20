@@ -6,7 +6,7 @@ This document holds every requirement of glyphplot not yet built, grouped by
 area, each naming the milestone that ships it. When a milestone lands, its
 requirements move into [SPEC.md](SPEC.md) with their IDs unchanged, a line
 in their old section says where they went, and the milestone's row in §20
-says when it was built. v0.1.0 to v0.4.0 have shipped. IDs go up in tens within an area so a requirement
+says when it was built. v0.1.0 to v0.5.0 have shipped. IDs go up in tens within an area so a requirement
 can be added between two others (`REQ-DATA-045`); an ID is never reused,
 even after its requirement is removed.
 
@@ -110,7 +110,7 @@ REQ-VENDOR-010 and REQ-VENDOR-020 were withdrawn on 2026-10-18 by ADR-013, befor
 
 - Shipped in v0.2.0 and moved to [SPEC.md](SPEC.md) §4.1: REQ-DATA-010, REQ-DATA-020, REQ-DATA-030, REQ-DATA-040, REQ-DATA-080, REQ-DATA-090, REQ-DATA-110, REQ-DATA-130.
 - Shipped in v0.3.0 and moved to [SPEC.md](SPEC.md) §4.1: REQ-DATA-050, REQ-DATA-060, REQ-DATA-070, REQ-DATA-120.
-- REQ-DATA-100: `unit`, `scale` and `offset` MUST apply to ticks, readouts and the data table and MUST NOT change stored values: a readout of stored 18240 with `scale: 0.01` shows `182.40`. (v0.5.0)
+- Shipped in v0.5.0 and moved to [SPEC.md](SPEC.md) §4.1: REQ-DATA-100.
 - REQ-DATA-140: The core MUST read an Arrow IPC stream (uncompressed; Float64, Float32, Int32, Int64, UInt32, Timestamp, Bool, Utf8 and Dictionary<Int32, Utf8> columns with validity bitmaps) with its own reader, adding at most 8 KB gzipped to a chart module; the element's `data` property and the CLI MUST accept it. [ADR-105](adr/105-hand-written-arrow-reader.md) (v0.6.0)
 - REQ-DATA-150: The element MUST take `src`, a URL of CSV, JSON, NDJSON or Arrow, fetched once per change and parsed in the shell (type from `Content-Type` or the extension), and given as `data`. (v0.6.0)
 - REQ-DATA-160: Graph data MUST be `nodes` and `edges` tables whose `source` and `target` are `u32` indices into `nodes` or strings equal to `nodes.id`, and matrices MUST be row-major `rows × cols`; an edge naming no node MUST be dropped with one warning. (v0.9.0)
@@ -129,9 +129,8 @@ REQ-VENDOR-010 and REQ-VENDOR-020 were withdrawn on 2026-10-18 by ADR-013, befor
 ### 3.3 Downsampling (SAMPLE)
 
 - Shipped in v0.3.0 and moved to [SPEC.md](SPEC.md) §4.3: REQ-SAMPLE-010, REQ-SAMPLE-020, REQ-SAMPLE-030.
-- REQ-SAMPLE-040: Candlestick charts MUST draw each candle at least one cell wide: when the candles in view do not fit, they MUST be resampled to the smallest interval of the ladder 1 s, 5 s, 15 s, 1 min, 5 min, 15 min, 1 h, 4 h, 1 d, 1 w, 1 mo at which they fit, open the first row, high the maximum, low the minimum, close the last and volume the sum, buckets aligned to the interval in the column's zone. [ADR-109](adr/109-candles-resample-to-calendar-intervals.md) (v0.5.0)
+- Shipped in v0.5.0 and moved to [SPEC.md](SPEC.md) §4.3: REQ-SAMPLE-040, REQ-SAMPLE-060.
 - REQ-SAMPLE-050: Scatter charts MUST set a dot for every visible point; no point may be dropped by sampling. (v0.9.0)
-- REQ-SAMPLE-060: LTTB MAY be offered as `sample: "lttb"` and MUST NOT be any chart's default. (v0.5.0)
 
 ---
 
@@ -140,34 +139,27 @@ REQ-VENDOR-010 and REQ-VENDOR-020 were withdrawn on 2026-10-18 by ADR-013, befor
 ### 4.1 Scales (SCALE)
 
 - Shipped in v0.2.0 and moved to [SPEC.md](SPEC.md) §5.1: REQ-SCALE-010, REQ-SCALE-020, REQ-SCALE-030.
-- REQ-SCALE-040: The core MUST provide log scales (any base above 1) and band scales; a band scale MUST give every category the same whole number of cells. (v0.5.0)
-- REQ-SCALE-050: The core SHOULD provide a symlog scale whose ticks are 0 and ± powers of ten within the domain. (v0.5.0)
-- REQ-SCALE-060: The core MUST provide an index time scale on which bars sit at consecutive indices whatever the time between them, labelled from each bar's timestamp; a fixture with weekend gaps MUST draw no empty columns. [ADR-131](adr/131-index-time-scale-for-session-gaps.md) (v0.5.0)
+- Shipped in v0.5.0 and moved to [SPEC.md](SPEC.md) §5.1: REQ-SCALE-040, REQ-SCALE-050, REQ-SCALE-060.
 - REQ-SCALE-070: The core MUST provide sequential, diverging, categorical and threshold colour scales mapping a value to a palette index. (v0.9.0)
 - REQ-SCALE-080: The core MUST provide an angle scale that wraps (right ascension 0–24 h, azimuth 0–360°). (v0.12.0)
 
 ### 4.2 Ticks (TICK)
 
 - Shipped in v0.2.0 and moved to [SPEC.md](SPEC.md) §5.2: REQ-TICK-010, REQ-TICK-020, REQ-TICK-030, REQ-TICK-040.
-- REQ-TICK-050: A y axis with `snap: "rows"` MUST place every tick on a row exactly with a nice step per row; it MUST be the default for bar and candlestick y axes under 20 rows. (v0.5.0)
-- REQ-TICK-060: Log axes MUST label only powers of the base and MAY mark other integer multiples without labels. (v0.5.0)
-- REQ-TICK-070: A time axis SHOULD draw a context row with the date at each day boundary when its span is under two days and the layout has the row. (v0.5.0)
+- Shipped in v0.5.0 and moved to [SPEC.md](SPEC.md) §5.2: REQ-TICK-050, REQ-TICK-060, REQ-TICK-070.
 
 ### 4.3 Formatting (FMT)
 
 - Shipped in v0.2.0 and moved to [SPEC.md](SPEC.md) §5.3: REQ-FMT-010, REQ-FMT-020, REQ-FMT-030.
-- REQ-FMT-040: The core MUST format SI units, IEC bytes (`KiB`, `MiB`), bits a second (`kb/s`, `Mb/s`), durations from nanoseconds to days, prices to a tick size (0.01, 0.25, 1/32) and signed percentages, each covered by a table test. (v0.5.0)
-- REQ-FMT-050: Date labels MUST accept the strftime subset `%Y %m %d %e %H %I %M %S %L %p %a %A %b %B %j %Z`, and MUST default to 24-hour multi-scale labels unless the locale's hour cycle is 12-hour. (v0.5.0)
+- Shipped in v0.5.0 and moved to [SPEC.md](SPEC.md) §5.3: REQ-FMT-040, REQ-FMT-050.
 - Shipped in v0.3.0 and moved to [SPEC.md](SPEC.md) §5.3: REQ-FMT-060.
 - REQ-FMT-070: The core MUST format right ascension in hours (`18h 54m`) and declination in signed degrees (`−23° 45′`). (v0.12.0)
 
 ### 4.4 Time zones and locales (TZ, I18N)
 
 - Shipped in v0.2.0 and moved to [SPEC.md](SPEC.md) §5.3: REQ-TZ-010.
-- REQ-TZ-020: The element MUST accept `timeZone` as `UTC`, a fixed offset or an IANA name, and MUST give the core a table of offset transitions covering the data's time extent and the view, computed with `Intl.DateTimeFormat`. (v0.5.0)
-- REQ-TZ-030: Local-time ticks over the table MUST equal d3-scale's `scaleTime().ticks()` run under `TZ=<zone>` for every captured case, across daylight-saving changes. (v0.5.0)
+- Shipped in v0.5.0 and moved to [SPEC.md](SPEC.md) §5.3: REQ-TZ-020, REQ-TZ-030, REQ-TZ-050.
 - REQ-TZ-040: The CLI MUST build the same table from the system's tzdata, and a frame drawn by the CLI and by the element from the same data, options, view and zone MUST be identical. (v0.8.0)
-- REQ-TZ-050: The element MUST default its time zone to the page's (`Intl.DateTimeFormat().resolvedOptions().timeZone`), resolved to an IANA name and passed to the core explicitly; the core, the CLI and the tests MUST default to UTC. [ADR-112](adr/112-zones-and-locales-from-the-shell.md) (v0.5.0)
 - Shipped in v0.3.0 and moved to [SPEC.md](SPEC.md) §5.3: REQ-I18N-010, REQ-I18N-020, REQ-I18N-050.
 - Shipped in v0.2.0 and moved to [SPEC.md](SPEC.md) §5.3: REQ-I18N-030, REQ-I18N-040.
 - REQ-I18N-060: Labels with right-to-left runs MUST be reordered by UAX #9 before layout, and an RTL locale MUST put the y axis and the legend on the right. (v0.9.0)
@@ -177,11 +169,10 @@ REQ-VENDOR-010 and REQ-VENDOR-020 were withdrawn on 2026-10-18 by ADR-013, befor
 
 - Shipped in v0.2.0 and moved to [SPEC.md](SPEC.md) §5.4: REQ-LAYOUT-010, REQ-LAYOUT-020, REQ-LAYOUT-030.
 - Shipped in v0.3.0 and moved to [SPEC.md](SPEC.md) §5.4: REQ-LAYOUT-040, REQ-LAYOUT-070.
-- REQ-LAYOUT-050: Panes MUST split rows by weight with at least three rows each, share the x scale, and align their plot areas to the same gutters. (v0.5.0)
-- REQ-LAYOUT-060: A legend at `position: "auto"` MUST go outside in one row when it fits and rows ≥ 12, else inside the first pane when it takes at most a third of its width and height, else be left out of the frame (it stays in the table and the events). (v0.5.0)
+- Shipped in v0.5.0 and moved to [SPEC.md](SPEC.md) §5.4: REQ-LAYOUT-050, REQ-LAYOUT-060.
 - Shipped in v0.2.0 and moved to [SPEC.md](SPEC.md) §5.4: REQ-TEXT-010, REQ-TEXT-020.
-- REQ-AXIS-010: A pane MUST support a left and a right y axis bound to different scales, with gridlines from one axis only. (v0.5.0)
-- REQ-ANNOT-010: The core MUST draw `hline`, `vline`, `band`, `label` and `marker` annotations in data coordinates, clipped to their pane; an annotation label on an axis MUST hide the tick labels it overlaps. (v0.5.0)
+- Shipped in v0.5.0 and moved to [SPEC.md](SPEC.md) §5.4: REQ-AXIS-010.
+- Shipped in v0.5.0 and moved to [SPEC.md](SPEC.md) §5.4: REQ-ANNOT-010.
 
 ---
 
@@ -205,7 +196,7 @@ REQ-VENDOR-010 and REQ-VENDOR-020 were withdrawn on 2026-10-18 by ADR-013, befor
 ### 5.4 Events out and linking (EVENT, LINK)
 
 - Shipped in v0.3.0 and moved to [SPEC.md](SPEC.md) §8.4: REQ-EVENT-010, REQ-EVENT-020, REQ-EVENT-030.
-- REQ-LINK-010: Charts sharing a `link` attribute value MUST share `x.domain` and `cursor.x` in data units without event loops; a browser test MUST show two linked charts of different widths agreeing after a pan. (v0.5.0)
+- Shipped in v0.5.0 and moved to [SPEC.md](SPEC.md) §8.4: REQ-LINK-010.
 
 ### 5.5 Keyboard and touch (KEY, TOUCH)
 
@@ -229,7 +220,7 @@ REQ-VENDOR-010 and REQ-VENDOR-020 were withdrawn on 2026-10-18 by ADR-013, befor
 - Shipped in v0.4.0 and moved to [SPEC.md](SPEC.md) §6.4: REQ-CONTRACT-030, REQ-CONTRACT-050, REQ-CONTRACT-060.
 - REQ-CONTRACT-040: Appending a fixture in the batches 1, 7, ⌊n/3⌋ and the rest, with frames drawn between, MUST end on the frame and view that replacing with the same rows gives; with a ring of capacity c < n, on replacing with the last c rows (rule 14). (v0.6.0)
 - Shipped in v0.2.0 and moved to [SPEC.md](SPEC.md) §6.5: REQ-FIX-010, REQ-REF-010, REQ-PROP-010.
-- REQ-FIX-020: Real datasets checked in under `crates/glyphplot/tests/data/` MUST each be under 100 KB, public domain or MIT-compatible, named with source and licence in that directory's README. (v0.5.0)
+- Shipped in v0.5.0 and moved to [SPEC.md](SPEC.md) §6.5: REQ-FIX-020.
 
 ### 6.3 Snapshots, references and properties (SNAP, REF, PROP)
 
@@ -255,22 +246,17 @@ element's `type` names.
 
 - Shipped in v0.3.0 and moved to [SPEC.md](SPEC.md) §7.1: REQ-LINE-010, REQ-LINE-020, REQ-LINE-030, REQ-LINE-040.
 - REQ-LINE-050: The `line` type MUST draw the modes `band` (between two columns) and `baseline` (coloured above and below a value), and `area` MUST take `stack` (`none`, `stack`, `percent`). (v0.9.0)
-- REQ-SPARK-010: The `sparkline` type, played by the `line` module, MUST draw without axes, one series a row band, MUST take appended samples into a ring of set capacity, and MAY show each series' label, latest value, minimum and maximum. (v0.5.0)
+- Shipped in v0.5.0 and moved to [SPEC.md](SPEC.md) §7.1: REQ-SPARK-010.
 
 ### 7.2 Candles (CANDLE)
 
-- REQ-CANDLE-010: The `candles` type MUST draw the modes `candle`, `hollow` and `ohlc`. (v0.5.0)
-- REQ-CANDLE-020: It MUST choose glyphs by candle spacing in cells: box-drawing candles at 4 cells or more; braille wick and body with a blank cell between at 2 or 3; braille without the gap at 1; snapshots at spacings 4, 2 and 1. (v0.5.0)
-- REQ-CANDLE-030: In one ink it MUST draw rising candles hollow and falling candles solid, and MUST NOT draw candles narrower than four cells, resampling instead (REQ-SAMPLE-040). (v0.5.0)
-- REQ-CANDLE-040: It MUST draw volume in a second pane sharing the x axis when the data has a `volume` column, on the index time scale by default (REQ-SCALE-060). (v0.5.0)
-- REQ-CANDLE-050: Its crosshair MUST snap to the nearest of open, high, low and close, and its readout MUST show `o h l c`, volume and the signed change. (v0.5.0)
+- Shipped in v0.5.0 and moved to [SPEC.md](SPEC.md) §7.2: REQ-CANDLE-010, REQ-CANDLE-020, REQ-CANDLE-030, REQ-CANDLE-040, REQ-CANDLE-050.
 - REQ-CANDLE-060: Streaming into a candlestick chart MUST update the last candle in place when a row's time falls in it (REQ-STREAM-040). (v0.6.0)
 - REQ-CANDLE-070: The `candles` type MUST draw the mode `heikin-ashi`. (v0.9.0)
 
 ### 7.3 Bar (BAR)
 
-- REQ-BAR-010: The `bar` type MUST draw vertical and horizontal bars, grouped and stacked, with each bar's free end at an eighth of a cell (`▁`–`▇` vertical, `▏`–`▉` horizontal). (v0.5.0)
-- REQ-BAR-020: A bar chart MUST hit-test by band in O(1). (v0.5.0)
+- Shipped in v0.5.0 and moved to [SPEC.md](SPEC.md) §7.3: REQ-BAR-010, REQ-BAR-020.
 - REQ-BAR-030: The `histogram` mode MUST bin unbinned values by a bin count or width, MUST accept pre-binned edges and counts, and its counts MUST equal a reference binning of the fixture. (v0.9.0)
 
 ### 7.4 Scatter and heatmap (SCATTER, HEAT)
@@ -303,9 +289,7 @@ element's `type` names.
 ### 9.1 The element (EL)
 
 - Shipped in v0.3.0 and moved to [SPEC.md](SPEC.md) §10.1: REQ-EL-010, REQ-EL-020, REQ-EL-040, REQ-EL-060, REQ-EL-070, REQ-EL-080, REQ-EL-085, REQ-EL-090, REQ-EL-100, REQ-EL-120, REQ-EL-130, REQ-EL-140, REQ-EL-150.
-- REQ-EL-030: `define(tag, { type })` MUST define `tag` as a subclass whose chart type is `type` whatever its `type` attribute says, and MUST do nothing for a tag already defined. (v0.5.0)
-- REQ-EL-050: A change of `type` MUST make a new chart and give it the old chart's data and view when its meta accepts the data's shape; otherwise it MUST warn once naming the shape and draw the new chart empty. (v0.5.0)
-- REQ-EL-110: With `cols` and `rows`, the grid MUST be that size, and `fit` MUST scale its drawing: `width` to the element's content width W (a cell W / cols wide), `contain` to the largest box inside W × H that keeps the cell's 1:2 aspect, centred, acting as `width` when H is 0; any other value MUST act as no fit. (v0.5.0)
+- Shipped in v0.5.0 and moved to [SPEC.md](SPEC.md) §10.1: REQ-EL-030, REQ-EL-050, REQ-EL-110.
 
 ### 9.2 Mount and the JS API (MOUNT, JS, SSR)
 
@@ -316,12 +300,12 @@ element's `type` names.
 ### 9.3 Rendering (RENDER)
 
 - Shipped in v0.3.0 and moved to [SPEC.md](SPEC.md) §10.3: REQ-RENDER-010, REQ-RENDER-020, REQ-RENDER-030, REQ-RENDER-050.
-- REQ-RENDER-040: A frame whose cells carry back colours SHOULD be drawn as one image of `cols × 2·rows` pixels scaled without smoothing, with other glyphs over it. (v0.5.0)
+- Shipped in v0.5.0 and moved to [SPEC.md](SPEC.md) §10.3: REQ-RENDER-040.
 
 ### 9.4 Font (FONT)
 
 - Shipped in v0.2.0 and moved to [SPEC.md](SPEC.md) §3.3: REQ-FONT-010.
-- REQ-FONT-020: The font SHOULD also cover U+00C0–00FF and U+0100–017F (tier B). (v0.5.0)
+- Shipped in v0.5.0 and moved to [SPEC.md](SPEC.md) §3.3: REQ-FONT-020.
 - Shipped in v0.3.0 and moved to [SPEC.md](SPEC.md) §10.4: REQ-FONT-030.
 
 ---
@@ -331,8 +315,7 @@ element's `type` names.
 ### 10.1 Theme (THEME)
 
 - Shipped in v0.3.0 and moved to [SPEC.md](SPEC.md) §11.1: REQ-THEME-010, REQ-THEME-020, REQ-THEME-030, REQ-THEME-040, REQ-THEME-050, REQ-THEME-070.
-- REQ-THEME-060: Up and down MUST be theme tokens, never fixed colours, and candles and bars MUST tell them apart by fill (hollow and solid) as well as by colour. (v0.5.0)
-- REQ-THEME-065: The default `up` and `down` tokens MUST be a blue and an orange at least 50 CIEDE2000 apart under normal vision and the three simulated deficiencies, overridable like every token. [ADR-123](adr/123-colour-defaults-held-to-measured-bars.md) (v0.5.0)
+- Shipped in v0.5.0 and moved to [SPEC.md](SPEC.md) §11.1: REQ-THEME-060, REQ-THEME-065.
 - REQ-THEME-080: The default sequential scale (cividis) sampled at nine steps MUST be monotonic in L* with neighbours at least 5 ΔE00 apart under each of the four visions, its low end the end nearer the ground's lightness; the default diverging scale MUST run blue to orange with its middle on the ground's side. (v0.9.0)
 - REQ-THEME-090: The JS API, the CLI (`--theme <file.json>`), the Rust crate and the SVG and ANSI exports MUST accept a theme object with REQ-THEME-010's token names. (v0.8.0)
 - REQ-THEME-100: Under `forced-colors: active` the element MUST draw in one ink in `CanvasText` on `Canvas`, with the accent in `Highlight`; under `@media print` it SHOULD draw on paper. (v0.7.0)
@@ -340,8 +323,7 @@ element's `type` names.
 ### 10.2 One ink (MONO)
 
 - Shipped in v0.3.0 and moved to [SPEC.md](SPEC.md) §11.2: REQ-MONO-010, REQ-MONO-040.
-- REQ-MONO-020: In one ink, series 5–8 MUST repeat patterns 1–4 and add a marker each from `● ○ ■ □ ▲ △ ◆ ◇`, at most one marker a cell. (v0.5.0)
-- REQ-MONO-030: In one ink, bar and area series MUST fill with `█ ▓ ▒ ░` by series. (v0.5.0)
+- Shipped in v0.5.0 and moved to [SPEC.md](SPEC.md) §11.2: REQ-MONO-020, REQ-MONO-030.
 - REQ-MONO-050: With up to four series and room, a line chart SHOULD label each series at its last visible point. (v0.9.0)
 
 ---
@@ -497,7 +479,7 @@ command verifies; real-browser checks are the owner's (REQ-TEST-030).
 | v0.2.0 (built 2026-10-18) | 1 · Core | GRID, CANVAS, COLOR-010–040, DATA-010–040, 080–090, 110, 130, SCALE-010–030, TICK-010–040, FMT-010–030, TZ-010, I18N-030–040, LAYOUT-010–030, TEXT, FIX-010, REF-010, PROP-010, FONT-010, BUILD-070, LINT-040, SIZE-060 | `mise run test:rust`: reference fixtures 0 differ; properties pass; `fixtures` regenerates bitwise |
 | v0.3.0 (built 2026-10-19) | 2 · Line end to end | the `line` type; VIEW-010–050; INPUT; HIT-010–020; OVERLAY; EVENT-010–030; KEY; TOUCH; CHART; OPT; REG; CONTRACT-010–020; SNAP; WASM; MANIFEST; LOAD; EL (most); MOUNT; JS; RENDER-010–030, 050; FONT-030; THEME-010–050, 070; MONO-010, 040; A11Y-010–070; PERF-010–020; MEM; DATA-050–070, 120; STREAM-060; SAMPLE-010–030; I18N-010–020, 050; FMT-060; CANVAS-040; EL-085; LAYOUT-040, 070; CHAR; TEST-020–040; E2E-010–040, 070; BUILD-040, 080; LINT-020; ARCH-020–050 | `mise run check`; `mise run test:site` (interaction, element, resize, axe) |
 | v0.4.0 (built 2026-10-20) | 3 · Contract and budgets | CONTRACT-030, 050, 060; PERF-030–060, 080; SIZE-050; BENCH; CI-020; BUILD-090 | `cargo test --profile contract --test contract --test budgets`; `mise run bench`; `mise run signoff` on the branch |
-| v0.5.0 | 4 · Candles, bar, sparkline | CANDLE-010–050; BAR-010–020; SPARK-010; SCALE-040–060; TICK-050–070; FMT-040–050; TZ-020–030, 050; LAYOUT-050–060; AXIS; ANNOT; LINK; EL-030, 050, 110; EVENT-010 (`plot-brush`, `plot-legend`); SAMPLE-040, 060; DATA-100; THEME-060, 065; MONO-020–030; RENDER-040; FONT-020; FIX-020 | contract and snapshots for the three types; the owner's candlestick on the checklist page |
+| v0.5.0 (built 2026-10-21) | 4 · Candles, bar, sparkline | CANDLE-010–050; BAR-010–020; SPARK-010; SCALE-040–060; TICK-050–070; FMT-040–050; TZ-020–030, 050; LAYOUT-050–060; AXIS; ANNOT; LINK; EL-030, 050, 110; EVENT-010 (`plot-brush`, `plot-legend`); SAMPLE-040, 060; DATA-100; THEME-060, 065; MONO-020–030; RENDER-040; FONT-020; FIX-020 | contract and snapshots for the three types; the owner's candlestick on the checklist page |
 | v0.6.0 | 5 · Streaming | STREAM-010–050, 070; VIEW-060; CANDLE-060; CONTRACT-040; DATA-140–150; A11Y-080–100; PERF-070; E2E-050; EVENT-010 (`plot-data`) | `streaming.spec.ts`; `bench:web` streaming row; the owner's one-line test on a phone |
 | v0.7.0 | 6 · The site | SITE (all but 100); DATASET; A11Y-110; THEME-100; E2E-060; LINT-020 (site); PKG-060 | `mise run build:site`; `test:site` in full; `datasets:check` |
 | v0.8.0 | 7 · The CLI | SITE-100; CLI; TERM; CRATE-010; EXPORT; SSR; TZ-040; I18N-070; COLOR-050; THEME-090; A11Y-120; ARCH-080 | `cargo test -p glyphplot-cli`; `glyphplot candles --from feed.csv` by the owner |

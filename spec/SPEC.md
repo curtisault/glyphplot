@@ -1,6 +1,6 @@
 # glyphplot — Specification
 
-Version 0.4.0 · 2026-10-20 · License: MIT
+Version 0.5.0 · 2026-10-21 · License: MIT
 
 glyphplot is an interactive charting library whose charts are drawn in
 Unicode glyphs, one code point and one colour a cell. Charts are Rust,
@@ -9,7 +9,7 @@ by a `<glyph-plot>` custom element over a small TypeScript shell and in the
 terminal by a CLI; every chart draws data the page or the terminal gives it.
 
 This document describes the application exactly as it stands. On
-2026-10-20 v0.4.0, the contract and the budgets, is built: a section with nothing
+2026-10-21 v0.5.0, candles, bar and the sparkline, is built: a section with nothing
 built
 holds only its heading and the words "nothing is built". Requirements arrive
 from
@@ -158,8 +158,10 @@ the TypeScript shell and `<glyph-plot>`, the contract test and snapshots,
 the Node and Playwright tests, `mise run dev` and the renderer bench. v0.4.0
 (Phase 3) was built on 2026-10-20: the contract's other rules and its
 self-test, the time budgets, the native and browser benches, the size
-breakdown and `signoff` as CI. Phase 4, candles, bar and the sparkline, is
-next (`docs/IMPLEMENTATION_PLAN.md`).
+breakdown and `signoff` as CI. v0.5.0 (Phase 4) was built on 2026-10-21:
+the `candles` and `bar` families, the sparkline, log, symlog, band and index
+time scales, zones, units, panes, dual axes, annotations and linked charts.
+Phase 5, streaming, is next (`docs/IMPLEMENTATION_PLAN.md`).
 
 ---
 
@@ -237,6 +239,8 @@ use.
 - REQ-CHAR-010: Every code point a chart draws outside label text MUST be in the bundled font's ranges (REQ-FONT-010); label text that comes from data or options MAY be any Unicode scalar value. Note: (v0.3.0)
 - REQ-CHAR-020: A double-width glyph MUST be drawn with `set_wide` and its `WIDE_TAIL`, and a `WIDE_TAIL` MUST follow only a double-width glyph in the same row. Note: (v0.3.0)
 
+- REQ-FONT-020: The font SHOULD also cover U+00C0–00FF and U+0100–017F (tier B). Note: (v0.5.0)
+
 ### 3.4 Palette and colour
 
 `palette` names the layout; `theme::resolve` and `theme::resolve_json` give
@@ -285,6 +289,8 @@ bitwise equal natively and in wasm32 (checked once by hand in Node 26 on
 - REQ-DATA-070: Replacing a chart's data with two 1,000,000-row `Float64Array` columns MUST take at most 10 ms (median of 5) in Node on the reference machine and grow wasm memory by at most 1.1 times the columns' bytes. Note: (v0.3.0)
 - REQ-DATA-120: The element MUST accept, as the `data` property or attribute, the data object, the columns shorthand (`{"t": […], "close": […]}`) and the rows shorthand (`[{…}, …]`); the shell MUST parse JSON with `JSON.parse` and infer shorthand types as the schema says. [ADR-104](adr/104-typed-columns-cross-the-boundary.md) Note: (v0.3.0)
 
+- REQ-DATA-100: `unit`, `scale` and `offset` MUST apply to ticks, readouts and the data table and MUST NOT change stored values: a readout of stored 18240 with `scale: 0.01` shows `182.40`. Note: (v0.5.0)
+
 ### 4.2 Streaming
 
 `append` concatenates numeric columns, dropping late rows and replacing an
@@ -302,6 +308,9 @@ range and width; the line chart reuses the buffers between frames.
 - REQ-SAMPLE-020: A line-like chart MUST find the rows in view by binary search on x, and MUST cache its aggregates by data version, view x range and width; a frame with all three unchanged MUST NOT read the data (a scan counter in the test build stays 0). Note: (v0.3.0)
 - REQ-SAMPLE-030: M4 over 1,000,000 rows in view at 640 dot columns MUST take at most 8 ms (median of 7) in wasm in Node on the reference machine. Note: (v0.3.0)
 
+- REQ-SAMPLE-040: Candlestick charts MUST draw each candle at least one cell wide: when the candles in view do not fit, they MUST be resampled to the smallest interval of the ladder 1 s, 5 s, 15 s, 1 min, 5 min, 15 min, 1 h, 4 h, 1 d, 1 w, 1 mo at which they fit, open the first row, high the maximum, low the minimum, close the last and volume the sum, buckets aligned to the interval in the column's zone. [ADR-109](adr/109-candles-resample-to-calendar-intervals.md) Note: (v0.5.0)
+- REQ-SAMPLE-060: LTTB MAY be offered as `sample: "lttb"` and MUST NOT be any chart's default. Note: (v0.5.0)
+
 ---
 
 ## 5. Scales, ticks, formatting and layout
@@ -316,6 +325,10 @@ them.
 - REQ-SCALE-020: A scale's domain MUST be `"data"`, `"view"`, a fixed `[a, b]` or `{"follow": seconds}`, and MUST be a pure function of the data, the options and the view state. Note: (v0.2.0)
 - REQ-SCALE-030: `nice` MUST give the domain d3-scale 4.0.2's `linear().nice(count)` gives for every case of the captured fixture file, including leaving unchanged a domain that does not settle in ten rounds. Note: (v0.2.0)
 
+- REQ-SCALE-040: The core MUST provide log scales (any base above 1) and band scales; a band scale MUST give every category the same whole number of cells. Note: (v0.5.0)
+- REQ-SCALE-050: The core SHOULD provide a symlog scale whose ticks are 0 and ± powers of ten within the domain. Note: (v0.5.0)
+- REQ-SCALE-060: The core MUST provide an index time scale on which bars sit at consecutive indices whatever the time between them, labelled from each bar's timestamp; a fixture with weekend gaps MUST draw no empty columns. [ADR-131](adr/131-index-time-scale-for-session-gaps.md) Note: (v0.5.0)
+
 ### 5.2 Ticks
 
 `ticks::ticks` and `time::utc_ticks` are d3's; `layout::fit_ticks` fits
@@ -328,6 +341,10 @@ scale's transform.
 - REQ-TICK-020: UTC time ticks MUST equal d3-time 3.1.0's `utcTicks(a, b, count)` exactly for every case of the captured fixture file. Note: (v0.2.0)
 - REQ-TICK-030: For any axis from 4 to 400 cells and any finite domain, placed ticks MUST lie in the domain, increase strictly in value and never decrease in cell, and their labels MUST lie within the axis and be separated by at least the label gap (default two cells on x, one row on y). [ADR-111](adr/111-ticks-fit-by-lowering-the-count.md) Note: (v0.2.0)
 - REQ-TICK-040: A tick mark MUST be drawn in the cell nearest its continuous position, and a gridline at the braille dot nearest it. Note: (v0.2.0)
+
+- REQ-TICK-050: A y axis with `snap: "rows"` MUST place every tick on a row exactly with a nice step per row; it MUST be the default for bar and candlestick y axes under 20 rows. Note: (v0.5.0)
+- REQ-TICK-060: Log axes MUST label only powers of the base and MAY mark other integer multiples without labels. Note: (v0.5.0)
+- REQ-TICK-070: A time axis SHOULD draw a context row with the date at each day boundary when its span is under two days and the layout has the row. Note: (v0.5.0)
 
 ### 5.3 Formatting, time zones and locales
 
@@ -349,6 +366,12 @@ JavaScript's `toFixed`, `toExponential`, `toPrecision` and `toString`);
 - REQ-I18N-020: The shell MUST build a locale pack (decimal and group separators, grouping sizes, minus sign, percent pattern, the ten digits, month and weekday names, date and time patterns, direction) from `Intl` with the Gregorian calendar forced, once per locale, and pass it to wasm; no wasm module MUST link a locale database. Note: (v0.3.0)
 - REQ-I18N-050: The shell MUST NFC-normalise label text before it crosses into wasm; zero-width code points MUST take no cell; a grapheme cluster of several scalars MUST be drawn as its first scalar; the accessible name, summary and table MUST keep the original text. Note: (v0.3.0)
 
+- REQ-FMT-040: The core MUST format SI units, IEC bytes (`KiB`, `MiB`), bits a second (`kb/s`, `Mb/s`), durations from nanoseconds to days, prices to a tick size (0.01, 0.25, 1/32) and signed percentages, each covered by a table test. Note: (v0.5.0)
+- REQ-FMT-050: Date labels MUST accept the strftime subset `%Y %m %d %e %H %I %M %S %L %p %a %A %b %B %j %Z`, and MUST default to 24-hour multi-scale labels unless the locale's hour cycle is 12-hour. Note: (v0.5.0)
+- REQ-TZ-020: The element MUST accept `timeZone` as `UTC`, a fixed offset or an IANA name, and MUST give the core a table of offset transitions covering the data's time extent and the view, computed with `Intl.DateTimeFormat`. Note: (v0.5.0)
+- REQ-TZ-030: Local-time ticks over the table MUST equal d3-scale's `scaleTime().ticks()` run under `TZ=<zone>` for every captured case, across daylight-saving changes. Note: (v0.5.0)
+- REQ-TZ-050: The element MUST default its time zone to the page's (`Intl.DateTimeFormat().resolvedOptions().timeZone`), resolved to an IANA name and passed to the core explicitly; the core, the CLI and the tests MUST default to UTC. [ADR-112](adr/112-zones-and-locales-from-the-shell.md) Note: (v0.5.0)
+
 ### 5.4 Layout, text, axes and annotations
 
 `layout::layout` places the title, legend, panes and axes in cells;
@@ -362,6 +385,11 @@ JavaScript's `toFixed`, `toExponential`, `toPrecision` and `toString`);
 
 - REQ-LAYOUT-040: Every chart MUST draw a frame without panicking at every size from 1 × 1 to 320 × 120 with every fixture it accepts. Note: (v0.3.0)
 - REQ-LAYOUT-070: Each chart's meta MUST declare its minimum useful size with axes; the contract and the site MUST use it. Note: (v0.3.0)
+
+- REQ-LAYOUT-050: Panes MUST split rows by weight with at least three rows each, share the x scale, and align their plot areas to the same gutters. Note: (v0.5.0)
+- REQ-LAYOUT-060: A legend at `position: "auto"` MUST go outside in one row when it fits and rows ≥ 12, else inside the first pane when it takes at most a third of its width and height, else be left out of the frame (it stays in the table and the events). Note: (v0.5.0)
+- REQ-AXIS-010: A pane MUST support a left and a right y axis bound to different scales, with gridlines from one axis only. Note: (v0.5.0)
+- REQ-ANNOT-010: The core MUST draw `hline`, `vline`, `band`, `label` and `marker` annotations in data coordinates, clipped to their pane; an annotation label on an axis MUST hide the tick labels it overlaps. Note: (v0.5.0)
 
 ---
 
@@ -429,6 +457,8 @@ The properties run at proptest's default 256 cases in `check` and passed at
 - REQ-SNAP-030: `mise run snap [type …]` MUST rewrite snapshots; a chart without one MUST fail the contract; `web/test/snapshot.test.mjs` MUST compare every chart's wasm frame for every fixture at 80 × 24 with the native snapshot. Note: (v0.3.0)
 - REQ-SNAP-040: A commit that changes a snapshot MUST say why in its message. Note: (v0.3.0)
 
+- REQ-FIX-020: Real datasets checked in under `crates/glyphplot/tests/data/` MUST each be under 100 KB, public domain or MIT-compatible, named with source and licence in that directory's README. Note: (v0.5.0)
+
 ---
 
 ## 7. Charts
@@ -457,13 +487,34 @@ column's `scale`, `offset` and `unit`.
 - REQ-LINE-030: In `line`, `step` and `area`, a missing y MUST break the line with no segment drawn across it; the option `spanGaps: true` MAY join across it. Note: (v0.3.0)
 - REQ-LINE-040: The readout of a line-like chart MUST name the datum whose x is nearest the cursor's x value, not the minimum or maximum of the dot column under it. Note: (v0.3.0)
 
+- REQ-SPARK-010: The `sparkline` type, played by the `line` module, MUST draw without axes, one series a row band, MUST take appended samples into a ring of set capacity, and MAY show each series' label, latest value, minimum and maximum. Note: (v0.5.0)
+
 ### 7.2 Candles
 
-Nothing is built.
+`charts/candles/` plays `candles` in its own module (194,402 B gzipped):
+modes `candle`, `hollow` and `ohlc`; glyphs chosen by candle spacing;
+calendar resampling up the ladder (with 3 mo and years past 1 mo); a volume
+pane on the index time scale; a crosshair that snaps to open, high, low or
+close. A table of one value column draws its closes as candles. Natively a
+frame over 1M rows takes 0.18 ms at 320 × 120 (`test:budgets`).
+
+- REQ-CANDLE-010: The `candles` type MUST draw the modes `candle`, `hollow` and `ohlc`. Note: (v0.5.0)
+- REQ-CANDLE-020: It MUST choose glyphs by candle spacing in cells: box-drawing candles at 4 cells or more; braille wick and body with a blank cell between at 2 or 3; braille without the gap at 1; snapshots at spacings 4, 2 and 1. Note: (v0.5.0)
+- REQ-CANDLE-030: In one ink it MUST draw rising candles hollow and falling candles solid, and MUST NOT draw candles narrower than four cells, resampling instead (REQ-SAMPLE-040). Note: (v0.5.0)
+- REQ-CANDLE-040: It MUST draw volume in a second pane sharing the x axis when the data has a `volume` column, on the index time scale by default (REQ-SCALE-060). Note: (v0.5.0)
+- REQ-CANDLE-050: Its crosshair MUST snap to the nearest of open, high, low and close, and its readout MUST show `o h l c`, volume and the signed change. Note: (v0.5.0)
 
 ### 7.3 Bar
 
-Nothing is built.
+`charts/bar/` plays `bar` in its own module (178,564 B gzipped). Orientation
+and stacking are options (`orient`, `stack`), not modes: they combine
+freely, and modes stay for drawings that change the data (`histogram`,
+`waterfall`, later). Several series not stacked are grouped. `signed: auto`
+draws one series in the data in up and down. Natively a frame takes
+0.35 ms at 320 × 120.
+
+- REQ-BAR-010: The `bar` type MUST draw vertical and horizontal bars, grouped and stacked, with each bar's free end at an eighth of a cell (`▁`–`▇` vertical, `▏`–`▉` horizontal). Note: (v0.5.0)
+- REQ-BAR-020: A bar chart MUST hit-test by band in O(1). Note: (v0.5.0)
 
 ### 7.4 Scatter and heatmap
 
@@ -514,6 +565,8 @@ A hover redraws only the overlay over a copy of the cached base: 0.010 ms at
 - REQ-EVENT-010: The element MUST dispatch `plot-ready`, `plot-error`, `plot-hover`, `plot-select`, `plot-view`, `plot-cursor` (v0.3.0), `plot-brush`, `plot-legend` (v0.5.0) and `plot-data` (v0.6.0) as bubbling, composed `CustomEvent`s whose `detail` has the shape of [events.schema.json](schemas/events.schema.json); each reader-action event MUST carry `source` (`pointer`, `touch`, `keyboard`, `wheel`). Note: (v0.3.0)
 - REQ-EVENT-020: `plot-hover` MUST fire only when the hovered datum changes, at most once an animation frame, with `detail` `null` when the cursor leaves the plot. Note: (v0.3.0)
 - REQ-EVENT-030: `plot-view` MUST fire at most once an animation frame during a gesture with `final: false`, and exactly once with `final: true` when the gesture ends (pointer up, wheel idle 150 ms, key up, motion done). Note: (v0.3.0)
+
+- REQ-LINK-010: Charts sharing a `link` attribute value MUST share `x.domain` and `cursor.x` in data units without event loops; a browser test MUST show two linked charts of different widths agreeing after a pan. Note: (v0.5.0)
 
 ### 8.5 Keyboard and touch
 
@@ -579,6 +632,10 @@ rate-limited.
 - REQ-EL-140: Disconnecting MUST stop drawing and free the chart; a load superseded by a later change or by removal MUST free what it made and draw nothing. Note: (v0.3.0)
 - REQ-EL-150: The element MUST NOT be form-associated. Note: (v0.3.0)
 
+- REQ-EL-030: `define(tag, { type })` MUST define `tag` as a subclass whose chart type is `type` whatever its `type` attribute says, and MUST do nothing for a tag already defined. Note: (v0.5.0)
+- REQ-EL-050: A change of `type` MUST make a new chart and give it the old chart's data and view when its meta accepts the data's shape; otherwise it MUST warn once naming the shape and draw the new chart empty. Note: (v0.5.0)
+- REQ-EL-110: With `cols` and `rows`, the grid MUST be that size, and `fit` MUST scale its drawing: `width` to the element's content width W (a cell W / cols wide), `contain` to the largest box inside W × H that keeps the cell's 1:2 aspect, centred, acting as `width` when H is 0; any other value MUST act as no fit. Note: (v0.5.0)
+
 ### 10.2 Mount and the JS API
 
 `mount` draws changed cells into a `<pre>` or a canvas and turns Pointer
@@ -599,6 +656,8 @@ atlas; the owner's Chrome and Safari measurement decides (REQ-RENDER-050).
 - REQ-RENDER-020: Block, quadrant, sextant, octant and wedge glyphs MUST be filled as exact shapes (`blocks.ts`), never drawn from the font. Note: (v0.3.0)
 - REQ-RENDER-030: A frame MUST redraw only the cells whose glyph, ink or back changed since the last frame drawn; a crosshair move over an unchanged chart MUST redraw at most the cells of the old and new crosshair and readout. Note: (v0.3.0)
 - REQ-RENDER-050: The renderer (`fillText` per changed cell, or an atlas keyed by code point and tinted by compositing) MUST be the one the owner's Chrome and Safari measurements choose in v0.3.0, recorded in the plan with the numbers. Note: (v0.3.0)
+
+- REQ-RENDER-040: A frame whose cells carry back colours SHOULD be drawn as one image of `cols × 2·rows` pixels scaled without smoothing, with other glyphs over it. Note: (v0.5.0)
 
 ### 10.4 Font
 
@@ -624,10 +683,16 @@ resolves it through the module, repainting without a new frame.
 - REQ-THEME-050: Each default categorical palette MUST hold eight colours whose smallest pairwise CIEDE2000 difference is at least 15 under normal vision and under deuteranopia, protanopia and tritanopia simulated by Machado 2009 at severity 1.0 on linear sRGB. Note: (v0.3.0)
 - REQ-THEME-070: In a debug build, a page-set series colour under 3:1 against the resolved ground MUST log one warning naming the token and the ratio, and MUST still be used. Note: (v0.3.0)
 
+- REQ-THEME-060: Up and down MUST be theme tokens, never fixed colours, and candles and bars MUST tell them apart by fill (hollow and solid) as well as by colour. Note: (v0.5.0)
+- REQ-THEME-065: The default `up` and `down` tokens MUST be a blue and an orange at least 50 CIEDE2000 apart under normal vision and the three simulated deficiencies, overridable like every token. [ADR-123](adr/123-colour-defaults-held-to-measured-bars.md) Note: (v0.5.0)
+
 ### 11.2 One ink
 
 - REQ-MONO-010: In one ink, line series 1–4 MUST draw with the dash patterns solid, 3 on 1 off, 1 on 1 off, and 3 on 1 off 1 on 1 off, counted in dot columns from the x scale's origin, so a pan by n whole dots shifts the pattern by n dots. [ADR-123](adr/123-colour-defaults-held-to-measured-bars.md) Note: (v0.3.0)
 - REQ-MONO-040: The legend MUST draw each series' key beside its name as the series is drawn: a solid line in the series' colour, and in one ink (or with patterns on) its pattern, marker or fill. Note: (v0.3.0)
+
+- REQ-MONO-020: In one ink, series 5–8 MUST repeat patterns 1–4 and add a marker each from `● ○ ■ □ ▲ △ ◆ ◇`, at most one marker a cell. Note: (v0.5.0)
+- REQ-MONO-030: In one ink, bar and area series MUST fill with `█ ▓ ▒ ░` by series. Note: (v0.5.0)
 
 ### 11.3 Accessibility
 
