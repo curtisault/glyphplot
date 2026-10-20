@@ -25,10 +25,10 @@ TypeScript shell, and in the terminal by a CLI. Every chart draws data the page
 or the terminal gives it. It is the sibling of unicel (`../animate-unicode`)
 and follows its architecture (ADR-003), sharing no code with it (ADR-013).
 
-**Status: v0.3.0, the line chart end to end.** The core, the `line` chart,
-the wasm boundary, the TypeScript shell and `<glyph-plot>`, the contract and
-snapshots, and the Node and Playwright tests are built. The next session
-builds Phase 3, the contract's other rules and the budgets.
+**Status: v0.4.0, the contract and the budgets.** The `line` chart works end
+to end and is held by the whole chart contract, time budgets, native and
+browser benches and `signoff` as CI. The next session builds Phase 4:
+candles, bar and the sparkline.
 
 | Path | What |
 |---|---|
@@ -63,7 +63,10 @@ mise is the only entry point (`mise tasks` lists them all).
 - `mise run snap [type …]` (rewrite snapshots), `mise run test:site` (all
   Playwright tests; `check` runs the smoke set), `mise run dev` (the debug
   build with the checklist page, rebuilt on change), `mise run bench:render`.
-- `mise run bench` arrives with Phase 3.
+- `mise run bench` (native, exits 1 over budget), `bench:web`, `bench:load`,
+  `test:budgets`, `size --charts`.
+- `mise run signoff` checks every open PR's head and posts a `signoff`
+  status (`-- <rev>` checks a local revision and posts nothing).
 
 ## Conventions
 

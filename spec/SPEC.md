@@ -1,6 +1,6 @@
 # glyphplot — Specification
 
-Version 0.3.0 · 2026-10-19 · License: MIT
+Version 0.4.0 · 2026-10-20 · License: MIT
 
 glyphplot is an interactive charting library whose charts are drawn in
 Unicode glyphs, one code point and one colour a cell. Charts are Rust,
@@ -9,7 +9,7 @@ by a `<glyph-plot>` custom element over a small TypeScript shell and in the
 terminal by a CLI; every chart draws data the page or the terminal gives it.
 
 This document describes the application exactly as it stands. On
-2026-10-19 v0.3.0, the line chart end to end, is built: a section with nothing
+2026-10-20 v0.4.0, the contract and the budgets, is built: a section with nothing
 built
 holds only its heading and the words "nothing is built". Requirements arrive
 from
@@ -155,9 +155,11 @@ palette and themes; data and fixtures; scales, ticks, formats and time
 checked against d3; layout and text; the font. v0.3.0 (Phase 2) was built
 on 2026-10-19: the chart framework and the `line` chart, the wasm boundary,
 the TypeScript shell and `<glyph-plot>`, the contract test and snapshots,
-the Node and Playwright tests, `mise run dev` and the renderer bench. Phase
-3, the contract's other rules and the budgets, is next
-(`docs/IMPLEMENTATION_PLAN.md`).
+the Node and Playwright tests, `mise run dev` and the renderer bench. v0.4.0
+(Phase 3) was built on 2026-10-20: the contract's other rules and its
+self-test, the time budgets, the native and browser benches, the size
+breakdown and `signoff` as CI. Phase 4, candles, bar and the sparkline, is
+next (`docs/IMPLEMENTATION_PLAN.md`).
 
 ---
 
@@ -400,6 +402,16 @@ for `line`.
 - REQ-CONTRACT-010: `crates/glyphplot/tests/contract.rs` MUST check every registered chart against rules 1–9 and 29 of the plan's [contract rules](../docs/IMPLEMENTATION_PLAN.md#contract-rules) table (meta, options, shape, no panic, charset, colours, first frame, determinism, out-of-order calls, snapshots), over every fixture whose shape the chart accepts, at 1 × 1, `META.min`, 40 × 12, 80 × 24 and 320 × 120, with no test of the chart's own. Note: (v0.3.0)
 - REQ-CONTRACT-020: The contract MUST report every failing chart in one run, spread charts over threads, print a per-chart table with `--nocapture`, and accept `CHART=<type>[,<type>…]`, failing on an unknown type. Note: (v0.3.0)
 
+From v0.4.0 the contract checks rules 1–13 and 15–29; rule 14 (streaming)
+comes with v0.6.0, and rule 25 is skipped, saying why, for a chart with no
+log scale. Events and views are validated in Rust against their schemas.
+The `contract-selftest` feature registers three broken charts the contract
+must reject. The whole contract binary runs in about 5.6 s for `line`.
+
+- REQ-CONTRACT-030: The contract MUST also check rules 10–13, 15–28 of the table: one ink and series told apart in it, paper, resize, replace is whole, view round trip, scripted input, events against the schema, hits naming what was drawn, hit and readout agreeing, empty and edge fixtures, gaps, tick labels, log-invalid values, unsorted and duplicate x, exact downsampling and wrong shapes. Note: (v0.4.0)
+- REQ-CONTRACT-050: Time budgets (rule 30) MUST be checked in `tests/budgets.rs`, a test binary of its own, only without debug assertions; a chart over budget MUST be timed twice more, and the lowest average and the lowest worst count. [ADR-126](adr/126-correctness-and-timing-apart.md) Note: (v0.4.0)
+- REQ-CONTRACT-060: A `contract-selftest` feature MUST register three broken charts (non-deterministic, outside its charset, keeping state across appends), and a test MUST assert that the contract rejects each with the matching message. Note: (v0.4.0)
+
 ### 6.5 Fixtures, snapshots, references and properties
 
 The properties run at proptest's default 256 cases in `check` and passed at
@@ -530,7 +542,7 @@ budgets; the debug build maps every type to `all`.
 - REQ-MANIFEST-010: `web/pkg/modules.js` MUST export `charts` (every chart's meta, in registry order), `modules` (type → module), `imports` (module → a function importing `./<module>/glyphplot.js`), `wasm` (module → a function returning `new URL("./<module>/glyphplot_bg.wasm", import.meta.url)`, written as that literal so a bundler emits the file and rewrites the URL), `fallback` and `budgets` (module → `{gzip, frameMs, worstMs, inputMs}`), of the shape of [manifest.schema.json](schemas/manifest.schema.json); the same budgets MUST be in `web/pkg/budgets.json` and the gzipped sizes in `web/pkg/sizes.json` ([sizes.schema.json](schemas/sizes.schema.json)). Note: (v0.3.0)
 - REQ-MANIFEST-020: In the release build every type MUST map to the module of its family, which plays exactly the types the manifest gives it, and `fallback` MUST be `null`; the debug build MUST map every type to `all`. Note: (v0.3.0)
 - REQ-LOAD-010: `chart(type, init)` MUST return its `Chart` at once (so calls can queue, REQ-LOAD-030), load the type's module at most once a page, share it with every later caller, reject its `ready` with `there is no chart named "<type>"` for a type no module plays, and try a failed load again on the next call. Note: (v0.3.0)
-- REQ-LOAD-020: The element MUST load nothing until it first comes within one screen height of the viewport (IntersectionObserver, `rootMargin: "100% 0px"`), unless `loading="eager"` or there is no IntersectionObserver. Note: (v0.3.0)
+- REQ-LOAD-020: The element MUST fetch no wasm module or glue (the manifest ships in the shell, changed in v0.4.0) until it first comes within one screen height of the viewport (IntersectionObserver, `rootMargin: "100% 0px"`), unless `loading="eager"` or there is no IntersectionObserver. Note: (v0.3.0)
 - REQ-LOAD-030: A `data`, `options` or `view` set and every `append` made before the chart exists MUST be applied in order once it is made; a `data` set MUST discard the appends queued before it. Note: (v0.3.0)
 
 ---
@@ -685,6 +697,8 @@ Nothing is built.
 - REQ-BUILD-040: `mise run build:wasm:debug` MUST build one module, `all`, with every family and the `debug` feature, in its own cargo target dir, staged beside `web/pkg` and swapped in whole, so a failed build leaves the last good `web/pkg`. Note: (v0.3.0)
 - REQ-BUILD-080: `mise run dev` MUST serve the debug build with the checklist page and rebuild the debug wasm when a file under `crates/` changes, reloading the page. Note: (v0.3.0)
 
+- REQ-BUILD-090: `mise run check` SHOULD finish in under five minutes from a warm cache on the reference machine. Note: (v0.4.0)
+
 ### 16.2 Lint
 
 `mise run lint` also checks each family alone (`cargo check -p glyphplot
@@ -713,6 +727,14 @@ gzipped, and its JS glue 7,016 B, 2,016 B gzipped (`mise run size`).
 
 - REQ-SIZE-060: No wasm module's dependency tree MUST hold chrono, time, jiff, chrono-tz, num-format, any `icu_` crate, arrow, arrow2 or vsop87, which `mise run lint` checks with `cargo tree -e normal --target wasm32-unknown-unknown`. Note: (v0.2.0)
 
+`mise run size --charts` splits each module by owner from a build with
+names (`scripts/size-charts.mjs`): the chart, the core, serde and
+serde_json, the rest, and data. A function's gzipped share is its raw share
+times the module's gzipped size. On 2026-10-20 the line module is 175,578 B
+gzipped; JSON through serde derives is its largest part.
+
+- REQ-SIZE-050: `mise run size --charts` MUST list, for each module, the gzipped share of the chart's own code, the core, serde and serde_json, and the rest (std, alloc, wasm-bindgen), from an unstripped build. Note: (v0.4.0)
+
 ### 16.4 Time and memory budgets
 
 In Node 26 a 1M-point chart grew memory 16.2 MB against its 17.0 MB limit;
@@ -724,6 +746,24 @@ freeing and remaking grew 0 B.
 - REQ-MEM-020: The element MUST load a typed-array column into wasm memory with at most one copy. Note: (v0.3.0)
 - REQ-MEM-030: Replacing a chart's data with data of the same or smaller size, or freeing a chart and making another of the same capacity, MUST NOT grow wasm memory, except that a chart first framed after its first replace MAY grow by one column on its second (measured 8,060,928 B at 1,000,000 rows). Note: (v0.3.0)
 
+Measured on 2026-10-20 for `line`:
+- natively (`tests/budgets.rs`, contract profile), 1.80 ms a frame over 1M
+  points at 320 × 120 and 0.010 ms a pointer move;
+- in headless Chromium 156 (`mise run bench:web`), 4.14 ms a frame and
+  0.055 ms a move;
+- the first frame (`mise run bench:load`, median of 7 cold loads) takes
+  796 ms on 170 ms / 9 Mbps and 3,022 ms on slow 4G. The shell ships the
+  manifest and fetches the wasm alongside its glue, so a page needs no
+  preload hints.
+
+- REQ-PERF-030: In a release build, every chart MUST average at most 4 ms a frame with no frame over 16 ms, over 300 frames of a view panning across a fixture of 1,000,000 points at 80 × 24 and 320 × 120 with default options, measured natively by `tests/budgets.rs`. Note: (v0.4.0)
+- REQ-PERF-040: In a release build, every chart MUST average at most 1 ms a frame with no frame over 8 ms over the same play with a fixture of 100,000 points. Note: (v0.4.0)
+- REQ-PERF-050: A pointer move (hit test, crosshair and readout) MUST average at most 0.5 ms with none over 2 ms over 300 moves across a chart holding 1,000,000 points, natively in release and in wasm in headless Chromium. Note: (v0.4.0)
+- REQ-PERF-060: In headless Chromium on the reference machine, every chart MUST average at most 8 ms a frame with no frame over 16 ms in the play of REQ-PERF-030, checked by `mise run bench:web` in `signoff`. Note: (v0.4.0)
+- REQ-PERF-080: A page holding one chart MUST draw its first frame within 1.0 s of navigation start on a 170 ms, 9 Mbps profile, median of 7 cold loads in headless Chromium; `mise run bench:load` MUST also report, without gating, the time on Lighthouse 12's `mobileSlow4G` request-level profile (562.5 ms, 1.44 Mbps, CPU 4×); both run in `signoff`. [ADR-133](adr/133-a-350-kb-module-gate.md) Note: (v0.4.0)
+- REQ-BENCH-010: `mise run bench [type …]` MUST print the load average, then a row per type, fixture size (1k, 100k, 1M) and grid size (80 × 24, 320 × 120) with average, worst, budget and `OVER`, and exit 1 when any row is over. Note: (v0.4.0)
+- REQ-BENCH-020: `mise run bench:web`, `bench:load` and `bench:render` MUST run the discovery harnesses' successors in headless Chromium against the release build and print their tables with the load average. Note: (v0.4.0)
+
 ### 16.5 Local CI (signoff)
 
 `mise run signoff [rev]` checks a commit (HEAD by default) out into
@@ -733,6 +773,13 @@ freeing and remaking grew 0 B.
 commit status yet; REQ-CI-020 adds that in v0.4.0.
 
 - REQ-CI-010: There MUST be no hosted CI workflow; `mise run signoff` is CI ([ADR-003](adr/003-unicels-architecture.md)). Note: (v0.1.0)
+
+From v0.4.0 `mise run signoff` checks each open pull request's head (or the
+PRs named) in its own detached worktree and posts a `signoff` commit
+status; a revision argument checks locally and posts nothing. A PR whose
+tree has no `check` task is skipped.
+
+- REQ-CI-020: `mise run signoff` MUST, for each open pull request (or those named), copy the head commit's tree into `target/ci/tree`, run `npm ci`, `lint`, `test`, `build`, `size`, the whole of `test:site`, `bench:web` and `bench:load` there, with `PROPTEST_CASES=4096`, log to `target/ci/logs/`, and post a `signoff` commit status; it MUST exit 1 when any pull request fails, after checking the rest. Note: (v0.4.0)
 
 ---
 
