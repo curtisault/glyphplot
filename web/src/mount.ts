@@ -39,12 +39,29 @@ export interface MountOptions {
   paintGround?: boolean;
   /** Draw nothing until the first `resize` (the element sizes the grid first). */
   waitForSize?: boolean;
-  /** Called after each frame drawn, with the grid and what was redrawn. */
-  onFrame?: (g: GridViews, stats: DrawStats | null) => void;
+  /** Called after each frame drawn, with the grid, what was redrawn and how long the frame took. */
+  onFrame?: (g: GridViews, stats: DrawStats | null, timing: FrameTiming) => void;
   /** Called with each dispatched event. */
   onEvent?: (e: WasmEvent) => void;
   /** Called when a call traps or fails; drawing stops. */
   onError?: (message: string) => void;
+}
+
+/**
+ * What the last display frame cost, in ms of `performance.now()`: the
+ * benches (`mise run bench:web`) and the debug overlay read it.
+ */
+export interface FrameTiming {
+  /** The inputs applied this display frame (hit test, crosshair, readout in wasm), 0 with none. */
+  input: number;
+  /** `chart.frame`: the chart's frame in wasm, 0 when nothing was drawn. */
+  frame: number;
+  /** The canvas draw (or the `<pre>`'s text), 0 when nothing was drawn. */
+  draw: number;
+  /** Whether a frame was drawn. */
+  drew: boolean;
+  /** Display frames ticked since mount, counting this one. */
+  tick: number;
 }
 
 /** A mounted chart. */
@@ -71,6 +88,8 @@ export interface Mount {
   readonly t: number;
   /** `frame` calls made: a theme change makes none. */
   readonly frames: number;
+  /** The last display frame's cost (the object is reused: copy what you keep). */
+  readonly timing: Readonly<FrameTiming>;
   readonly cols: number;
   readonly rows: number;
 }
@@ -114,6 +133,8 @@ export function mount(el: HTMLCanvasElement | HTMLPreElement, chart: Chart, opts
   let cols = 0;
   let rows = 0;
   let sized = !opts.waitForSize;
+  const timing: FrameTiming = { input: 0, frame: 0, draw: 0, drew: false, tick: 0 };
+  const now = (): number => performance.now();
 
   const fail = (e: unknown): void => {
     const m = messageOf(e);
@@ -160,7 +181,9 @@ export function mount(el: HTMLCanvasElement | HTMLPreElement, chart: Chart, opts
   };
 
   const draw = (): void => {
+    const t0 = now();
     const g = chart.frame(t, paper);
+    const t1 = now();
     frames++;
     let stats: DrawStats | null = null;
     if (renderer) stats = renderer.draw(g);
@@ -171,10 +194,13 @@ export function mount(el: HTMLCanvasElement | HTMLPreElement, chart: Chart, opts
         lastText = text;
       }
     }
+    timing.frame = t1 - t0;
+    timing.draw = now() - t1;
+    timing.drew = true;
     cols = g.cols;
     rows = g.rows;
     dirty = false;
-    opts.onFrame?.(g, stats);
+    opts.onFrame?.(g, stats, timing);
   };
 
   const closeGestures = (): void => {
@@ -188,17 +214,22 @@ export function mount(el: HTMLCanvasElement | HTMLPreElement, chart: Chart, opts
     }
   };
 
-  function tick(now: number): void {
+  function tick(at: number): void {
     rafId = null;
     if (stopped) return;
+    timing.tick++;
+    timing.input = timing.frame = timing.draw = 0;
+    timing.drew = false;
     try {
       if (fixedTime !== null) t = fixedTime;
       else if (motionEnd !== null) {
-        if (lastNow !== null) t += Math.max(0, now - lastNow) / 1000;
-        lastNow = now;
+        if (lastNow !== null) t += Math.max(0, at - lastNow) / 1000;
+        lastNow = at;
       } else lastNow = null;
       let changed = 0;
+      const i0 = now();
       for (const e of queue.take()) changed |= chart.inputRaw(e.kind, e.x, e.y, e.a, e.b, e.buttons, e.mods, t);
+      timing.input = now() - i0;
       if (changed & Changed.events) {
         for (const e of gate.frame(chart.events())) {
           dispatch(e);
@@ -450,6 +481,9 @@ export function mount(el: HTMLCanvasElement | HTMLPreElement, chart: Chart, opts
     },
     get frames() {
       return frames;
+    },
+    get timing() {
+      return timing;
     },
     get cols() {
       return cols;

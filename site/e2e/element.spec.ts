@@ -350,10 +350,37 @@ test("loading is lazy: nothing is fetched until the element is within a screen o
   const top = await el.evaluate((e) => e.getBoundingClientRect().top + scrollY);
   await page.evaluate((y) => scrollTo(0, y), top - 800 - 400);
   await expect.poll(() => wasm.length).toBe(1);
-  expect(await page.evaluate(() => window.gp.instantiations.get("line"))).toBe(1);
+  // The wasm's fetch leaves before the glue arrives (REQ-PERF-080), so instantiation follows it.
+  await expect.poll(() => page.evaluate(() => window.gp.instantiations.get("line"))).toBe(1);
+  expect(wasm).toHaveLength(1);
   // On screen it draws.
   await el.scrollIntoViewIfNeeded();
   await el.evaluate((e) => (e as El).ready);
+});
+
+test("the wasm's fetch starts while the glue is still arriving, once, and the manifest is no request of its own (REQ-PERF-080)", async ({ page }) => {
+  const wasm: string[] = [];
+  page.on("request", (r) => {
+    if (r.url().endsWith(".wasm")) wasm.push(r.url());
+  });
+  let release = (): void => {};
+  const held = new Promise<void>((ok) => (release = ok));
+  let glue = "";
+  // Hold the module's glue: the wasm must be asked for while it is held.
+  await page.route(/\/glyphplot-[^/]*\.js$/, async (route) => {
+    glue = route.request().url();
+    await held;
+    await route.continue();
+  });
+  const added = addChart(page);
+  await expect.poll(() => wasm.length).toBe(1);
+  expect(glue).not.toBe("");
+  release();
+  await added;
+  expect(wasm).toHaveLength(1);
+  expect(await page.evaluate(() => window.gp.instantiations.get("line"))).toBe(1);
+  const names = await page.evaluate(() => performance.getEntriesByType("resource").map((e) => e.name));
+  expect(names.filter((n) => /\/modules[-.][^/]*\.js$/.test(n))).toEqual([]);
 });
 
 test("a chart draws only while it intersects the viewport", async ({ page }) => {

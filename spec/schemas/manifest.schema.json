@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/curtisault/glyphplot/spec/schemas/manifest.schema.json",
   "title": "Wasm manifest (web/pkg/modules.js)",
-  "description": "The data exports of web/pkg/modules.js, written during `mise run build:wasm` (or build:wasm:debug) (REQ-MANIFEST-010). modules.js is an ES module, not JSON: it also exports `imports`, an object of module name to a function returning `import(\"./<module>/glyphplot.js\")`, which no JSON can hold and this schema leaves out. The site boots from `charts`, the shell's `moduleOf()` reads `modules` and `fallback`, and `chart(type, init)` loads a type's module at most once a page (REQ-LOAD-010). `budgets` is also written as web/pkg/budgets.json.",
+  "description": "The data exports of web/pkg/modules.js, written during `mise run build:wasm` (or build:wasm:debug) (REQ-MANIFEST-010). modules.js is an ES module, not JSON: it also exports `imports`, an object of module name to a function returning `import(\"./<module>/glyphplot.js\")`, and `wasm`, an object of module name to a function returning `new URL(\"./<module>/glyphplot_bg.wasm\", import.meta.url)` (the shell starts that fetch alongside the glue's import, and a bundler rewrites the literal), which no JSON can hold and this schema leaves out. The site boots from `charts`, the shell's `moduleOf()` reads `modules` and `fallback`, and `chart(type, init)` loads a type's module at most once a page (REQ-LOAD-010). `budgets` is also written as web/pkg/budgets.json.",
   "type": "object",
   "required": ["charts", "modules", "fallback", "budgets"],
   "properties": {

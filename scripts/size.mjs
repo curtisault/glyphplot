@@ -6,10 +6,18 @@
 //   node scripts/size.mjs                     the table and the gate
 //   node scripts/size.mjs --write             only web/pkg/sizes.json (build:wasm)
 //   node scripts/size.mjs --write --pkg DIR   the same for a staged build in DIR
+//   node scripts/size.mjs --charts [--top N]  what each module is made of, from an
+//                                             unstripped build (REQ-SIZE-050,
+//                                             scripts/size-charts.mjs)
 import { appendFileSync, existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { resolve } from "node:path";
+
+if (process.argv.includes("--charts")) {
+  const { main } = await import("./size-charts.mjs");
+  process.exit(main(process.argv.slice(2)));
+}
 
 const at = process.argv.indexOf("--pkg");
 const dir = at >= 0 ? process.argv[at + 1] : undefined;

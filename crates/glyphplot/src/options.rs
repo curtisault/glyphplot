@@ -20,6 +20,14 @@ use serde_json::{Map, Value};
 
 use crate::chart::{MakeError, Meta};
 
+/// `v` as compact JSON, the text `v.to_string()` gives. Through
+/// `serde_json::to_string`, because `Value`'s `Display` instantiates a second
+/// serializer, compact and pretty, for its `fmt::Write` adapter: about 3.9 KB
+/// of the wasm module (`mise run size --charts`).
+fn json_text(v: &Value) -> String {
+    serde_json::to_string(v).unwrap_or_default()
+}
+
 /// A chart's options: overrides layered on defaults (REQ-OPT-010).
 #[derive(Clone, Debug, Default)]
 pub struct Options {
@@ -164,14 +172,14 @@ impl Options {
 
     /// The overrides alone, as JSON.
     pub fn overrides_json(&self) -> String {
-        Value::Object(self.overrides.clone()).to_string()
+        json_text(&Value::Object(self.overrides.clone()))
     }
 
     /// The options as a chart reads them, defaults filled in, as JSON.
     pub fn to_json(&self) -> String {
         let mut all = self.defaults.clone();
         all.extend(self.overrides.clone());
-        Value::Object(all).to_string()
+        json_text(&Value::Object(all))
     }
 
     /// The `mode` option checked against `meta.modes`: the default, the
@@ -183,7 +191,7 @@ impl Options {
         match given {
             None => Ok(meta.modes[0]),
             Some(Value::String(s)) => meta.modes.iter().copied().find(|m| m == s).ok_or_else(|| MakeError::Mode { mode: s.clone(), modes: meta.modes }),
-            Some(other) => Err(MakeError::Mode { mode: other.to_string(), modes: meta.modes }),
+            Some(other) => Err(MakeError::Mode { mode: json_text(other), modes: meta.modes }),
         }
     }
 }

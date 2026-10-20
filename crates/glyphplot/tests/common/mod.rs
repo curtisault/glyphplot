@@ -3,6 +3,8 @@
 //! draw from its data, panics caught as failures, a pool of threads, and the
 //! tally each check adds to (REQ-CONTRACT-010, REQ-CONTRACT-020).
 
+pub mod probe;
+pub mod schema;
 pub mod snap;
 
 use std::cell::{Cell, RefCell};
@@ -39,15 +41,20 @@ pub fn sizes(entry: &Entry) -> Vec<(usize, usize)> {
     out
 }
 
-/// The charts under test: every registered chart, or the types `CHART`
-/// names, comma-separated. An unknown type fails the test
-/// (REQ-CONTRACT-020).
+/// The family of the broken charts the `contract-selftest` feature
+/// registers (REQ-CONTRACT-060): the contract must reject them, so they are
+/// under test only when `CHART` names them or the self-test asks for them.
+pub const SELFTEST: &str = "selftest";
+
+/// The charts under test: every registered chart but the self-test's broken
+/// ones, or the types `CHART` names, comma-separated. An unknown type fails
+/// the test (REQ-CONTRACT-020).
 pub fn charts() -> Vec<&'static Entry> {
     let all: Vec<&'static Entry> = registry::entries().collect();
     let wanted = std::env::var("CHART").unwrap_or_default();
     let names: Vec<&str> = wanted.split([',', ' ']).map(str::trim).filter(|s| !s.is_empty()).collect();
     if names.is_empty() {
-        return all;
+        return all.into_iter().filter(|e| e.meta.family != SELFTEST).collect();
     }
     let unknown: Vec<&str> = names.iter().copied().filter(|n| !all.iter().any(|e| e.meta.slug == *n)).collect();
     assert!(
@@ -107,27 +114,28 @@ impl Font {
 /// options: column names, category labels, string values and every string in
 /// the options (REQ-CHAR-010). Only these may be drawn outside the font.
 pub fn label_chars(data: &Data, options_json: &str) -> BTreeSet<char> {
-    let mut out = BTreeSet::new();
+    label_strings(data, options_json).iter().flat_map(|s| s.chars()).collect()
+}
+
+/// The label text that comes from the data or the options, string by string:
+/// table, column and matrix names, category labels, string values and every
+/// string in the options.
+pub fn label_strings(data: &Data, options_json: &str) -> Vec<String> {
+    let mut out = Vec::new();
     for (name, table) in data.tables() {
-        out.extend(name.chars());
+        out.push(name.to_string());
         for column in table.columns() {
-            out.extend(column.name.chars());
-            for label in &column.categories {
-                out.extend(label.chars());
-            }
+            out.push(column.name.clone());
+            out.extend(column.categories.iter().cloned());
             if let Values::Text(texts) = &column.values {
-                for t in texts {
-                    out.extend(t.chars());
-                }
+                out.extend(texts.iter().cloned());
             }
         }
     }
-    for (name, _) in data.matrices() {
-        out.extend(name.chars());
-    }
-    fn strings(v: &serde_json::Value, out: &mut BTreeSet<char>) {
+    out.extend(data.matrices().map(|(name, _)| name.to_string()));
+    fn strings(v: &serde_json::Value, out: &mut Vec<String>) {
         match v {
-            serde_json::Value::String(s) => out.extend(s.chars()),
+            serde_json::Value::String(s) => out.push(s.clone()),
             serde_json::Value::Array(a) => a.iter().for_each(|e| strings(e, out)),
             serde_json::Value::Object(m) => m.values().for_each(|e| strings(e, out)),
             _ => {}
@@ -136,6 +144,8 @@ pub fn label_chars(data: &Data, options_json: &str) -> BTreeSet<char> {
     if let Ok(v) = serde_json::from_str::<serde_json::Value>(options_json) {
         strings(&v, &mut out);
     }
+    out.sort();
+    out.dedup();
     out
 }
 
@@ -203,6 +213,8 @@ pub struct Tally {
     pub fails: BTreeMap<u32, u64>,
     /// The first failures of each rule, in words.
     pub examples: Vec<String>,
+    /// Rules not checked, each with the reason, said once.
+    pub skips: BTreeMap<u32, String>,
     /// Frames drawn.
     pub frames: u64,
     /// Time spent, summed over the threads that did the work.
@@ -223,8 +235,22 @@ impl Tally {
         }
     }
 
+    /// Records that `rule` was not checked, and why.
+    pub fn skip(&mut self, rule: u32, why: impl Into<String>) {
+        self.skips.entry(rule).or_insert_with(|| why.into());
+    }
+
+    /// The failures counted so far, all rules together, to tell whether the
+    /// checks since a count passed.
+    pub fn failures(&self) -> u64 {
+        self.fails.values().sum()
+    }
+
     /// Adds another tally of the same chart.
     pub fn merge(&mut self, other: Tally) {
+        for (r, why) in other.skips {
+            self.skips.entry(r).or_insert(why);
+        }
         for (r, n) in other.checks {
             *self.checks.entry(r).or_default() += n;
         }
@@ -259,6 +285,7 @@ pub fn report(title: &str, rules: &[u32], tallies: &[(&'static str, Tally)], wal
         let mut line = format!("{slug:<12} {:>8}", t.frames);
         for r in rules {
             let cell = match (t.checks.get(r), t.fails.get(r)) {
+                (None, _) if t.skips.contains_key(r) => "skip".to_string(),
                 (None, _) => "-".to_string(),
                 (Some(_), Some(&f)) if f > 0 => format!("{f} FAIL"),
                 (Some(&n), _) => format!("{n} ok"),
@@ -267,6 +294,11 @@ pub fn report(title: &str, rules: &[u32], tallies: &[(&'static str, Tally)], wal
         }
         line += &format!(" {:>9.2}", t.time.as_secs_f64());
         println!("{line}");
+    }
+    for (slug, t) in tallies {
+        for (r, why) in t.skips.iter().filter(|(r, _)| rules.contains(r) && !t.checks.contains_key(r)) {
+            println!("{slug}: rule {r} skipped: {why}");
+        }
     }
     let failed: Vec<String> = tallies
         .iter()

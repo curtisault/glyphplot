@@ -20,9 +20,13 @@ unicode-width = "0.2"
 # Lean, as ADR-130 measured it.
 proptest = { version = "1.12", default-features = false, features = ["std"] }
 
-# As unicel's: size first, abort on panic (the contract test is the guard).
+# Size first, abort on panic (the contract test is the guard). `z` over
+# unicel's `s`: the line module 177,385 B gzipped against 191,283 B, and in
+# Node 26 its 1M-point frames 7–9 % faster, its 100k-point frames at
+# 320 × 120 up to 10 % slower, all far inside REQ-PERF-060 (Phase 3,
+# `mise run size`; best of 3 runs of 300 frames, load 12–15).
 [profile.release]
-opt-level = "s"
+opt-level = "z"
 lto = true
 codegen-units = 1
 panic = "abort"

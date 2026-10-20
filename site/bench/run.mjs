@@ -1,11 +1,13 @@
 // mise run bench:render: serves bench/render.html with Vite for the owner's
 // Chrome and Safari runs (REQ-RENDER-050), or, with --headless, runs it once
-// in Playwright's headless Chromium and prints the table (REQ-RENDER-010).
+// in Playwright's headless Chromium and prints the table with the load
+// average before and after (REQ-RENDER-010, REQ-BENCH-020).
 //
 //   node bench/run.mjs [--host] [--port N]       serve, until Ctrl-C
 //   node bench/run.mjs --headless [--runs N]     one headless run, printed
 import { createServer } from "vite";
 import { chromium } from "@playwright/test";
+import { load, machine } from "./common.mjs";
 
 const args = process.argv.slice(2);
 const flag = (name) => args.includes(name);
@@ -30,14 +32,17 @@ if (!headless) {
   console.log(`\nThe renderer bench: ${url}\nOpen it in Chrome and in Safari, press Run, and copy the table into the plan (the page says how). Ctrl-C stops.`);
 } else {
   const browser = await chromium.launch({ headless: true });
+  const started = Date.now();
   try {
+    console.log(`bench:render: headless Chromium ${browser.version()} (Playwright), ${machine()}, ${new Date().toISOString()}, ${runs} runs`);
     const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
     page.on("pageerror", (e) => console.error(`page error: ${e.message}`));
     await page.goto(`${url}?auto&runs=${runs}`);
     await page.waitForFunction(() => window.benchDone !== undefined, null, { timeout: 600_000, polling: 500 });
     const done = await page.evaluate(() => window.benchDone);
-    console.log(`headless Chromium ${browser.version()} (Playwright), software raster unless the machine's GPU is used headless`);
     console.log(done.table);
+    console.log("Headless Chromium rasters in software unless it uses the machine's GPU; the owner's Chrome and Safari runs choose the renderer (REQ-RENDER-050).");
+    console.log(`bench:render: ${((Date.now() - started) / 1000).toFixed(1)} s, load averages after ${load()}`);
   } finally {
     await browser.close();
     await server.close();

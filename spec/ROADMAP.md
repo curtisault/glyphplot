@@ -6,7 +6,7 @@ This document holds every requirement of glyphplot not yet built, grouped by
 area, each naming the milestone that ships it. When a milestone lands, its
 requirements move into [SPEC.md](SPEC.md) with their IDs unchanged, a line
 in their old section says where they went, and the milestone's row in §20
-says when it was built. v0.1.0 to v0.3.0 have shipped. IDs go up in tens within an area so a requirement
+says when it was built. v0.1.0 to v0.4.0 have shipped. IDs go up in tens within an area so a requirement
 can be added between two others (`REQ-DATA-045`); an ID is never reused,
 even after its requirement is removed.
 
@@ -67,7 +67,7 @@ REQ-VENDOR-010 and REQ-VENDOR-020 were withdrawn on 2026-10-18 by ADR-013, befor
 - Shipped in v0.1.0 and moved to [SPEC.md](SPEC.md) §16.1: REQ-BUILD-010, REQ-BUILD-020, REQ-BUILD-030, REQ-BUILD-050, REQ-BUILD-060.
 - Shipped in v0.3.0 and moved to [SPEC.md](SPEC.md) §16.1: REQ-BUILD-040, REQ-BUILD-080.
 - Shipped in v0.2.0 and moved to [SPEC.md](SPEC.md) §16.1: REQ-BUILD-070.
-- REQ-BUILD-090: `mise run check` SHOULD finish in under five minutes from a warm cache on the reference machine. (v0.4.0)
+- Shipped in v0.4.0 and moved to [SPEC.md](SPEC.md) §16.1: REQ-BUILD-090.
 
 ### 1.4 Lint (LINT)
 
@@ -78,7 +78,7 @@ REQ-VENDOR-010 and REQ-VENDOR-020 were withdrawn on 2026-10-18 by ADR-013, befor
 ### 1.5 Local CI (CI)
 
 - Shipped in v0.1.0 and moved to [SPEC.md](SPEC.md) §16.5: REQ-CI-010.
-- REQ-CI-020: `mise run signoff` MUST, for each open pull request (or those named), copy the head commit's tree into `target/ci/tree`, run `npm ci`, `lint`, `test`, `build`, `size`, the whole of `test:site`, `bench:web` and `bench:load` there, with `PROPTEST_CASES=4096`, log to `target/ci/logs/`, and post a `signoff` commit status; it MUST exit 1 when any pull request fails, after checking the rest. (v0.4.0)
+- Shipped in v0.4.0 and moved to [SPEC.md](SPEC.md) §16.5: REQ-CI-020.
 
 ---
 
@@ -226,10 +226,8 @@ REQ-VENDOR-010 and REQ-VENDOR-020 were withdrawn on 2026-10-18 by ADR-013, befor
 ### 6.2 The contract test (CONTRACT, FIX)
 
 - Shipped in v0.3.0 and moved to [SPEC.md](SPEC.md) §6.4: REQ-CONTRACT-010, REQ-CONTRACT-020.
-- REQ-CONTRACT-030: The contract MUST also check rules 10–13, 15–28 of the table: one ink and series told apart in it, paper, resize, replace is whole, view round trip, scripted input, events against the schema, hits naming what was drawn, hit and readout agreeing, empty and edge fixtures, gaps, tick labels, log-invalid values, unsorted and duplicate x, exact downsampling and wrong shapes. (v0.4.0)
+- Shipped in v0.4.0 and moved to [SPEC.md](SPEC.md) §6.4: REQ-CONTRACT-030, REQ-CONTRACT-050, REQ-CONTRACT-060.
 - REQ-CONTRACT-040: Appending a fixture in the batches 1, 7, ⌊n/3⌋ and the rest, with frames drawn between, MUST end on the frame and view that replacing with the same rows gives; with a ring of capacity c < n, on replacing with the last c rows (rule 14). (v0.6.0)
-- REQ-CONTRACT-050: Time budgets (rule 30) MUST be checked in `tests/budgets.rs`, a test binary of its own, only without debug assertions; a chart over budget MUST be timed twice more, and the lowest average and the lowest worst count. [ADR-126](adr/126-correctness-and-timing-apart.md) (v0.4.0)
-- REQ-CONTRACT-060: A `contract-selftest` feature MUST register three broken charts (non-deterministic, outside its charset, keeping state across appends), and a test MUST assert that the contract rejects each with the matching message. (v0.4.0)
 - Shipped in v0.2.0 and moved to [SPEC.md](SPEC.md) §6.5: REQ-FIX-010, REQ-REF-010, REQ-PROP-010.
 - REQ-FIX-020: Real datasets checked in under `crates/glyphplot/tests/data/` MUST each be under 100 KB, public domain or MIT-compatible, named with source and licence in that directory's README. (v0.5.0)
 
@@ -368,19 +366,15 @@ default), and reaches `mise run size`, the contract and the benches through
 ### 12.1 Size (SIZE)
 
 - Shipped in v0.1.0 and moved to [SPEC.md](SPEC.md) §16.3: REQ-SIZE-010, REQ-SIZE-020, REQ-SIZE-030, REQ-SIZE-040.
-- REQ-SIZE-050: `mise run size --charts` MUST list, for each module, the gzipped share of the chart's own code, the core, serde and serde_json, and the rest (std, alloc, wasm-bindgen), from an unstripped build. (v0.4.0)
+- Shipped in v0.4.0 and moved to [SPEC.md](SPEC.md) §16.3: REQ-SIZE-050.
 - Shipped in v0.2.0 and moved to [SPEC.md](SPEC.md) §16.3: REQ-SIZE-060.
 - REQ-SIZE-070: A pack module MUST stay under 32 KB gzipped. (v0.10.0)
 
 ### 12.2 Time (PERF)
 
 - Shipped in v0.3.0 and moved to [SPEC.md](SPEC.md) §16.4: REQ-PERF-010, REQ-PERF-020.
-- REQ-PERF-030: In a release build, every chart MUST average at most 4 ms a frame with no frame over 16 ms, over 300 frames of a view panning across a fixture of 1,000,000 points at 80 × 24 and 320 × 120 with default options, measured natively by `tests/budgets.rs`. (v0.4.0)
-- REQ-PERF-040: In a release build, every chart MUST average at most 1 ms a frame with no frame over 8 ms over the same play with a fixture of 100,000 points. (v0.4.0)
-- REQ-PERF-050: A pointer move (hit test, crosshair and readout) MUST average at most 0.5 ms with none over 2 ms over 300 moves across a chart holding 1,000,000 points, natively in release and in wasm in headless Chromium. (v0.4.0)
-- REQ-PERF-060: In headless Chromium on the reference machine, every chart MUST average at most 8 ms a frame with no frame over 16 ms in the play of REQ-PERF-030, checked by `mise run bench:web` in `signoff`. (v0.4.0)
+- Shipped in v0.4.0 and moved to [SPEC.md](SPEC.md) §16.4: REQ-PERF-030, REQ-PERF-040, REQ-PERF-050, REQ-PERF-060, REQ-PERF-080.
 - REQ-PERF-070: Appending one sample at 1 kHz to a full ring of 1,000,000 points while redrawing at 60 Hz MUST cost at most 500 ms of CPU a second in headless Chromium, the summed time of appends and frames over 10 simulated seconds. (v0.6.0)
-- REQ-PERF-080: A page holding one chart MUST draw its first frame within 1.0 s of navigation start on a 170 ms, 9 Mbps profile, median of 7 cold loads in headless Chromium; `mise run bench:load` MUST also report, without gating, the time on Lighthouse 12's `mobileSlow4G` request-level profile (562.5 ms, 1.44 Mbps, CPU 4×); both run in `signoff`. [ADR-133](adr/133-a-350-kb-module-gate.md) (v0.4.0)
 
 ### 12.3 Memory (MEM)
 
@@ -388,8 +382,7 @@ default), and reaches `mise run size`, the contract and the benches through
 
 ### 12.4 Benches (BENCH)
 
-- REQ-BENCH-010: `mise run bench [type …]` MUST print the load average, then a row per type, fixture size (1k, 100k, 1M) and grid size (80 × 24, 320 × 120) with average, worst, budget and `OVER`, and exit 1 when any row is over. (v0.4.0)
-- REQ-BENCH-020: `mise run bench:web`, `bench:load` and `bench:render` MUST run the discovery harnesses' successors in headless Chromium against the release build and print their tables with the load average. (v0.4.0)
+- Shipped in v0.4.0 and moved to [SPEC.md](SPEC.md) §16.4: REQ-BENCH-010, REQ-BENCH-020.
 
 ---
 
@@ -503,7 +496,7 @@ command verifies; real-browser checks are the owner's (REQ-TEST-030).
 | v0.1.0 (built 2026-10-18) | 0 · Toolchain green | ARCH-010, 040, 060, 070; INDEP-010–020; BUILD-010–030, 050, 060; LINT-010, 030; CI-010; SIZE-010–040; TEST-010; PKG-040 | `mise run check` exits 0 on an empty family; `mise run size` prints the empty module |
 | v0.2.0 (built 2026-10-18) | 1 · Core | GRID, CANVAS, COLOR-010–040, DATA-010–040, 080–090, 110, 130, SCALE-010–030, TICK-010–040, FMT-010–030, TZ-010, I18N-030–040, LAYOUT-010–030, TEXT, FIX-010, REF-010, PROP-010, FONT-010, BUILD-070, LINT-040, SIZE-060 | `mise run test:rust`: reference fixtures 0 differ; properties pass; `fixtures` regenerates bitwise |
 | v0.3.0 (built 2026-10-19) | 2 · Line end to end | the `line` type; VIEW-010–050; INPUT; HIT-010–020; OVERLAY; EVENT-010–030; KEY; TOUCH; CHART; OPT; REG; CONTRACT-010–020; SNAP; WASM; MANIFEST; LOAD; EL (most); MOUNT; JS; RENDER-010–030, 050; FONT-030; THEME-010–050, 070; MONO-010, 040; A11Y-010–070; PERF-010–020; MEM; DATA-050–070, 120; STREAM-060; SAMPLE-010–030; I18N-010–020, 050; FMT-060; CANVAS-040; EL-085; LAYOUT-040, 070; CHAR; TEST-020–040; E2E-010–040, 070; BUILD-040, 080; LINT-020; ARCH-020–050 | `mise run check`; `mise run test:site` (interaction, element, resize, axe) |
-| v0.4.0 | 3 · Contract and budgets | CONTRACT-030, 050, 060; PERF-030–060, 080; SIZE-050; BENCH; CI-020; BUILD-090 | `cargo test --profile contract --test contract --test budgets`; `mise run bench`; `mise run signoff` on the branch |
+| v0.4.0 (built 2026-10-20) | 3 · Contract and budgets | CONTRACT-030, 050, 060; PERF-030–060, 080; SIZE-050; BENCH; CI-020; BUILD-090 | `cargo test --profile contract --test contract --test budgets`; `mise run bench`; `mise run signoff` on the branch |
 | v0.5.0 | 4 · Candles, bar, sparkline | CANDLE-010–050; BAR-010–020; SPARK-010; SCALE-040–060; TICK-050–070; FMT-040–050; TZ-020–030, 050; LAYOUT-050–060; AXIS; ANNOT; LINK; EL-030, 050, 110; EVENT-010 (`plot-brush`, `plot-legend`); SAMPLE-040, 060; DATA-100; THEME-060, 065; MONO-020–030; RENDER-040; FONT-020; FIX-020 | contract and snapshots for the three types; the owner's candlestick on the checklist page |
 | v0.6.0 | 5 · Streaming | STREAM-010–050, 070; VIEW-060; CANDLE-060; CONTRACT-040; DATA-140–150; A11Y-080–100; PERF-070; E2E-050; EVENT-010 (`plot-data`) | `streaming.spec.ts`; `bench:web` streaming row; the owner's one-line test on a phone |
 | v0.7.0 | 6 · The site | SITE (all but 100); DATASET; A11Y-110; THEME-100; E2E-060; LINT-020 (site); PKG-060 | `mise run build:site`; `test:site` in full; `datasets:check` |

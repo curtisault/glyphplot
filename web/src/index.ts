@@ -3,7 +3,7 @@
 // Full packaging is v0.11.0.
 
 export { chart, Chart, VIEW_RESET, type ChartInit, type Change, type View } from "./chart.ts";
-export { mount, prefersReducedMotion, type Mount, type MountOptions } from "./mount.ts";
+export { mount, prefersReducedMotion, type FrameTiming, type Mount, type MountOptions } from "./mount.ts";
 export { manifest, moduleOf, setManifest, loadModule, loadFor, instantiations, type GridViews, type Loaded } from "./wasm.ts";
 export {
   prepare,

@@ -340,7 +340,7 @@ testing.md, with the milestone each rule lands in.
 | 7 | good first frame | Every non-empty fixture inks the plot area at the default view: ≥ 1 cell for `one`; otherwise ≥ 2% of plot cells, or a cell in at least half the plot's columns (a flat line at 320 × 120 inks 315 of 37,170 plot cells) | v0.3.0 |
 | 8 | determinism | Two fresh charts given the same data, options, view and `t` draw the same frame | v0.3.0 |
 | 9 | out-of-order calls | One chart asked for t = 6, 1, 2.5, 0 with `view()`, `hit()` and a repeated `frame()` between draws what a fresh chart draws in order | v0.3.0 |
-| 10 | one ink | `mono` frames keep rules 3–7 and pass the one-ink checks (ink 1–90%, no slab, glyphs in the font) | v0.4.0 |
+| 10 | one ink | `mono` frames keep rules 3–7 and pass the one-ink checks: ink in at least 1% of cells, no slab (no grid row or column, nor the whole plot, one glyph), glyphs in the font. (Until v0.4.0 the cap was 90% ink, which a correct one-ink area at 80 × 24 passes, at 91.8%.) | v0.4.0 |
 | 11 | one ink tells series apart | In `multi-4`, each series draws a glyph or pattern the others do not | v0.4.0 |
 | 12 | paper | `paper` frames keep rules 3–6 | v0.4.0 |
 | 13 | resize | A chart drawn at A, then B, then A draws its first A frame again; its B frame equals a fresh chart's; its view is unchanged in data units | v0.4.0 |
@@ -349,12 +349,12 @@ testing.md, with the milestone each rule lands in.
 | 16 | view round trip | `set_view(view())` changes nothing; a view through JSON onto a fresh chart draws the same frame | v0.4.0 |
 | 17 | input is deterministic | A scripted input list on two fresh charts gives the same events, views and frames; the resulting view on a third gives that frame | v0.4.0 |
 | 18 | events validate | Every event serialises to JSON that `events.schema.json` accepts | v0.4.0 |
-| 19 | hit names what was drawn | For up to 512 seeded plot cells, a named datum maps into that cell's column by the cell-mapping module; for a mark chart the frame drew its mark there | v0.4.0 |
+| 19 | hit names what was drawn | For up to 512 seeded plot cells, a named datum lies in the dot column under the probe when that column holds one, else it is the nearest datum on its left or right (hits snap, REQ-HIT-010); the datum is in the data, its x maps to the hit's column by the cell-mapping module, and that cell is inked; for a mark chart the frame drew its mark there | v0.4.0 |
 | 20 | hit and readout agree | The readout for a cursor at a cell names the datum `hit` returns there | v0.4.0 |
 | 21 | empty data | `empty` draws axes or "no data", `hit` is none, domains null | v0.4.0 |
 | 22 | one point | `one` draws its point in a padded domain; no label reads `NaN`, `inf` or `-0` | v0.4.0 |
 | 23 | gaps break lines | In line-like modes no dot column inside a NaN run is inked, unless `spanGaps` | v0.4.0 |
-| 24 | tick labels distinct and fitting | No two labels on an axis are equal; none overruns its gutter | v0.4.0 |
+| 24 | tick labels distinct and fitting | No two labels on a numeric axis are equal and numeric labels are in order; no two neighbouring labels are equal on any axis (d3's hourly time format writes `01 AM` each day); none overruns its gutter | v0.4.0 |
 | 25 | log-invalid values | Values ≤ 0 on a log scale are skipped, no panic, no NaN cells | v0.4.0 |
 | 26 | unsorted and duplicate x | `unsorted-x` draws its sorted copy's frame; `duplicate-x` is deterministic | v0.4.0 |
 | 27 | downsampling is exact | A line-like frame of x-sorted data equals the frame from every segment | v0.4.0 |
@@ -529,9 +529,19 @@ sends no other key:
 `modules.d.ts`, `budgets.json` and `sizes.json`
 ([manifest.schema.json](../spec/schemas/manifest.schema.json)): `charts`
 (every type's meta), `modules` (type → module: `line` and `sparkline` →
-`line`), `imports`, `fallback` (`null` in release, `"all"` in the debug
-build) and `budgets` (REQ-MANIFEST-010). `wasm.ts` imports a module once a
-page and shares it (REQ-LOAD-010), as unicel's does.
+`line`), `imports` (module → a function importing its glue,
+`./<module>/glyphplot.js`), `wasm` (module → a function returning
+`new URL("./<module>/glyphplot_bg.wasm", import.meta.url)`, a literal a
+bundler rewrites and emits once, as it does the glue's own), `fallback`
+(`null` in release, `"all"` in the debug build) and `budgets`
+(REQ-MANIFEST-010). `wasm.ts` imports modules.js statically, so a bundler
+puts it in the shell's chunk and the page makes no request for it, and
+imports a module once a page and shares it (REQ-LOAD-010), as unicel's does.
+To load a module it starts the wasm's fetch and the glue's import together
+and hands wasm-bindgen's init the pending `Response`, so a page's first
+frame waits on three requests in turn (the page, the shell, then the glue and
+the wasm together) rather than five, with no preload hints (REQ-PERF-080); in
+Node it reads the file instead.
 
 <a id="element-attributes"></a>
 ### The element
@@ -1282,6 +1292,50 @@ Acceptance:
 <a id="phase-3"></a>
 ### Phase 3 · Contract and budgets (v0.4.0)
 
+Done 2026-10-20. Every acceptance command passes. `mise run check` takes
+15.4 s warm (`time`). Differences from the tasks:
+- **Contract (task 1):**
+  - Rules 10, 19 and 24 as first worded failed on right frames: a one-ink
+    area inks 91.8 % of cells; hits snap to the nearest datum; d3 writes the
+    same hour label each day. The rules table now has the wordings the
+    contract checks, and an ignored test keeps the old ones.
+  - Rule 25 is skipped, saying why, until log scales land (v0.5.0).
+  - The new rules forced two chart fixes: one-ink area fills now take their
+    series' pattern, and the readout writes the datum's own values, since
+    serde_json's float parsing is not correctly rounded.
+  - serde_json's `float_roundtrip` would have fixed the parsing too, but
+    costs 10,322 B gzipped, so it is left off.
+- **Budgets (task 2):** `line`, natively, 1.80 ms a frame over 1M points at
+  320 × 120 and 0.010 ms a pointer move. `test:rust` runs the budgets; on a
+  machine loaded past about 22 a worst frame can still exceed 16 ms after
+  the retimes.
+- **Benches (task 3):**
+  - Headless Chromium 156: 4.14 ms a frame and 0.055 ms a move.
+  - `bench:load` first measured 1,132 ms on 170 ms / 9 Mbps, over budget:
+    the page made five requests in sequence. The shell now bundles the
+    manifest and fetches the wasm alongside its glue, which gives 796 ms
+    with no preload hints. REQ-LOAD-020 now says the element fetches no
+    wasm or glue before it nears the viewport.
+- **Size (task 4):** `size --charts` attributes the line module's
+  191,283 B: JSON parsing through serde derives with its exports (about
+  40 %), the chart, `f64` Display (pinned by serde) and sorts.
+  - Made, behaviour unchanged: `opt-level = "z"` (REQ-BUILD-050 changed
+    from `"s"`), one serializer instead of two, and a pick loop for a sort.
+    The module is now 175,578 B.
+  - Hand-written JSON readers would save about 25–35 KB more; that is left
+    as a proposal.
+  - Module paths are remapped so no home directory ships.
+- **Signoff (task 5):** checks each open PR's head in its own worktree and
+  posts a `signoff` status. Its first real run posted success on #2, #4, #5
+  and #6 and skipped #1, which has no tasks. #2's `check` was still the
+  placeholder, so that success checked nothing.
+- **Debug overlay (task 6):** debug builds show the last wasm, draw and
+  input times against the budget, outside the grid; release builds never
+  fetch it.
+- **Conformance:** an audit of v0.3.0's `yes` rows downgraded 38 of them
+  and corrected about 25 check names. Rows whose missing check was a
+  contract rule that now exists were upgraded after review.
+
 Tasks:
 1. Rules 10–13, 15–28 in `tests/contract.rs`, threads across charts; the
    `contract-selftest` feature with three broken charts (REQ-CONTRACT-030,
@@ -1499,7 +1553,7 @@ number (as unicel's `Category::budget()`).
 
 | Budget | Value | Measured | Held by |
 |---|---|---|---|
-| Module size, gzip -9 | 350 KB a chart module (358,400 B), warning at 175 KB; 32 KB a pack | line: 17.4 KB without serde, 49.3 KB with; + candles 51.4 KB; + M4 52.6 KB | `mise run size` (REQ-SIZE-010, 040, 070) |
+| Module size, gzip -9 | 350 KB a chart module (358,400 B), warning at 175 KB; 32 KB a pack | discovery's ladder: line 17.4 KB without serde, 49.3 KB with; + candles 51.4 KB; + M4 52.6 KB. Built (2026-10-20): line 175,578 B, mostly serde's JSON (`size --charts`) | `mise run size` (REQ-SIZE-010, 040, 070) |
 | Frame, native, ≤ 100k visible points | 1 ms average, 8 ms worst | ≤ 0.81 / ≤ 1.03 ms | `tests/budgets.rs` (REQ-PERF-040) |
 | Frame, native, ≤ 1M visible points | 4 ms average, 16 ms worst | 2.1–2.4 / 2.5–3.4 ms with M4 | `tests/budgets.rs` (REQ-PERF-030) |
 | Frame, Chromium, ≤ 1M visible points | 8 ms average, 16 ms worst | 3.2–3.7 / 3.7–4.2 ms; WebKit 3.8–4.3 / 4.5–5.0 | `bench:web` at signoff (REQ-PERF-060) |
@@ -1507,7 +1561,7 @@ number (as unicel's `Category::budget()`).
 | Streaming 1 kHz into a full 1M ring, 60 Hz | ≤ 500 ms of CPU a second in Chromium | 236 ms/s with M4 | `bench:web` (REQ-PERF-070) |
 | Memory a chart | 16 B a point of capacity (two columns) + 1 MiB | 17.7 MB at 1M zero-copy | `memory.test.mjs` (REQ-MEM-010) |
 | Memory on replace or free | no growth | pages unchanged after free (522) | `memory.test.mjs` (REQ-MEM-030) |
-| First frame, one chart | 1.0 s on 170 ms / 9 Mbps; Lighthouse slow 4G reported, not gated | 635 ms and 2,082 ms (443 and 1,500 with preload hints) | `bench:load` at signoff (REQ-PERF-080) |
+| First frame, one chart | 1.0 s on 170 ms / 9 Mbps; Lighthouse slow 4G reported, not gated | discovery: 635 ms and 2,082 ms (443 and 1,500 with preload hints). Built (2026-10-20): 796 ms and 3,022 ms with no hints | `bench:load` at signoff (REQ-PERF-080) |
 | Font | ≤ 32 KB woff2 | tier A 25,344 B | `build:font` (REQ-FONT-010) |
 | `check` | under 5 minutes, warm | unicel's contract alone: 32.5 s idle | (REQ-BUILD-090) |
 

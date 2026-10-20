@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en-US">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Load bench</title>
+<meta name="description" content="glyphplot's load bench page: one line chart, timed from navigation start to its first frame by mise run bench:load (REQ-PERF-080).">
+<style>
+  body { margin: 0; padding: 16px; background: #fff; color: #1b1b1b; font: 16px/1.4 system-ui, sans-serif; }
+  glyph-plot { width: 640px; height: 320px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Load bench</h1>
+  <glyph-plot id="chart" type="line" loading="eager" label="A sine of 1,000 points"></glyph-plot>
+</main>
+<script type="module" src="./load.ts"></script>
+</body>
+</html>

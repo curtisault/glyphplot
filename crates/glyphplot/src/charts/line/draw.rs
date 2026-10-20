@@ -10,7 +10,9 @@
 //! the path (REQ-LINE-030). Series are drawn in z-order on one colour
 //! canvas, a cell taking the ink of the last series lighting it
 //! (REQ-CANVAS-040, REQ-CHART-060); in one ink, line series take the dash
-//! patterns of REQ-MONO-010 counted from the x origin.
+//! patterns of REQ-MONO-010 counted from the x origin, and an area series
+//! fills to its baseline only in its pattern's dot columns, its line drawn
+//! in every column (contract rule 11).
 
 use std::ops::Range;
 
@@ -230,7 +232,13 @@ pub(super) fn base(grid: &mut Grid, canvas: &mut ColorCanvas, cache: &mut Cache,
                 let base_dot = base_dot.max(-1).min(h);
                 for x in 0..w as usize {
                     if top[x] <= bot[x] {
-                        let (a, b) = (top[x].min(base_dot).max(0), bot[x].max(base_dot).min(h - 1));
+                        // Patterned (one ink, or `patterns: "on"`), the fill
+                        // to the baseline takes the series' dash pattern by
+                        // dot column, as a line does, and the line itself
+                        // every column, so series of one ink differ in their
+                        // fills (contract rule 11).
+                        let filled = !patterned || mono::lit(s, x as i64, origin);
+                        let (a, b) = if filled { (top[x].min(base_dot).max(0), bot[x].max(base_dot).min(h - 1)) } else { (top[x].max(0), bot[x].min(h - 1)) };
                         for y in a..=b {
                             canvas.set(x as i64, y, ink);
                         }

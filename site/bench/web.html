@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en-US">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Frame bench</title>
+<meta name="description" content="glyphplot's browser frame and pointer bench, driven by mise run bench:web (REQ-PERF-050, REQ-PERF-060).">
+<style>
+  body { margin: 0; padding: 16px; background: #111; color: #e8e8e8; font: 16px/1.5 system-ui, sans-serif; }
+  #stage { overflow: hidden; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Frame bench</h1>
+  <p><code>mise run bench:web</code> drives this page in headless Chromium through <code>window.bench</code>; it does nothing on its own.</p>
+  <div id="stage"></div>
+</main>
+<script type="module" src="./web.ts"></script>
+</body>
+</html>

@@ -2,8 +2,9 @@
 // plan's architecture diagram), so the pages run the shell's TypeScript as it
 // is and its wasm from web/pkg, whichever build `mise run build:wasm` or
 // `mise run build:wasm:debug` left there. Pages: test.html (the owner's
-// checklist, REQ-TEST-040), blank.html (the browser tests' bare page) and
-// bench/render.html (the renderer bench, REQ-RENDER-010).
+// checklist, REQ-TEST-040), blank.html (the browser tests' bare page),
+// bench/render.html (the renderer bench, REQ-RENDER-010) and the pages
+// bench:web and bench:load drive (bench/web.html, bench/load.html).
 //
 // Under `vite` (mise run dev), a change under web/pkg (a debug rebuild
 // swapped in by scripts/dev.sh's watcher) reloads every open page
@@ -66,6 +67,8 @@ export default defineConfig({
         test: `${site}/test.html`,
         blank: `${site}/blank.html`,
         render: `${site}/bench/render.html`,
+        "bench-web": `${site}/bench/web.html`,
+        "bench-load": `${site}/bench/load.html`,
       },
     },
   },

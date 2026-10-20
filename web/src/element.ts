@@ -38,6 +38,7 @@ import {
   type ThemeMode,
 } from "./theme.ts";
 import { manifest, messageOf } from "./wasm.ts";
+import type { Overlay } from "./debug.ts";
 
 /** The tag. */
 export const TAG = "glyph-plot";
@@ -160,6 +161,8 @@ export class GlyphPlot extends Base {
   #a11y = throttle(() => this.#writeA11y(), REWRITE_MS);
   #warned = new Set<string>();
   #paper = false;
+  /** The debug overlay, in a debug build only. */
+  #overlay: Overlay | null = null;
 
   // ------------------------------------------------------------ properties (REQ-EL-060)
 
@@ -531,7 +534,10 @@ export class GlyphPlot extends Base {
       keys: parts.cursor,
       motion: this.hasAttribute("motion"),
       time: t !== null && t !== "" && Number.isFinite(Number(t)) ? Math.max(0, Number(t)) : null,
-      onFrame: () => this.#framed(),
+      onFrame: (_g, _s, timing) => {
+        this.#framed();
+        this.#overlay?.update(timing);
+      },
       onEvent: (e) => this.#onEvent(e.type, e.detail),
       waitForSize: true,
       onError: (m) => {
@@ -542,6 +548,23 @@ export class GlyphPlot extends Base {
     this.#resolveTheme();
     this.#laid = "";
     this.#relayout();
+    this.#debugOverlay(c);
+  }
+
+  /** In a debug build (the manifest has a fallback), the frame-cost overlay; a release page never loads debug.ts. */
+  #debugOverlay(c: Chart): void {
+    this.#overlay?.remove();
+    this.#overlay = null;
+    const m = this.#mount;
+    void manifest()
+      .then(async (mf) => {
+        if (mf.fallback === null) return;
+        const { debugOverlay } = await import("./debug.ts");
+        if (this.#mount !== m || !m) return;
+        this.#overlay?.remove();
+        this.#overlay = debugOverlay(this, c.meta.budget);
+      })
+      .catch((e: unknown) => console.warn(`glyphplot: debug overlay: ${messageOf(e)}`));
   }
 
   #framed(): void {
@@ -717,6 +740,8 @@ export class GlyphPlot extends Base {
     this.#a11y.cancel();
     this.#mount?.stop();
     this.#mount = null;
+    this.#overlay?.remove();
+    this.#overlay = null;
     this.#unsubscribe?.();
     this.#unsubscribe = null;
     this.#ro?.disconnect();
