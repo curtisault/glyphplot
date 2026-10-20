@@ -123,8 +123,8 @@ mod tests {
     #[test]
     fn all_holds_every_family() {
         let names: Vec<&str> = FAMILIES.iter().map(|f| f.name).collect();
-        assert_eq!(names, ["line"]);
-        assert_eq!(metas().map(|m| m.slug).collect::<Vec<_>>(), ["line"]);
+        assert_eq!(names, ["line", "candles", "bar"]);
+        assert_eq!(metas().map(|m| m.slug).collect::<Vec<_>>(), ["line", "sparkline", "candles", "bar"]);
     }
 
     /// REQ-REG-010, REQ-WASM-020, REQ-CHART-030: making fails with the plan's

@@ -19,8 +19,10 @@ wasm-bindgen = "0.2"
 # release module never has. `mise run build:wasm:debug` builds `all debug`.
 [features]
 default = ["all"]
-all = ["line"]
+all = ["line", "candles", "bar"]
 line = ["glyphplot/line"]
+candles = ["glyphplot/candles"]
+bar = ["glyphplot/bar"]
 debug = []
 
 # REQ-BUILD-050.
