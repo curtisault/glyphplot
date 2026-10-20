@@ -87,7 +87,7 @@ Several checks may be listed for one requirement, separated by commas.
 | Requirement | Milestone | Planned check | Status |
 |---|---|---|---|
 | REQ-CI-010 | v0.1.0 | review (no `.github/workflows`) | — |
-| REQ-CI-020 | v0.4.0 | `mise run signoff` (itself) | partial |
+| REQ-CI-020 | v0.4.0 | `mise run signoff` (itself), its run on #7 (2026-10-20: npm ci, check with all of test:site, test:budgets, bench:web and bench:load passed; a success status posted) | yes |
 
 ## 2. Core: grid, glyphs, colour
 
@@ -685,6 +685,6 @@ kind of the first check listed.
 
 | Status | Requirements |
 |---|---|
-| yes | 137 |
-| partial | 55 |
+| yes | 138 |
+| partial | 54 |
 | — | 148 |
