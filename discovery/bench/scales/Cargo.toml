@@ -1,0 +1,62 @@
+[package]
+name = "scales-bench"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "Throwaway: what each formatting and date dependency adds to a minimal wasm-bindgen module"
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wasm-bindgen = "0.2"
+ryu = { version = "1", optional = true }
+num-format = { version = "0.4", default-features = false, features = ["std"], optional = true }
+chrono = { version = "0.4", default-features = false, features = ["alloc"], optional = true }
+chrono-tz = { version = "0.10", default-features = false, optional = true }
+time = { version = "0.3", default-features = false, features = ["alloc", "formatting", "macros"], optional = true }
+jiff = { version = "0.2", default-features = false, features = ["alloc"], optional = true }
+icu_decimal = { version = "2", optional = true }
+icu_datetime = { version = "2", optional = true }
+icu_locale_core = { version = "2", optional = true }
+fixed_decimal = { version = "0.7", optional = true }
+js-sys = { version = "0.3", optional = true }
+
+[features]
+# One variant at a time: `--no-default-features --features <variant>`.
+default = []
+# Returns an f64: wasm-bindgen and nothing else.
+empty = []
+# Every other variant: a String from integers and a &str with format!, as any chart module has.
+base = []
+fmt-float = ["base"]
+ryu = ["base", "dep:ryu"]
+num-format-en = ["base", "dep:num-format"]
+num-format-any = ["base", "dep:num-format"]
+chrono = ["base", "dep:chrono"]
+chrono-tz = ["base", "dep:chrono", "dep:chrono-tz"]
+time = ["base", "dep:time"]
+jiff-utc = ["base", "dep:jiff"]
+jiff-civil = ["base", "dep:jiff"]
+jiff-tz = ["base", "dep:jiff", "jiff/tzdb-bundle-always"]
+icu-decimal = ["base", "dep:icu_decimal", "dep:icu_locale_core", "dep:fixed_decimal"]
+icu-datetime = ["base", "dep:icu_datetime", "dep:icu_locale_core"]
+js-intl = ["base", "dep:js-sys"]
+hand = ["base"]
+hand-linear = ["base"]
+hand-time = ["base"]
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = ["-Os", "--enable-bulk-memory", "--enable-nontrapping-float-to-int"]
+
+[dev-dependencies]
+serde_json = "1"

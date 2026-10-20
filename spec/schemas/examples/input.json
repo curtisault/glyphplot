@@ -1,0 +1,81 @@
+[
+  {
+    "t": 3.2,
+    "kind": "move",
+    "x": 41.37,
+    "y": 10.62,
+    "pointer": "mouse",
+    "buttons": 0,
+    "mods": []
+  },
+  {
+    "t": 3.25,
+    "kind": "down",
+    "x": 41.4,
+    "y": 10.62,
+    "pointer": "touch",
+    "buttons": 1,
+    "mods": []
+  },
+  {
+    "t": 3.4,
+    "kind": "up",
+    "x": 47.1,
+    "y": 10.8,
+    "pointer": "touch",
+    "buttons": 0,
+    "mods": []
+  },
+  {
+    "t": 3.6,
+    "kind": "wheel",
+    "x": 41.37,
+    "y": 10.62,
+    "dx": 0,
+    "dy": -1.5,
+    "mods": [
+      "ctrl"
+    ]
+  },
+  {
+    "t": 3.8,
+    "kind": "pinch",
+    "x": 40.0,
+    "y": 12.0,
+    "scale": 1.25,
+    "end": false
+  },
+  {
+    "t": 3.9,
+    "kind": "pan",
+    "dx": -2.5,
+    "dy": 0,
+    "end": true,
+    "velocity": -18.0
+  },
+  {
+    "t": 4.1,
+    "kind": "tap",
+    "x": 41.4,
+    "y": 10.62,
+    "count": 2
+  },
+  {
+    "t": 4.3,
+    "kind": "press",
+    "x": 41.4,
+    "y": 10.62
+  },
+  {
+    "t": 4.5,
+    "kind": "key",
+    "key": "ArrowRight",
+    "mods": [
+      "shift"
+    ]
+  },
+  {
+    "t": 4.7,
+    "kind": "leave"
+  }
+]

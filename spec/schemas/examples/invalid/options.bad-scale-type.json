@@ -1,0 +1,7 @@
+{
+  "scales": {
+    "x": {
+      "type": "quantile"
+    }
+  }
+}

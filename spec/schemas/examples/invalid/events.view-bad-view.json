@@ -1,0 +1,13 @@
+{
+  "type": "plot-view",
+  "detail": {
+    "source": "pointer",
+    "cause": "pan",
+    "final": true,
+    "view": {
+      "x": {
+        "domain": "all"
+      }
+    }
+  }
+}

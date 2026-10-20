@@ -1,0 +1,52 @@
+{
+  "charts": [
+    {
+      "slug": "line",
+      "name": "line",
+      "note": "values over x as a line, steps or an area",
+      "family": "line",
+      "modes": [
+        "line",
+        "step",
+        "area"
+      ],
+      "shapes": [
+        "series"
+      ],
+      "options": {
+        "mode": "line",
+        "spanGaps": false
+      },
+      "min": {
+        "cols": 23,
+        "rows": 6
+      },
+      "drop": [
+        "title",
+        "legend",
+        "labels",
+        "axes"
+      ],
+      "mono": "authored",
+      "charset": "extended",
+      "budget": {
+        "gzip": 358400,
+        "frameMs": 4,
+        "worstMs": 16,
+        "inputMs": 0.5
+      }
+    }
+  ],
+  "modules": {
+    "line": "all"
+  },
+  "fallback": "all",
+  "budgets": {
+    "all": {
+      "gzip": 358400,
+      "frameMs": 4,
+      "worstMs": 16,
+      "inputMs": 0.5
+    }
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "tables": {
+    "a": {
+      "columns": [
+        {
+          "name": "c",
+          "type": "category",
+          "values": [
+            0
+          ]
+        }
+      ]
+    }
+  }
+}

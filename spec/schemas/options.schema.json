@@ -1,0 +1,304 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/curtisault/glyphplot/spec/schemas/options.schema.json",
+  "title": "Chart options",
+  "description": "A chart's options as a JSON object: its defaults (`Meta.options`) or the overrides given in the element's `options` attribute or property, `chart(type, init)`, or the CLI's `--options`. Overrides are layered on the defaults key by key; a typed getter falls back to the default on a missing key or a wrong type (REQ-OPT-010). Changing options keeps the chart's data and view (REQ-OPT-020). This schema holds the options every chart shares; a chart's own options are further keys, which it declares with defaults in its Meta.",
+  "type": "object",
+  "properties": {
+    "mode": {
+      "description": "The variant within the family, one of `Meta.modes`; default the first. A mode not listed is an error naming the valid modes (REQ-CHART-030).",
+      "type": "string",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+    },
+    "encode": {
+      "description": "Which column plays each channel (x, y, open, …, source, target, ra, dec): a column name, or a list of names for a channel that takes several (y). A chart looks here first, then at a column's `role`, then for a column of the channel's name (REQ-DATA-080).",
+      "type": "object",
+      "propertyNames": { "type": "string", "pattern": "^[a-z][a-z0-9]*$" },
+      "additionalProperties": {
+        "anyOf": [
+          { "$ref": "data.schema.json#/$defs/name" },
+          { "type": "array", "minItems": 1, "items": { "$ref": "data.schema.json#/$defs/name" } }
+        ]
+      }
+    },
+    "title": {
+      "description": "The chart's title, drawn in one row at the top when there are at least 10 rows (REQ-LAYOUT-020), truncated with `…`.",
+      "type": "string"
+    },
+    "locale": {
+      "description": "A BCP 47 tag (`de-DE`). The element's `locale` attribute, the nearest `lang` or `navigator.language` otherwise (REQ-I18N-010); the shell builds the locale pack from it.",
+      "type": "string",
+      "pattern": "^[A-Za-z]{2,8}(-[A-Za-z0-9]{1,8})*$"
+    },
+    "localeData": {
+      "description": "A locale pack that overrides the one built from `locale`: the CLI's path, and the way to pin formatting in tests.",
+      "$ref": "locale.schema.json"
+    },
+    "timeZone": {
+      "description": "The zone time scales draw ticks and labels in: `UTC` (default), `local`, a fixed offset (`+05:30`) or an IANA name (`America/New_York`). The shell, not the options, carries the resulting offset table (zone.schema.json) into wasm (REQ-TZ-020).",
+      "type": "string",
+      "anyOf": [
+        { "enum": ["UTC", "local"] },
+        { "pattern": "^[+-](0[0-9]|1[0-8]):[0-5][0-9]$" },
+        { "pattern": "^[A-Za-z][A-Za-z0-9_+-]*(/[A-Za-z0-9_+-]+)+$" }
+      ],
+      "default": "UTC"
+    },
+    "theme": {
+      "description": "Theme tokens that win over the element's custom properties and the defaults (REQ-THEME-010).",
+      "$ref": "theme.schema.json"
+    },
+    "legend": {
+      "description": "Where the legend goes.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "position": {
+          "description": "auto: outside in one row when it fits and there are at least 12 rows, else inside the first pane when it takes at most a third of its width and height, else left out of the frame (REQ-LAYOUT-060); outside and inside force one; none draws none. A legend left out stays in the table and the events.",
+          "enum": ["auto", "outside", "inside", "none"],
+          "default": "auto"
+        }
+      }
+    },
+    "panes": {
+      "description": "Panes stacked top to bottom, sharing the x scale, splitting the rows by weight with at least three rows each (REQ-LAYOUT-050). Default one pane.",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "description": "One pane.",
+        "type": "object",
+        "required": ["id"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "description": "The pane's name, which axes name.", "$ref": "data.schema.json#/$defs/name" },
+          "weight": { "description": "The pane's share of the rows; default 1.", "type": "number", "exclusiveMinimum": 0, "default": 1 }
+        }
+      }
+    },
+    "scales": {
+      "description": "Scales by name. `x` is the shared x scale; other names are y scales and colour scales, which axes, annotations and the view's `axes` name.",
+      "type": "object",
+      "propertyNames": { "$ref": "data.schema.json#/$defs/name" },
+      "additionalProperties": { "$ref": "#/$defs/scale" }
+    },
+    "axes": {
+      "description": "Axes, each binding a scale to a side of a pane; a pane holds up to two y axes, gridlines from the first only (REQ-AXIS-010).",
+      "type": "array",
+      "items": { "$ref": "#/$defs/axis" }
+    },
+    "annotations": {
+      "description": "Marks in data coordinates, clipped to their pane (REQ-ANNOT-010).",
+      "type": "array",
+      "items": { "$ref": "#/$defs/annotation" }
+    },
+    "sample": {
+      "description": "How a line-like chart reduces the rows in view: m4 (default, exact per dot column; REQ-SAMPLE-010), lttb (REQ-SAMPLE-060), or none.",
+      "enum": ["m4", "lttb", "none"],
+      "default": "m4"
+    },
+    "spanGaps": {
+      "description": "Join a line across a missing y instead of breaking it (REQ-LINE-030); default false.",
+      "type": "boolean",
+      "default": false
+    },
+    "retain": {
+      "description": "What a streaming chart keeps (REQ-STREAM-020, REQ-STREAM-030).",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "rows": {
+          "description": "The ring's capacity, allocated once; default 1,000,000.",
+          "type": "integer",
+          "minimum": 1,
+          "default": 1000000
+        },
+        "age": {
+          "description": "Drop rows older than the newest x minus this: a number in x units, or a duration (`90s`, `15min`, `1h`, `7d`).",
+          "anyOf": [
+            { "type": "number", "exclusiveMinimum": 0 },
+            { "type": "string", "pattern": "^[0-9]+(\\.[0-9]+)?(ns|us|ms|s|min|h|d|w)$" }
+          ]
+        }
+      }
+    },
+    "drag": {
+      "description": "What a plain mouse drag does: pan (default), brush or zoom (REQ-INPUT-040).",
+      "enum": ["pan", "brush", "zoom"],
+      "default": "pan"
+    },
+    "wheel": {
+      "description": "What the plain wheel does: scroll the page (default) or zoom about the pointer (REQ-INPUT-040).",
+      "enum": ["scroll", "zoom"],
+      "default": "scroll"
+    },
+    "patterns": {
+      "description": "Whether series are told apart by dash patterns, markers and fills as well as colour: auto (default) on in one ink and off in colour; on; off.",
+      "enum": ["auto", "on", "off"],
+      "default": "auto"
+    }
+  },
+  "additionalProperties": true,
+  "$defs": {
+    "scale": {
+      "description": "A scale: a map from a domain value to a continuous cell coordinate and back, or to a palette index for a colour scale.",
+      "type": "object",
+      "required": ["type"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "description": "linear, log, symlog, time (UTC or `zone`), index (consecutive bars whatever the time between them; REQ-SCALE-060), band and point (categories), angle (wrapping: right ascension, azimuth); and the colour scales sequential, diverging, categorical, threshold.",
+          "enum": ["linear", "log", "symlog", "time", "index", "band", "point", "sequential", "diverging", "categorical", "threshold", "angle"]
+        },
+        "domain": {
+          "description": "\"data\": the extent of every series bound to the scale; \"view\": the x range from the view state, and for a y scale the data visible in it; a fixed list; or {follow: seconds}, the last window of a stream (REQ-SCALE-020). A fixed list is [low, high] for a continuous scale, [low, mid, high] for diverging, the thresholds for threshold, and the categories in order for band, point and categorical.",
+          "anyOf": [
+            { "enum": ["data", "view"] },
+            { "type": "array", "minItems": 1, "items": { "type": "number" } },
+            { "type": "array", "minItems": 1, "items": { "type": "string" } },
+            {
+              "type": "object",
+              "required": ["follow"],
+              "additionalProperties": false,
+              "properties": {
+                "follow": { "description": "The window's length in seconds.", "type": "number", "exclusiveMinimum": 0 }
+              }
+            }
+          ]
+        },
+        "nice": {
+          "description": "Extend the domain to nice round values, as d3-scale's `nice` (REQ-SCALE-030).",
+          "type": "boolean"
+        },
+        "zero": {
+          "description": "Include 0 in the domain; the default for bars.",
+          "type": "boolean"
+        },
+        "padding": {
+          "description": "For a continuous scale, a fraction of the span added at each end; for band and point, the fraction of each band left empty.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "base": {
+          "description": "For a log scale, the base, above 1; default 10.",
+          "type": "number",
+          "exclusiveMinimum": 1
+        },
+        "constant": {
+          "description": "For a symlog scale, the linear region's half-width; default 1.",
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "zone": {
+          "description": "For a time or index scale, the zone of its ticks and labels, as `timeZone` takes it; overrides `timeZone` and the column's `zone`.",
+          "type": "string"
+        },
+        "scheme": {
+          "description": "For a colour scale, the named stops to use instead of the theme's (`red-blue`).",
+          "type": "string"
+        }
+      }
+    },
+    "axis": {
+      "description": "An axis on one side of a pane.",
+      "type": "object",
+      "required": ["scale"],
+      "additionalProperties": false,
+      "properties": {
+        "scale": { "description": "The scale it draws, by name.", "type": "string" },
+        "pane": { "description": "The pane it belongs to, by id.", "type": "string" },
+        "orient": { "description": "Which side: left, right, bottom or top.", "enum": ["left", "right", "bottom", "top"] },
+        "format": { "description": "A d3-format subset specifier `[sign][$][,][.precision][~][type]` with types f, s, %, e, d (REQ-FMT-020), `auto` (precision from the step), or for a time scale a strftime subset string (REQ-FMT-050).", "type": "string", "default": "auto" },
+        "ticks": {
+          "description": "\"auto\" (fit as many as the label gap allows; REQ-TICK-030), a tick count, or the tick values.",
+          "anyOf": [
+            { "const": "auto" },
+            { "type": "integer", "minimum": 0 },
+            { "type": "array", "items": { "type": "number" } }
+          ],
+          "default": "auto"
+        },
+        "grid": { "description": "Draw gridlines from this axis's ticks across the pane, on empty cells only.", "type": "boolean" },
+        "snap": { "description": "none: ticks at the nearest cell; rows: the domain chosen so every tick lands on a row exactly (default for bar and candlestick y axes under 20 rows; REQ-TICK-050); cells: ticks on whole cells.", "enum": ["none", "rows", "cells"] },
+        "title": { "description": "The axis title, drawn when the layout has a row for it.", "type": "string" },
+        "labelGap": { "description": "The least gap between labels, in cells on x (default 2) and rows on y (default 1).", "type": "integer", "minimum": 0 },
+        "context": { "description": "For a time axis: draw a context row with the date at each day boundary when the span is under two days (REQ-TICK-070).", "type": "boolean" }
+      }
+    },
+    "annotation": {
+      "description": "One annotation, discriminated by `type`.",
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": { "description": "The annotation's kind.", "enum": ["hline", "vline", "band", "label", "marker"] }
+      },
+      "oneOf": [
+        {
+          "description": "hline: a horizontal line at a y value across its pane, with an optional label in the axis gutter (a candlestick's last price).",
+          "type": "object",
+          "required": ["type", "scale", "value"],
+          "additionalProperties": false,
+          "properties": {
+            "type": { "description": "hline.", "const": "hline" },
+            "scale": { "description": "The y scale the value is in.", "type": "string" },
+            "value": { "description": "The y value.", "type": "number" },
+            "label": { "description": "Text drawn on the axis; it hides the tick labels it overlaps.", "type": "string" },
+            "axis": { "description": "Which gutter the label goes in.", "enum": ["left", "right"] }
+          }
+        },
+        {
+          "description": "vline: a vertical line at an x value through every pane.",
+          "type": "object",
+          "required": ["type", "value"],
+          "additionalProperties": false,
+          "properties": {
+            "type": { "description": "vline.", "const": "vline" },
+            "scale": { "description": "The x scale the value is in; default `x`.", "type": "string" },
+            "value": { "description": "The x value.", "type": "number" },
+            "label": { "description": "Text drawn on the x axis.", "type": "string" }
+          }
+        },
+        {
+          "description": "band: a range shaded on the back colour, or with `░` in one ink.",
+          "type": "object",
+          "required": ["type", "scale", "from", "to"],
+          "additionalProperties": false,
+          "properties": {
+            "type": { "description": "band.", "const": "band" },
+            "scale": { "description": "The scale the range is in: `x` for a vertical band, a y scale for a horizontal one.", "type": "string" },
+            "from": { "description": "The range's start.", "type": "number" },
+            "to": { "description": "The range's end.", "type": "number" },
+            "label": { "description": "Text drawn at the band's start.", "type": "string" }
+          }
+        },
+        {
+          "description": "label: text at a point.",
+          "type": "object",
+          "required": ["type", "x", "y", "text"],
+          "additionalProperties": false,
+          "properties": {
+            "type": { "description": "label.", "const": "label" },
+            "scale": { "description": "The y scale `y` is in; default the pane's first.", "type": "string" },
+            "x": { "description": "The point's x.", "type": "number" },
+            "y": { "description": "The point's y.", "type": "number" },
+            "text": { "description": "The text.", "type": "string", "minLength": 1 }
+          }
+        },
+        {
+          "description": "marker: a glyph at a point.",
+          "type": "object",
+          "required": ["type", "x", "y"],
+          "additionalProperties": false,
+          "properties": {
+            "type": { "description": "marker.", "const": "marker" },
+            "scale": { "description": "The y scale `y` is in; default the pane's first.", "type": "string" },
+            "x": { "description": "The point's x.", "type": "number" },
+            "y": { "description": "The point's y.", "type": "number" },
+            "glyph": { "description": "The glyph; default ●.", "enum": ["▲", "▼", "●", "◆"] },
+            "label": { "description": "Text drawn beside the glyph.", "type": "string" }
+          }
+        }
+      ]
+    }
+  }
+}

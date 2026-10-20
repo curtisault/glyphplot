@@ -1,0 +1,11 @@
+{
+  "type": "plot-legend",
+  "detail": {
+    "source": "pointer",
+    "series": "volume",
+    "visible": false,
+    "hidden": [
+      "volume"
+    ]
+  }
+}

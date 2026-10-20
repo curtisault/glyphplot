@@ -1,0 +1,33 @@
+{
+  "ground": "#131518",
+  "ink": "#e6e8eb",
+  "muted": "#9aa1a9",
+  "rule": "#2a2e33",
+  "accent": "#629cfb",
+  "selection": "#24344f",
+  "up": "#629cfb",
+  "down": "#f8d6b2",
+  "series": [
+    "#b29a02",
+    "#629cfb",
+    "#72916d",
+    "#c7f226",
+    "#abe6fd",
+    "#f8d6b2",
+    "#e424a4",
+    "#b3b3b2"
+  ],
+  "scale": [
+    "#131518",
+    "#30425a",
+    "#4f7a8a",
+    "#8fb07a",
+    "#f0e060"
+  ],
+  "diverging": [
+    "#90cbfe",
+    "#3d3d3d",
+    "#feb263"
+  ],
+  "paper": false
+}

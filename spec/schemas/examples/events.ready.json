@@ -1,0 +1,8 @@
+{
+  "type": "plot-ready",
+  "detail": {
+    "type": "line",
+    "cols": 80,
+    "rows": 24
+  }
+}

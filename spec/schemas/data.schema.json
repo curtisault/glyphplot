@@ -1,0 +1,207 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/curtisault/glyphplot/spec/schemas/data.schema.json",
+  "title": "Chart data",
+  "description": "What a chart draws: named tables of typed columns and named matrices (REQ-DATA-010). In JSON every column carries its values; through the binary API (typed arrays, Arrow IPC) the same descriptor travels without `values` and the values arrive as buffers (REQ-DATA-050). Two shorthands, an object of arrays and an array of row objects, are normalised by the shell to the full form before anything crosses into wasm (REQ-DATA-120). The schema does not check that every column of a table has the same length, that `sorted` names a column, or that edge indexes are within `nodes`; the shell checks these and warns.",
+  "oneOf": [
+    { "$ref": "#/$defs/data" },
+    { "$ref": "#/$defs/columnsShorthand" },
+    { "$ref": "#/$defs/rowsShorthand" }
+  ],
+  "$defs": {
+    "name": {
+      "description": "A table, matrix or column name: a letter or underscore, then up to 63 letters, digits, `_`, `.` or `-`.",
+      "type": "string",
+      "pattern": "^[A-Za-z_][A-Za-z0-9_.-]{0,63}$"
+    },
+    "data": {
+      "description": "The full form of the data contract.",
+      "type": "object",
+      "required": ["tables"],
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "description": "The data contract's version.",
+          "const": 1
+        },
+        "tables": {
+          "description": "Tables by name. A chart that draws one table takes the first; a graph takes `nodes` and `edges` (REQ-DATA-160).",
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": { "$ref": "#/$defs/name" },
+          "additionalProperties": { "$ref": "#/$defs/table" }
+        },
+        "matrices": {
+          "description": "Matrices by name, for heatmaps and adjacency matrices.",
+          "type": "object",
+          "propertyNames": { "$ref": "#/$defs/name" },
+          "additionalProperties": { "$ref": "#/$defs/matrix" }
+        }
+      }
+    },
+    "table": {
+      "description": "A table of columns, all of one length.",
+      "type": "object",
+      "required": ["columns"],
+      "additionalProperties": false,
+      "properties": {
+        "length": {
+          "description": "Rows. Required when no column carries values; otherwise every column's values have this length.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "sorted": {
+          "description": "A column the rows are in non-decreasing order of. The chart verifies it on load and sorts a copy if it is wrong (REQ-DATA-040).",
+          "$ref": "#/$defs/name"
+        },
+        "frame": {
+          "description": "The coordinate frame of the table's angle or position columns (roles ra/dec, lon/lat, az/alt, x/y/z). Angles are degrees; distances are au unless a column's `unit` says otherwise.",
+          "enum": ["icrs", "ecliptic", "galactic", "altaz", "geographic", "heliocentric-ecliptic"]
+        },
+        "epoch": {
+          "description": "The equinox or epoch of a celestial frame, as `J2000` or an RFC 3339 date-time.",
+          "type": "string"
+        },
+        "columns": {
+          "description": "The table's columns, 1 to 256, in order.",
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 256,
+          "items": { "$ref": "#/$defs/column" }
+        }
+      }
+    },
+    "column": {
+      "description": "One typed column. Numbers, timestamps and durations are held as f64 in the chart (REQ-DATA-020); missing values become NaN, or u32::MAX for categories (REQ-DATA-030).",
+      "type": "object",
+      "required": ["name", "type"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "description": "The column's name, unique in its table.",
+          "$ref": "#/$defs/name"
+        },
+        "type": {
+          "description": "f64, f32, i64 and u32 are numbers; timestamp is an instant since 1970-01-01T00:00:00Z in `time_unit`; duration is a span in `time_unit`; category is an index into `categories`; string is a free label per row.",
+          "enum": ["f64", "f32", "i64", "u32", "bool", "timestamp", "duration", "category", "string"]
+        },
+        "role": {
+          "description": "What the column is to a chart. A chart finds each channel by the option `encode`, then by `role`, then by a column of that name (REQ-DATA-080).",
+          "enum": ["x", "y", "y2", "series", "open", "high", "low", "close", "volume", "lo", "hi", "count", "value", "category", "size", "color", "label", "id", "source", "target", "weight", "group", "ra", "dec", "lon", "lat", "az", "alt", "mag", "z", "a", "e", "i", "node", "peri", "anomaly", "epoch"]
+        },
+        "unit": {
+          "description": "The unit of the values for display and formatting (`USD`, `°C`, `B/s`, `%`). Not a conversion.",
+          "type": "string",
+          "maxLength": 32
+        },
+        "scale": {
+          "description": "Displayed value = stored value × scale + offset (prices in integer cents: scale 0.01). Applies to ticks, readouts and the table, never to stored values (REQ-DATA-100).",
+          "type": "number"
+        },
+        "offset": {
+          "description": "Added to the stored value times `scale` for display; default 0.",
+          "type": "number"
+        },
+        "time_unit": {
+          "description": "For timestamp and duration columns; default ms. A `us` or `ns` timestamp column is held as offsets from an i64 origin (REQ-DATA-020).",
+          "enum": ["s", "ms", "us", "ns"]
+        },
+        "zone": {
+          "description": "For timestamp columns: the IANA zone (`America/New_York`) or `UTC` in which ticks and labels are drawn. Values are UTC instants whatever the zone; default UTC (REQ-DATA-090).",
+          "type": "string"
+        },
+        "categories": {
+          "description": "For category columns: the labels the values index, in legend order.",
+          "type": "array",
+          "maxItems": 65535,
+          "items": { "type": "string" }
+        },
+        "values": {
+          "description": "The column's values in JSON. null is missing: NaN for a number or time, no category, an empty label. A timestamp may be a number in `time_unit` or an RFC 3339 string. Absent when the values arrive as a buffer.",
+          "type": "array",
+          "items": { "type": ["number", "string", "boolean", "null"] }
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "type": { "const": "category" } } },
+          "then": { "required": ["categories"], "properties": { "values": { "items": { "type": ["integer", "null"], "minimum": 0 } } } }
+        },
+        {
+          "if": { "properties": { "type": { "enum": ["f64", "f32", "i64", "u32", "duration"] } } },
+          "then": { "properties": { "values": { "items": { "type": ["number", "null"] } } } }
+        },
+        {
+          "if": { "properties": { "type": { "const": "timestamp" } } },
+          "then": { "properties": { "values": { "items": { "anyOf": [{ "type": ["number", "null"] }, { "type": "string", "format": "date-time" }] } } } }
+        },
+        {
+          "if": { "properties": { "type": { "const": "bool" } } },
+          "then": { "properties": { "values": { "items": { "type": ["boolean", "null"] } } } }
+        },
+        {
+          "if": { "properties": { "type": { "const": "string" } } },
+          "then": { "properties": { "values": { "items": { "type": ["string", "null"], "maxLength": 256 } } } }
+        },
+        {
+          "if": { "required": ["time_unit"] },
+          "then": { "properties": { "type": { "enum": ["timestamp", "duration"] } } }
+        }
+      ]
+    },
+    "matrix": {
+      "description": "A row-major matrix of rows × cols numbers (REQ-DATA-160).",
+      "type": "object",
+      "required": ["rows", "cols"],
+      "additionalProperties": false,
+      "properties": {
+        "rows": {
+          "description": "Number of rows.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "cols": {
+          "description": "Number of columns.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "values": {
+          "description": "rows × cols values, row by row; null is missing. Absent when the values arrive as a buffer.",
+          "type": "array",
+          "items": { "type": ["number", "null"] }
+        },
+        "row_labels": {
+          "description": "A label for each row, top to bottom.",
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "col_labels": {
+          "description": "A label for each column, left to right.",
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "unit": {
+          "description": "The unit of the values for display, as a column's `unit`.",
+          "type": "string",
+          "maxLength": 32
+        },
+        "symmetric": {
+          "description": "An adjacency matrix of an undirected graph: only the upper triangle is read.",
+          "type": "boolean"
+        }
+      }
+    },
+    "columnsShorthand": {
+      "description": "`{\"t\": [...], \"close\": [...]}`: one table of columns by name. Types are inferred: numbers f64, RFC 3339 strings timestamps (ms, UTC), other strings categories, booleans bool.",
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": { "$ref": "#/$defs/name", "not": { "enum": ["tables", "matrices", "version"] } },
+      "additionalProperties": { "type": "array", "items": { "type": ["number", "string", "boolean", "null"] } }
+    },
+    "rowsShorthand": {
+      "description": "`[{\"t\": ..., \"close\": ...}, ...]`: one table of rows, turned into columns by the shell with the same inference as the columns shorthand.",
+      "type": "array",
+      "items": { "type": "object", "additionalProperties": { "type": ["number", "string", "boolean", "null"] } }
+    }
+  }
+}

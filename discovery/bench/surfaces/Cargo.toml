@@ -1,0 +1,52 @@
+# Throwaway: discovery/surfaces.md's measurements. Not part of glyphplot.
+[package]
+name = "bench-surfaces"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# Its own workspace, so it builds apart from anything at the repository's root.
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+crossterm-cli = ["dep:crossterm"]
+ratatui-cli = ["dep:ratatui"]
+wasm = ["dep:wasm-bindgen"]
+
+[dependencies]
+crossterm = { version = "0.29", optional = true }
+ratatui = { version = "0.30", optional = true, default-features = false, features = ["crossterm"] }
+wasm-bindgen = { version = "0.2", optional = true }
+
+[[bin]]
+name = "hello-std"
+path = "src/bin/hello_std.rs"
+
+[[bin]]
+name = "hello-crossterm"
+path = "src/bin/hello_crossterm.rs"
+required-features = ["crossterm-cli"]
+
+[[bin]]
+name = "hello-ratatui"
+path = "src/bin/hello_ratatui.rs"
+required-features = ["ratatui-cli"]
+
+[[bin]]
+name = "hello-ratatui-grid"
+path = "src/bin/hello_ratatui_grid.rs"
+required-features = ["ratatui-cli"]
+
+# As unicel's release profile (../animate-unicode/Cargo.toml).
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = ["-Os", "--enable-bulk-memory", "--enable-nontrapping-float-to-int"]

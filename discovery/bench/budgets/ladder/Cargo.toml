@@ -1,0 +1,44 @@
+# Throwaway: the size ladder and frame-time harness for discovery/budgets.md.
+# Not part of any workspace; target/ lives beside this file.
+[package]
+name = "ladder"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wasm-bindgen = "0.2"
+serde = { version = "1", features = ["derive"], optional = true }
+serde_json = { version = "1", optional = true }
+
+[features]
+# Each step of the ladder adds one feature to the one before (scripts/ladder.sh).
+default = ["full"]
+full = ["line", "scale", "time", "serde", "candle", "downsample"]
+line = []
+scale = ["line"]
+# Step 2b: tick labels through core::fmt's float formatting instead of by hand.
+fmtfloat = ["scale"]
+time = ["scale"]
+serde = ["dep:serde", "dep:serde_json"]
+candle = ["line"]
+downsample = ["line"]
+
+[workspace]
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
+[profile.size-names]
+inherits = "release"
+strip = false
+
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = ["-Os", "--enable-bulk-memory", "--enable-nontrapping-float-to-int"]

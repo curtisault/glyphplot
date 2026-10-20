@@ -1,0 +1,23 @@
+Sun Oct 18 20:17:39 CDT 2026
+20:17  up 87 days,  4:51, 3 users, load averages: 8.52 8.90 7.42
+chromium 156.0.8078.4, load 8.52 8.90 7.42, 2026-10-19T01:17:39.627Z, 7 loads each
+brief-4g            1-line                               transfer    15805 B | first frame ms min    596 med    600 | wasm received med    598 | compile+instantiate+frame after it med 2.3
+brief-4g            4-serde                              transfer    53583 B | first frame ms min    629 med    630 | wasm received med    628 | compile+instantiate+frame after it med 1.9
+brief-4g            6-downsample                         transfer    57102 B | first frame ms min    632 med    635 | wasm received med    633 | compile+instantiate+frame after it med 1.9
+brief-4g            6-downsample/ladder_bg_pad150.wasm   transfer   158150 B | first frame ms min    718 med    722 | wasm received med    720 | compile+instantiate+frame after it med 2.1
+brief-4g            6-downsample/ladder_bg_pad300.wasm   transfer   311787 B | first frame ms min    855 med    857 | wasm received med    854 | compile+instantiate+frame after it med 2.6
+brief-4g            6-downsample/ladder_bg_pad1000.wasm  transfer  1028813 B | first frame ms min   1479 med   1482 | wasm received med   1478 | compile+instantiate+frame after it med 3.6
+lighthouse-slow-4g  1-line                               transfer    15805 B | first frame ms min   1867 med   1876 | wasm received med   1869 | compile+instantiate+frame after it med 7.3
+lighthouse-slow-4g  4-serde                              transfer    53583 B | first frame ms min   2051 med   2067 | wasm received med   2058 | compile+instantiate+frame after it med 8.8
+lighthouse-slow-4g  6-downsample                         transfer    57102 B | first frame ms min   2073 med   2082 | wasm received med   2073 | compile+instantiate+frame after it med 9.1
+lighthouse-slow-4g  6-downsample/ladder_bg_pad150.wasm   transfer   158150 B | first frame ms min   2609 med   2616 | wasm received med   2607 | compile+instantiate+frame after it med 8.9
+lighthouse-slow-4g  6-downsample/ladder_bg_pad300.wasm   transfer   311787 B | first frame ms min   3425 med   3436 | wasm received med   3425 | compile+instantiate+frame after it med 11.0
+lighthouse-slow-4g  6-downsample/ladder_bg_pad1000.wasm  transfer  1028813 B | first frame ms min   7229 med   7238 | wasm received med   7223 | compile+instantiate+frame after it med 15.2
+none                1-line                               transfer    15805 B | first frame ms min     50 med     55 | wasm received med     48 | compile+instantiate+frame after it med 7.0
+none                4-serde                              transfer    53583 B | first frame ms min     51 med     55 | wasm received med     49 | compile+instantiate+frame after it med 6.1
+none                6-downsample                         transfer    57102 B | first frame ms min     53 med     54 | wasm received med     48 | compile+instantiate+frame after it med 6.3
+none                6-downsample/ladder_bg_pad150.wasm   transfer   158150 B | first frame ms min     52 med     54 | wasm received med     48 | compile+instantiate+frame after it med 6.3
+none                6-downsample/ladder_bg_pad300.wasm   transfer   311787 B | first frame ms min     51 med     55 | wasm received med     49 | compile+instantiate+frame after it med 6.3
+none                6-downsample/ladder_bg_pad1000.wasm  transfer  1028813 B | first frame ms min     51 med     55 | wasm received med     48 | compile+instantiate+frame after it med 6.2
+load after 7.61 8.36 7.48
+20:20  up 87 days,  4:54, 3 users, load averages: 7.61 8.36 7.48

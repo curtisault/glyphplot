@@ -1,0 +1,11 @@
+{
+  "motion": {
+    "kind": "kinetic",
+    "t0": 1,
+    "from": [
+      0,
+      1
+    ],
+    "duration": 0.5
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "tables": {
+    "a": {
+      "columns": [
+        {
+          "name": "v",
+          "type": "f64",
+          "time_unit": "ms",
+          "values": [
+            1
+          ]
+        }
+      ]
+    }
+  }
+}

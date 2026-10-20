@@ -1,0 +1,21 @@
+{
+  "type": "plot-hover",
+  "detail": {
+    "source": "touch",
+    "series": "y",
+    "index": 700123,
+    "x": 700123,
+    "y": 0.42,
+    "aggregate": {
+      "count": 7042,
+      "first": 0.4,
+      "last": 0.43,
+      "min": -0.97,
+      "max": 0.99
+    },
+    "cell": {
+      "col": 30,
+      "row": 6
+    }
+  }
+}

@@ -1,0 +1,10 @@
+step                           wasm_raw    wasm_gz     js_raw      js_gz
+0-empty                           13746       6161       5493       1661
+1-line                            51193      22719      11269       2782
+2-scale                           56167      25176      11269       2782
+2b-scale-fmtfloat                 55932      25127      11269       2782
+3-time                            58440      26181      11269       2782
+4-serde                          108301      50006      14745       3486
+5-candle                         113474      52021      17653       3696
+6-downsample                     116373      53364      17653       3696
+x-line-downsample-noserde         61013      27361      11269       2782

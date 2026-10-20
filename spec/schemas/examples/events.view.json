@@ -1,0 +1,18 @@
+{
+  "type": "plot-view",
+  "detail": {
+    "source": "wheel",
+    "cause": "zoom",
+    "final": false,
+    "view": {
+      "version": 1,
+      "x": {
+        "domain": [
+          1760020000000,
+          1760060000000
+        ],
+        "follow": false
+      }
+    }
+  }
+}

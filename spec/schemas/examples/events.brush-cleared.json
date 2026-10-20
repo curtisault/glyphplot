@@ -1,0 +1,10 @@
+{
+  "type": "plot-brush",
+  "detail": {
+    "source": "keyboard",
+    "x": null,
+    "y": null,
+    "count": 0,
+    "final": true
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "name": "UTC",
+  "covering": [
+    0,
+    1798761600000
+  ],
+  "transitions": [
+    {
+      "at": 0,
+      "offset": 0
+    }
+  ]
+}

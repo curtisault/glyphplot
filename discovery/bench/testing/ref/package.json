@@ -1,0 +1,7 @@
+{
+  "name": "glyphplot-testing-ref",
+  "private": true,
+  "type": "module",
+  "description": "Throwaway: captures reference outputs from d3-array and the LTTB reference implementation for discovery/testing.md",
+  "dependencies": { "d3-array": "3.2.4", "d3-scale": "4.0.2" }
+}

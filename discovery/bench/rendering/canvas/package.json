@@ -1,0 +1,7 @@
+{
+  "name": "rendering-canvas-bench",
+  "private": true,
+  "description": "Throwaway: atlas draw cost by colour model, in headless Chrome. See ../README.md.",
+  "type": "module",
+  "devDependencies": { "playwright-core": "1.59.1" }
+}

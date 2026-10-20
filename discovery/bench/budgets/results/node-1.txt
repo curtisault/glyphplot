@@ -1,0 +1,31 @@
+Sun Oct 18 20:04:48 CDT 2026
+20:04  up 87 days,  4:39, 3 users, load averages: 8.96 6.29 4.46
+node v26.5.1, Apple M5 Pro, load 8.96 6.29 4.46, 2026-10-19T01:04:48.764Z
+frame 80x24 n=1000 ds=false        avg ms min     0.008 med     0.009 | worst ms min     0.014 med     0.064
+frame 80x24 n=1000 ds=true         avg ms min     0.007 med     0.008 | worst ms min     0.015 med     0.045
+frame 80x24 n=10000 ds=false       avg ms min     0.040 med     0.042 | worst ms min     0.069 med     0.083
+frame 80x24 n=10000 ds=true        avg ms min     0.049 med     0.050 | worst ms min     0.098 med     0.109
+frame 80x24 n=100000 ds=false      avg ms min     0.325 med     0.341 | worst ms min     0.495 med     0.524
+frame 80x24 n=100000 ds=true       avg ms min     0.308 med     0.319 | worst ms min     0.428 med     0.444
+frame 80x24 n=1000000 ds=false     avg ms min     2.535 med     2.575 | worst ms min     3.248 med     3.584
+frame 80x24 n=1000000 ds=true      avg ms min     2.448 med     2.499 | worst ms min     2.837 med     3.263
+frame 320x120 n=1000 ds=false      avg ms min     0.057 med     0.058 | worst ms min     0.076 med     0.103
+frame 320x120 n=1000 ds=true       avg ms min     0.061 med     0.062 | worst ms min     0.103 med     0.119
+frame 320x120 n=10000 ds=false     avg ms min     0.140 med     0.142 | worst ms min     0.233 med     0.254
+frame 320x120 n=10000 ds=true      avg ms min     0.148 med     0.151 | worst ms min     0.249 med     0.291
+frame 320x120 n=100000 ds=false    avg ms min     0.694 med     0.762 | worst ms min     1.105 med     1.221
+frame 320x120 n=100000 ds=true     avg ms min     0.466 med     0.474 | worst ms min     0.596 med     0.645
+frame 320x120 n=1000000 ds=false   avg ms min     4.732 med     4.786 | worst ms min     5.339 med     5.722
+frame 320x120 n=1000000 ds=true    avg ms min     3.908 med     4.800 | worst ms min     5.521 med     5.718
+hover 80x24 n=1000000              avg ms min     0.002 med     0.002 | worst ms min     0.024 med     0.037
+hover 320x120 n=1000000            avg ms min     0.007 med     0.008 | worst ms min     0.042 med     0.043
+stream batch=1 every=1ms ds=true: busy ms/s min 322.5 med 323.9
+  its frames                       avg ms min     5.371 med     5.395 | worst ms min     6.227 med     6.327
+stream batch=1 every=1ms ds=false: busy ms/s min 476.8 med 498.5
+  its frames                       avg ms min     7.944 med     8.306 | worst ms min     9.401 med     9.521
+stream batch=1000 every=100ms ds=true: busy ms/s min 270.7 med 296.5
+  its frames                       avg ms min     4.508 med     4.937 | worst ms min     5.645 med     6.012
+stream batch=1000 every=100ms ds=false: busy ms/s min 301.1 med 415.5
+  its frames                       avg ms min     5.015 med     6.921 | worst ms min     8.570 med     8.983
+load after 9.45 7.07 4.96
+20:06  up 87 days,  4:40, 3 users, load averages: 9.45 7.07 4.96

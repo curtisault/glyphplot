@@ -1,0 +1,171 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/curtisault/glyphplot/spec/schemas/view.schema.json",
+  "title": "View state",
+  "description": "A chart's interactive state (REQ-VIEW-010): what is in view, the cursor, the selection, hidden series, the page's time cursor and a view animation in flight. A frame is a function of data, options, this view and `t` only. Every domain is in data units (a timestamp in epoch ms), and null means the chart's fitted default (REQ-VIEW-020). Read from the element's `view` property or `Chart.view()`, it is whole. Set as the `view` property or attribute, it may be partial: every property is optional, a partial view is merged into the current one key by key, and a key set to null returns to its default (REQ-VIEW-030). Indices in `cursor` and `selection.points` are positions in the data as held now; after a replace or a trimming append they are re-derived from x, so a page linking or saving a view should rely on x values.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "description": "The view state's shape version, so it can grow.",
+      "const": 1
+    },
+    "x": {
+      "description": "The x axis's view. null returns it to the fitted default.",
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "properties": {
+        "domain": {
+          "description": "The visible x range [low, high]; null fits the data.",
+          "$ref": "#/$defs/range"
+        },
+        "follow": {
+          "description": "Live mode: the domain keeps its span and ends at the newest datum as appends arrive. A pan away from the end sets it false; End sets it true (REQ-VIEW-060).",
+          "type": "boolean"
+        }
+      }
+    },
+    "y": {
+      "description": "The first y scale's view. null returns it to the fitted default.",
+      "$ref": "#/$defs/axis"
+    },
+    "axes": {
+      "description": "Further y scales (a volume pane, a right axis), keyed by the scale names the options give. null returns them all to their defaults.",
+      "type": ["object", "null"],
+      "additionalProperties": { "$ref": "#/$defs/axis" }
+    },
+    "cursor": {
+      "description": "The crosshair, or null for none.",
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "properties": {
+        "x": {
+          "description": "The cursor's x in data units.",
+          "type": ["number", "null"]
+        },
+        "y": {
+          "description": "The cursor's y in data units, the snapped datum's y.",
+          "type": ["number", "null"]
+        },
+        "series": {
+          "description": "The series the cursor snapped to, by name.",
+          "type": ["string", "null"]
+        },
+        "index": {
+          "description": "The row of the datum the cursor snapped to.",
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "locked": {
+          "description": "Keeps the cursor when the pointer leaves: a click or Enter locks it, Escape unlocks it.",
+          "type": "boolean"
+        }
+      }
+    },
+    "selection": {
+      "description": "What the reader brushed and selected, or null for nothing.",
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "properties": {
+        "x": {
+          "description": "A brushed x range [low, high], or null.",
+          "$ref": "#/$defs/range"
+        },
+        "y": {
+          "description": "A brushed y range [low, high], or null.",
+          "$ref": "#/$defs/range"
+        },
+        "points": {
+          "description": "Selected data.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/point" }
+        }
+      }
+    },
+    "hidden": {
+      "description": "Series toggled off, by name. null shows every series.",
+      "type": ["array", "null"],
+      "uniqueItems": true,
+      "items": { "type": "string" }
+    },
+    "time": {
+      "description": "The page's time cursor in x units: a vertical marker and a readout, independent of the pointer. null for none.",
+      "type": ["number", "null"]
+    },
+    "motion": {
+      "description": "A view animation in flight (an eased zoom, a kinetic pan, a reset) for the x domain, stamped with play time, so the frame at any `t` is determined without replaying input (REQ-VIEW-050). At t ≥ t0 + duration it folds into `x.domain`. null for none; with reduced motion and no `motion` attribute there is none.",
+      "type": ["object", "null"],
+      "required": ["kind", "t0", "from", "to", "duration"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "description": "ease: an eased move from `from` to `to`; kinetic: a pan decelerating from its release velocity.",
+          "enum": ["ease", "kinetic"]
+        },
+        "t0": {
+          "description": "Play time in seconds at which the motion starts.",
+          "type": "number",
+          "minimum": 0
+        },
+        "from": {
+          "description": "The x domain at t0.",
+          "$ref": "#/$defs/span"
+        },
+        "to": {
+          "description": "The x domain at t0 + duration.",
+          "$ref": "#/$defs/span"
+        },
+        "duration": {
+          "description": "Seconds the motion lasts.",
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      }
+    }
+  },
+  "$defs": {
+    "span": {
+      "description": "A range [low, high] in data units, low ≤ high.",
+      "type": "array",
+      "prefixItems": [{ "type": "number" }, { "type": "number" }],
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "range": {
+      "description": "A range [low, high] in data units, or null for the default.",
+      "anyOf": [{ "$ref": "#/$defs/span" }, { "type": "null" }]
+    },
+    "axis": {
+      "description": "A y scale's view, or null for its fitted default.",
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "properties": {
+        "domain": {
+          "description": "The visible range [low, high]; null with `fit`.",
+          "$ref": "#/$defs/range"
+        },
+        "fit": {
+          "description": "visible (default): fit to the data in the x domain; all: fit to all data; fixed: keep `domain`.",
+          "enum": ["visible", "all", "fixed"]
+        }
+      }
+    },
+    "point": {
+      "description": "A datum by series and row.",
+      "type": "object",
+      "required": ["series", "index"],
+      "additionalProperties": false,
+      "properties": {
+        "series": {
+          "description": "The series' name.",
+          "type": "string"
+        },
+        "index": {
+          "description": "The datum's row in the data as held now.",
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    }
+  }
+}

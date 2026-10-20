@@ -1,0 +1,26 @@
+# Throwaway: measures what an astronomy pack and an indicator pack cost as wasm.
+[package]
+name = "domain-sizes"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+path = "src/lib.rs"
+
+[features]
+astro = []
+indicators = []
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
+[workspace]
+
+[dependencies]
+libm = "0.2"

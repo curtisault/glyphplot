@@ -1,0 +1,36 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>budgets bench</title>
+<link rel="modulepreload" href="../pkg/6-downsample/ladder.js">
+<link rel="preload" href="../pkg/6-downsample/ladder_bg.wasm" as="fetch" type="application/wasm" crossorigin>
+<pre id="out"></pre>
+<script type="module">
+// Throwaway. page.html with preload hints for pkg/6-downsample. ?mode=bench runs bench-core.mjs; ?mode=load&pkg=<step> times the
+// first frame of an 80x24 line chart over 1000 points from navigation start.
+const q = new URLSearchParams(location.search);
+const mode = q.get("mode") ?? "load";
+const pkg = q.get("pkg") ?? "6-downsample";
+const wasmName = q.get("wasm");
+const mod = await import(`../pkg/${pkg}/ladder.js`);
+const t_glue = performance.now();
+const exports = await mod.default(wasmName ? { module_or_path: `../pkg/${pkg}/${wasmName}` } : undefined);
+const t_init = performance.now();
+if (mode === "load") {
+  const n = 1000, c = new mod.LineChart(80, 24, n);
+  c.reserve(n);
+  const xs = new Float64Array(exports.memory.buffer, c.x_ptr(), n), ys = new Float64Array(exports.memory.buffer, c.y_ptr(), n);
+  for (let i = 0; i < n; i++) { xs[i] = 1_790_000_000_000 + i * 1000; ys[i] = Math.sin(i / 50); }
+  c.commit(n); c.set_time_axis(true); c.fit(); c.frame();
+  const cells = new Uint32Array(exports.memory.buffer, c.cells_ptr(), c.cols() * c.rows());
+  document.getElementById("out").textContent = c.text();
+  const t_frame = performance.now();
+  const res = performance.getEntriesByType("resource").map((e) => ({ name: e.name.split("/").slice(-2).join("/"), transfer: e.transferSize, end: e.responseEnd }));
+  const nav = performance.getEntriesByType("navigation")[0];
+  window.__result = { html: nav.responseEnd, glue: t_glue, init: t_init, frame: t_frame, cells: cells.length, res };
+} else if (mode === "bench") {
+  const core = await import("./bench-core.mjs");
+  const only = q.get("only")?.split(",");
+  const rows = core.run(mod, exports.memory, { runs: Number(q.get("runs") ?? 5), only });
+  window.__result = { text: core.format(rows), memory: q.get("memory") ? core.memoryReport(mod, exports.memory) : undefined };
+}
+</script>

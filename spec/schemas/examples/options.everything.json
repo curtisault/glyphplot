@@ -1,0 +1,179 @@
+{
+  "mode": "line",
+  "encode": {
+    "x": "time",
+    "y": [
+      "p50",
+      "p99"
+    ]
+  },
+  "timeZone": "+05:30",
+  "localeData": {
+    "decimal": ",",
+    "group": ".",
+    "grouping": [
+      3
+    ],
+    "minus": "−",
+    "percent": "# %",
+    "numerals": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9"
+    ],
+    "currency": [
+      "",
+      " €"
+    ],
+    "months": [
+      "Januar",
+      "Februar",
+      "März",
+      "April",
+      "Mai",
+      "Juni",
+      "Juli",
+      "August",
+      "September",
+      "Oktober",
+      "November",
+      "Dezember"
+    ],
+    "monthsShort": [
+      "Jan",
+      "Feb",
+      "Mär",
+      "Apr",
+      "Mai",
+      "Jun",
+      "Jul",
+      "Aug",
+      "Sep",
+      "Okt",
+      "Nov",
+      "Dez"
+    ],
+    "days": [
+      "Sonntag",
+      "Montag",
+      "Dienstag",
+      "Mittwoch",
+      "Donnerstag",
+      "Freitag",
+      "Samstag"
+    ],
+    "daysShort": [
+      "So",
+      "Mo",
+      "Di",
+      "Mi",
+      "Do",
+      "Fr",
+      "Sa"
+    ],
+    "periods": [
+      "AM",
+      "PM"
+    ],
+    "dateTime": "%A, der %e. %B %Y, %X",
+    "date": "%d.%m.%Y",
+    "time": "%H:%M:%S",
+    "hourCycle": "h23",
+    "direction": "ltr"
+  },
+  "theme": {
+    "accent": "#0784ff",
+    "paper": true
+  },
+  "legend": {
+    "position": "none"
+  },
+  "scales": {
+    "x": {
+      "type": "index",
+      "domain": {
+        "follow": 3600
+      },
+      "zone": "Asia/Tokyo"
+    },
+    "y": {
+      "type": "log",
+      "domain": "data",
+      "base": 2
+    },
+    "s": {
+      "type": "symlog",
+      "domain": [
+        -1000,
+        1000
+      ],
+      "constant": 1
+    },
+    "c": {
+      "type": "band",
+      "domain": [
+        "a",
+        "b",
+        "c"
+      ],
+      "padding": 0.2
+    },
+    "ra": {
+      "type": "angle",
+      "domain": [
+        0,
+        360
+      ]
+    }
+  },
+  "axes": [
+    {
+      "scale": "y",
+      "orient": "left",
+      "snap": "rows",
+      "ticks": [
+        1,
+        2,
+        4,
+        8
+      ],
+      "title": "latency"
+    }
+  ],
+  "annotations": [
+    {
+      "type": "vline",
+      "value": 1792330200000,
+      "label": "open"
+    },
+    {
+      "type": "label",
+      "x": 1792330200000,
+      "y": 4,
+      "text": "deploy"
+    },
+    {
+      "type": "marker",
+      "x": 1792330260000,
+      "y": 8,
+      "glyph": "▲"
+    }
+  ],
+  "sample": "lttb",
+  "spanGaps": true,
+  "retain": {
+    "rows": 100000,
+    "age": "1h"
+  },
+  "drag": "brush",
+  "wheel": "zoom",
+  "patterns": "on",
+  "stack": "percent"
+}

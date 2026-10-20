@@ -1,0 +1,17 @@
+[package]
+name = "charts-bench"
+version = "0.0.0"
+edition = "2024"
+publish = false
+description = "Throwaway discovery bench: prior-art line rasterisation versus per-column min/max, and candle glyph samples."
+license = "MIT"
+
+[workspace]
+
+[dependencies]
+ratatui-core = "0.1.2"
+ratatui-widgets = "0.3.2"
+
+[profile.release]
+opt-level = 3
+debug = false

@@ -1,0 +1,255 @@
+{
+  "version": 1,
+  "tables": {
+    "prices": {
+      "length": 3,
+      "sorted": "t",
+      "columns": [
+        {
+          "name": "t",
+          "type": "timestamp",
+          "role": "x",
+          "time_unit": "ms",
+          "zone": "America/New_York",
+          "values": [
+            1792330200000,
+            1792330260000,
+            "2026-10-18T14:52:00Z"
+          ]
+        },
+        {
+          "name": "open",
+          "type": "f64",
+          "role": "open",
+          "unit": "USD",
+          "values": [
+            182.4,
+            182.55,
+            182.31
+          ]
+        },
+        {
+          "name": "high",
+          "type": "f64",
+          "role": "high",
+          "unit": "USD",
+          "values": [
+            182.71,
+            182.6,
+            182.5
+          ]
+        },
+        {
+          "name": "low",
+          "type": "f64",
+          "role": "low",
+          "unit": "USD",
+          "values": [
+            182.3,
+            182.2,
+            182.05
+          ]
+        },
+        {
+          "name": "close",
+          "type": "f64",
+          "role": "close",
+          "unit": "USD",
+          "values": [
+            182.55,
+            182.31,
+            null
+          ]
+        },
+        {
+          "name": "volume",
+          "type": "i64",
+          "role": "volume",
+          "values": [
+            12000,
+            9800,
+            15100
+          ]
+        },
+        {
+          "name": "sym",
+          "type": "category",
+          "role": "series",
+          "categories": [
+            "ACME"
+          ],
+          "values": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "name": "halted",
+          "type": "bool",
+          "values": [
+            false,
+            false,
+            true
+          ]
+        },
+        {
+          "name": "note",
+          "type": "string",
+          "role": "label",
+          "values": [
+            null,
+            null,
+            "halt"
+          ]
+        }
+      ]
+    },
+    "nodes": {
+      "columns": [
+        {
+          "name": "id",
+          "type": "string",
+          "role": "id",
+          "values": [
+            "gw",
+            "db",
+            "web"
+          ]
+        },
+        {
+          "name": "group",
+          "type": "category",
+          "role": "group",
+          "categories": [
+            "edge",
+            "core"
+          ],
+          "values": [
+            0,
+            1,
+            1
+          ]
+        }
+      ]
+    },
+    "edges": {
+      "columns": [
+        {
+          "name": "source",
+          "type": "u32",
+          "role": "source",
+          "values": [
+            0,
+            0
+          ]
+        },
+        {
+          "name": "target",
+          "type": "u32",
+          "role": "target",
+          "values": [
+            1,
+            2
+          ]
+        },
+        {
+          "name": "bps",
+          "type": "f64",
+          "role": "weight",
+          "unit": "B/s",
+          "values": [
+            1200000.0,
+            340000.0
+          ]
+        }
+      ]
+    },
+    "stars": {
+      "frame": "icrs",
+      "epoch": "J2000",
+      "columns": [
+        {
+          "name": "ra",
+          "type": "f64",
+          "role": "ra",
+          "unit": "deg",
+          "values": [
+            101.2872,
+            88.7929
+          ]
+        },
+        {
+          "name": "dec",
+          "type": "f64",
+          "role": "dec",
+          "unit": "deg",
+          "values": [
+            -16.7161,
+            7.4071
+          ]
+        },
+        {
+          "name": "mag",
+          "type": "f32",
+          "role": "mag",
+          "values": [
+            -1.46,
+            0.42
+          ]
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "role": "label",
+          "values": [
+            "Sirius",
+            "Betelgeuse"
+          ]
+        }
+      ]
+    },
+    "binary": {
+      "length": 1000000,
+      "sorted": "t",
+      "columns": [
+        {
+          "name": "t",
+          "type": "timestamp",
+          "role": "x",
+          "time_unit": "ns"
+        },
+        {
+          "name": "rtt",
+          "type": "f32",
+          "role": "y",
+          "unit": "ms"
+        }
+      ]
+    }
+  },
+  "matrices": {
+    "latency": {
+      "rows": 2,
+      "cols": 3,
+      "values": [
+        1.0,
+        2.5,
+        null,
+        0.5,
+        4.0,
+        3.0
+      ],
+      "row_labels": [
+        "eu",
+        "us"
+      ],
+      "col_labels": [
+        "a",
+        "b",
+        "c"
+      ],
+      "unit": "ms"
+    }
+  }
+}

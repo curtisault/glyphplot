@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/curtisault/glyphplot/spec/schemas/meta.schema.json",
+  "title": "Meta",
+  "description": "What a chart type says about itself: a family's `pub static META: Meta` for that type, serialised (REQ-CHART-010, REQ-CHART-020). Listed in the module function `charts_json()` and in web/pkg/modules.js's `charts`, and read by the contract test, the site and the CLI's `list`. Every field is always present.",
+  "type": "object",
+  "required": ["slug", "name", "note", "family", "modes", "shapes", "options", "min", "drop", "mono", "charset", "budget"],
+  "additionalProperties": false,
+  "properties": {
+    "slug": {
+      "description": "The chart type: the element's `type`, the CLI's `<type>`, kebab-case and unique among types, e.g. \"candles\". Never `render`, `demo` or `list` (REQ-REG-020).",
+      "type": "string",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+      "not": { "enum": ["render", "demo", "list"] }
+    },
+    "name": {
+      "description": "Display name, e.g. \"candlestick\". Non-empty.",
+      "type": "string",
+      "minLength": 1
+    },
+    "note": {
+      "description": "One lowercase line saying what the chart shows, 1 to 72 characters.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 72,
+      "pattern": "^[^A-Z]*$"
+    },
+    "family": {
+      "description": "The family that plays the type, which is its Cargo feature and its wasm module in a release build: line, candles, bar, scatter, heatmap, sky in the first tier.",
+      "type": "string",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+    },
+    "modes": {
+      "description": "The modes the `mode` option may name (REQ-CHART-030), the default first.",
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$" }
+    },
+    "shapes": {
+      "description": "The data shapes the chart accepts (discovery/data.md, Domain shapes); data of another shape is an error naming these (REQ-DATA-110).",
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "enum": ["series", "ohlcv", "values", "bins", "counts", "points", "matrix", "graph", "geo", "sky", "orbits", "ephemeris"] }
+    },
+    "options": {
+      "description": "The defaults of every option the chart reads (REQ-OPT-010), as a JSON object, or null for a chart that reads none. Unlike unicel's Meta, which carried options as the text of a JSON object, glyphplot carries the object itself.",
+      "anyOf": [{ "type": "null" }, { "$ref": "options.schema.json" }]
+    },
+    "min": {
+      "description": "The smallest grid at which the chart draws with its axes (REQ-LAYOUT-070); below it the chart sheds parts in the order of `drop`. The contract draws at this size.",
+      "type": "object",
+      "required": ["cols", "rows"],
+      "additionalProperties": false,
+      "properties": {
+        "cols": { "description": "Width in cells, 1 to 320.", "type": "integer", "minimum": 1, "maximum": 320 },
+        "rows": { "description": "Height in cells, 1 to 120.", "type": "integer", "minimum": 1, "maximum": 120 }
+      }
+    },
+    "drop": {
+      "description": "The parts the chart sheds below `min`, first shed first. A part not listed is kept at every size the layout rules allow (REQ-LAYOUT-020).",
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "enum": ["title", "legend", "axes", "labels"] }
+    },
+    "mono": {
+      "description": "How the chart looks in one ink: \"auto\", its colour frame without the colours; \"authored\", drawn for one ink on purpose (dash patterns, markers, fills; REQ-MONO-010 to REQ-MONO-030).",
+      "enum": ["auto", "authored"]
+    },
+    "charset": {
+      "description": "Which glyphs the chart may draw outside label text (REQ-CHAR-010): basic (ASCII, a few symbols, box drawing, blocks), extended (plus arrows, geometric shapes, braille, octants, legacy computing), wide (any scalar, double-width glyphs in two cells).",
+      "enum": ["basic", "extended", "wide"]
+    },
+    "budget": {
+      "description": "What the chart may cost, the family default unless the chart says otherwise; the manifest writes it as its module's budget (ROADMAP §12).",
+      "$ref": "budgets.schema.json#/$defs/budget"
+    }
+  }
+}
