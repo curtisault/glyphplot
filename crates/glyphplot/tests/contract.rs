@@ -5,7 +5,7 @@
 //! `tests/budgets.rs`'s (ADR-126).
 //!
 //! - `every_chart_keeps_the_contract`: rules 1–13, 21–26 and 28 over every
-//!   fixture the chart accepts × every mode × plain, mono and paper × size
+//!   case of the chart (below) × every mode × plain, mono and paper × size
 //!   set S × t = 0, 1, 2.5, 6.
 //! - `replace_is_whole`: rule 15.
 //! - `view_round_trips`: rule 16.
@@ -26,21 +26,28 @@
 //! `CHART=<type>[,<type>…]` (REQ-CONTRACT-020). Run it with
 //! `cargo test -p glyphplot --profile contract --test contract`.
 //!
+//! The rules run on cases (`common/form.rs`): every fixture a chart accepts,
+//! and `empty`, `one`, `multi-4`, `nan-gaps`, `unsorted-x` and
+//! `duplicate-x` in a shape the chart takes when it takes no series
+//! (`counts` or `values` for `bar`, `ohlcv` for `candles`), so rules 11, 15,
+//! 21, 23 and 26 check those charts too. Snapshots stay on the fixtures
+//! themselves.
+//!
 //! Where the plan's words leave a check open, the choice is written at the
-//! check: "line-like" is a chart whose `META.options` has `spanGaps` (rule
-//! 23) or `sample` (rule 27); a log scale is asked for through a `scales`
-//! option (rule 25).
+//! check: "line-like" is a chart whose `META.options` has `spanGaps` or
+//! `sample` (rules 19, 23 and 27), any other a mark chart; a log scale is
+//! asked for through a `scales` option (rule 25).
 
 mod common;
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 use std::time::Instant;
 
 use glyphplot::cells::{self, Axis};
-use glyphplot::chart::{CellPos, Chart, Env};
+use glyphplot::chart::{CellPos, Chart, Env, Hit};
 use glyphplot::data::{Data, Encode, Role, Table};
-use glyphplot::fixtures::{self, Fixture, SplitMix64, FIXTURES};
+use glyphplot::fixtures::{self, SplitMix64, FIXTURES};
 use glyphplot::grid::{Grid, BLANK, NO_BACK, WIDE_TAIL};
 use glyphplot::input::{Input, Key, Mods, PointerType};
 use glyphplot::options::Options;
@@ -49,6 +56,7 @@ use glyphplot::registry::{self, Entry, RESERVED};
 use glyphplot::view::ViewPatch;
 use unicode_width::UnicodeWidthChar;
 
+use common::form::{cases, Case};
 use common::probe::{self, Held, Plot};
 use common::schema::Schemas;
 use common::{accepted, envs, guarded, mode_options, parallel, report, sizes, snap, Font, Tally, TIMES};
@@ -83,6 +91,14 @@ fn draw(chart: &mut dyn Chart, t: f64, env: &Env, cols: usize, rows: usize) -> G
 /// Whether `entry`'s `META.options` has a default for `key`.
 fn has_option(entry: &Entry, key: &str) -> bool {
     entry.meta.options.and_then(|o| serde_json::from_str::<serde_json::Value>(o).ok()).is_some_and(|v| v.get(key).is_some())
+}
+
+/// Whether `entry` is line-like: its `META.options` has `spanGaps` (rule 23)
+/// or `sample` (rule 27). Its hits snap by x, which maps linearly to columns
+/// (rule 19), and its gaps break lines (rule 23); any other chart is a mark
+/// chart.
+fn line_like(entry: &Entry) -> bool {
+    has_option(entry, "spanGaps") || has_option(entry, "sample")
 }
 
 /// A pointer event of `kind` at a cell.
@@ -364,7 +380,7 @@ fn check_shapes(entry: &Entry) -> Tally {
 /// One unit of the matrix rules: a chart, a fixture and a mode.
 struct Job {
     entry: &'static Entry,
-    fixture: &'static Fixture,
+    fixture: Case,
     mode: &'static str,
 }
 
@@ -410,13 +426,14 @@ fn check_one_ink(t: &mut Tally, g: &Grid, plot: Option<Plot>, case: &str, as_wor
 }
 
 /// Rule 11: in `multi-4`, each series draws a glyph or pattern the others do
-/// not. So that the data cannot tell them apart, each series is given the
+/// not; its series are its columns of role y, or of role value in its
+/// `counts` form. So that the data cannot tell them apart, each series is given the
 /// first series' values; each is then drawn alone in one ink (the others
 /// hidden by the view) at 80 × 24, and no two of those frames, nor any and
 /// the frame with every series hidden, may have the same glyphs.
 fn check_series_apart(t: &mut Tally, entry: &Entry, options: &Options, data: &Data, mode: &str) {
     let Some(table) = data.first_table() else { return };
-    let ys: Vec<usize> = table.columns().iter().enumerate().filter(|(_, c)| c.role == Some(Role::Y)).map(|(i, _)| i).collect();
+    let ys: Vec<usize> = table.columns().iter().enumerate().filter(|(_, c)| matches!(c.role, Some(Role::Y | Role::Value))).map(|(i, _)| i).collect();
     if ys.len() < 2 {
         return;
     }
@@ -490,7 +507,9 @@ fn check_resize(t: &mut Tally, chart: &mut dyn Chart, sizes: &[(usize, usize)], 
 /// Rule 23 on one frame of `nan-gaps`: no dot column whose x range lies
 /// inside a run of missing y is inked in the plot. Dot columns come from the
 /// cell mapping over the x domain the chart reports, two a cell; a braille
-/// cell's halves are read by its dots, any other glyph inks both.
+/// cell's halves are read by its dots, and any other glyph (a column mode's
+/// block) inks its cell whole, so it counts against a dot column only when
+/// both of its cell's dot columns lie in a gap.
 fn check_gaps(t: &mut Tally, g: &Grid, plot: Plot, domain: [f64; 2], data: &Data, case: &str) {
     let Some(table) = data.first_table() else { return };
     let (Some(xi), Some(yi)) = (probe::x_column(table), table.columns().iter().position(|c| c.role == Some(Role::Y))) else { return };
@@ -521,17 +540,119 @@ fn check_gaps(t: &mut Tally, g: &Grid, plot: Plot, domain: [f64; 2], data: &Data
         }
         checked += 1;
         let (c, right) = (plot.x + (k / 2) as usize, k % 2 == 1);
+        // A glyph other than braille inks its cell whole: it is laid to a dot
+        // column only when the cell's other dot column lies in a gap too.
+        let other = k ^ 1;
+        let (olo, ohi) = (axis.dot_value(other), axis.dot_value(other + 1));
+        let both = runs.iter().any(|&(a, b)| olo > a && ohi < b);
         let lit = (plot.y..plot.y + plot.h).find(|&r| {
-            let (l, rt) = probe::lit_halves(g.glyph(c, r));
-            if right {
-                rt
-            } else {
-                l
-            }
+            let gl = g.glyph(c, r);
+            let (l, rt) = probe::lit_halves(gl);
+            let braille = (0x2800..=0x28FF).contains(&gl);
+            (braille || both) && if right { rt } else { l }
         });
         t.check(23, lit.is_none(), || format!("{case}: dot column {k} (x {lo}..{hi}) lies in a gap but is inked at row {lit:?}"));
     }
     t.check(23, checked > 0, || format!("{case}: no dot column lies inside a gap; the check checked nothing"));
+}
+
+/// Rule 23 for a mark chart (not line-like) on `nan-gaps` in its form, at
+/// `cols × rows` at the default view: no mark is drawn for a missing value.
+/// From `hit` at every plot cell of a fresh chart's frame: no cell whose hit
+/// names a datum of missing y holds ink (a bar's band answers for its
+/// category whether or not it holds a bar); and for two drawn rows (of any
+/// series: a candle is named by up to four) next to each other in row
+/// order with a run of missing rows between them long enough to make a
+/// mark of its own, the plot column halfway between the cells `hit` reports
+/// them drawn in, when it is neither, holds no ink (a candle names only
+/// whole candles, so this is where its missing candles would be). A run
+/// makes a mark of its own when it is at least 2n − 1 rows, n the most rows
+/// a drawn mark aggregates (1 unless resampled): it then holds a whole
+/// bucket of evenly spaced rows, as the forms' are. At least one cell or
+/// column must be checked.
+fn check_missing_marks(t: &mut Tally, entry: &Entry, options: &Options, data: &Data, (cols, rows): (usize, usize), domain: [f64; 2], case: &str) {
+    let run = guarded(|| -> Result<(), String> {
+        let mut c = fresh(entry, options, data)?;
+        let g = draw(c.as_mut(), 0.0, &Env::plain(), cols, rows);
+        let every: Vec<Option<Hit>> = (0..cols * rows).map(|i| c.hit(CellPos::center(i % cols, i / cols))).collect();
+        let answers: Vec<bool> = every.iter().map(Option::is_some).collect();
+        let Some((plot, _)) = Plot::from_hits(&answers, cols, rows) else { return Ok(()) };
+        let held = Held::new(data);
+        let mut checked = 0usize;
+        for (i, h) in every.iter().enumerate() {
+            let Some(h) = h.as_ref().filter(|h| h.y.is_nan()) else { continue };
+            checked += 1;
+            let gl = g.glyph(i % cols, i / cols);
+            t.check(23, !probe::inked(gl), || {
+                format!("{case}: cell {},{} answers for {} row {}, which is missing, but holds U+{gl:04X}", i % cols, i / cols, h.series, h.index)
+            });
+        }
+        // The drawn rows of every series together, in row order: a mark
+        // (a candle) is named by up to four rows, one a price.
+        let places = Places::of(&every, domain);
+        let series: Vec<&String> = places.by_series.keys().collect();
+        let mut marks: BTreeMap<usize, usize> = BTreeMap::new();
+        for ((_, i), at) in &places.cells {
+            marks.entry(*i).or_insert(at.iter().next().map_or(0, |&(c, _)| c));
+        }
+        let missing = |r: usize| series.iter().all(|s| held.datum(s, r).is_none_or(|(_, y)| y.is_nan()));
+        let n = places.rows.values().copied().max().unwrap_or(1);
+        let need = (2 * n).saturating_sub(1).max(1);
+        let marks: Vec<(usize, usize)> = marks.into_iter().collect();
+        for w in marks.windows(2) {
+            let ((a, ca), (b, cb)) = (w[0], w[1]);
+            let (mut run, mut longest) = (0u64, 0u64);
+            for r in a + 1..b {
+                run = if missing(r) { run + 1 } else { 0 };
+                longest = longest.max(run);
+            }
+            let mid = (ca + cb) / 2;
+            if longest < need || mid == ca || mid == cb {
+                continue;
+            }
+            checked += 1;
+            let lit = (plot.y..plot.y + plot.h).find(|&r| probe::inked(g.glyph(mid, r)));
+            t.check(23, lit.is_none(), || {
+                format!("{case}: column {mid}, between rows {a} and {b} drawn with {longest} missing rows between, is inked at row {lit:?}")
+            });
+        }
+        t.check(23, checked > 0, || {
+            format!("{case}: no cell answers for a missing value and no column lies between drawn data across one; the check checked nothing")
+        });
+        Ok(())
+    });
+    match run {
+        Err(p) => t.check(4, false, || format!("{case}: rule 23 panicked: {p}")),
+        Ok(Err(e)) => t.check(4, false, || format!("{case}: rule 23: {e}")),
+        Ok(Ok(())) => {}
+    }
+}
+
+/// Rule 26 for data without an x column (a `counts` or `values` form, as
+/// categories): the sorted copy is the data itself (REQ-DATA-040 sorts by
+/// x), so what is checked is that the data's order is the order drawn: at
+/// every size of S but 1 × 1, the categories the chart's table lists are a
+/// run of the data's categories in the data's order.
+fn check_category_order(t: &mut Tally, entry: &Entry, options: &Options, data: &Data, sizes: &[(usize, usize)], case: &str) {
+    let Some(table) = data.first_table() else { return };
+    let Some(cat) = table.columns().iter().find(|c| c.role == Some(Role::Category)) else { return };
+    let labels: Vec<String> = (0..table.len()).map(|r| cat.label(r).unwrap_or_default().to_string()).collect();
+    for &(cols, rows) in sizes.iter().filter(|&&s| s != (1, 1)) {
+        let listed = guarded(|| -> Result<Vec<String>, String> {
+            let mut c = fresh(entry, options, data)?;
+            let _ = draw(c.as_mut(), 0.0, &Env::plain(), cols, rows);
+            Ok(c.table(usize::MAX).rows.into_iter().filter_map(|r| r.into_iter().next()).collect())
+        });
+        let at = format!("{case} · {cols}×{rows}");
+        let listed = match listed {
+            Ok(Ok(l)) => l,
+            Ok(Err(e)) => return t.check(4, false, || format!("{at}: {e}")),
+            Err(p) => return t.check(4, false, || format!("{at}: panicked: {p}")),
+        };
+        let first = listed.first().and_then(|l| labels.iter().position(|x| x == l));
+        let run = !listed.is_empty() && first.is_some_and(|s| labels.get(s..s + listed.len()).is_some_and(|w| w == listed.as_slice()));
+        t.check(26, run, || format!("{at}: the table lists {:?}…, not a run of the data's categories in its order", listed.iter().take(6).collect::<Vec<_>>()));
+    }
 }
 
 /// Rule 24 on one frame: the y axis's labels are the text left of the y
@@ -544,8 +665,11 @@ fn check_gaps(t: &mut Tally, g: &Grid, plot: Plot, domain: [f64; 2], data: &Data
 /// each day as d3's format writes it. Either way a y label leaves the axis's
 /// column a box-drawing glyph (it does not run into it), and where every
 /// label of an axis is a number they run in order (down for y, rightward for
-/// x), which a label cut or run into another breaks.
-fn check_ticks(t: &mut Tally, g: &Grid, plot: Plot, case: &str, as_worded: bool) {
+/// x), which a label cut or run into another breaks. An axis whose every
+/// label is label text from the data (`data`: a band of categories) is
+/// exempt from the distinct and order checks, as rule 22 exempts it: its
+/// labels are the data's, in the data's order (rule 26).
+fn check_ticks(t: &mut Tally, g: &Grid, plot: Plot, data: &[String], case: &str, as_worded: bool) {
     let axis_col = plot.x.checked_sub(1);
     let axis_row = plot.y + plot.h;
     let mut ys: Vec<String> = Vec::new();
@@ -566,6 +690,9 @@ fn check_ticks(t: &mut Tally, g: &Grid, plot: Plot, case: &str, as_worded: bool)
         xs.extend(text.split("  ").map(str::trim).filter(|s| !s.is_empty()).map(str::to_string));
     }
     for (axis, labels, down) in [("y", &ys, true), ("x", &xs, false)] {
+        if !as_worded && !labels.is_empty() && labels.iter().all(|l| data.contains(l)) {
+            continue;
+        }
         let values: Vec<f64> = labels.iter().filter_map(|l| probe::parse_number(l)).collect();
         let numeric = values.len() == labels.len();
         if as_worded || numeric {
@@ -691,24 +818,27 @@ fn run_job(job: &Job) -> Tally {
                 }
             }
             let Some((plot, _)) = plot else { continue };
-            // Rule 23: gaps break lines, in line-like modes (`spanGaps` off).
-            if f.name == "nan-gaps" && has_option(entry, "spanGaps") && matches!((cols, rows), (80, 24) | (320, 120)) {
+            // Rule 23: gaps break lines, in line-like modes (`spanGaps` off);
+            // a mark chart draws no mark for a missing value.
+            if f.base == "nan-gaps" && matches!((cols, rows), (80, 24) | (320, 120)) {
                 match domain {
-                    Some(d) => check_gaps(&mut t, g, plot, d, &data, &case),
+                    Some(d) if line_like(entry) => check_gaps(&mut t, g, plot, d, &data, &case),
+                    Some(d) => check_missing_marks(&mut t, entry, &options, &data, (cols, rows), d, &case),
                     None => t.check(23, false, || format!("{case}: the chart reports no x domain")),
                 }
             }
             // Rule 24: tick labels distinct and fitting.
-            check_ticks(&mut t, g, plot, &case, false);
+            check_ticks(&mut t, g, plot, &label_texts, &case, false);
         }
         if f.rows == 0 {
             let v = a.view();
             let null = v.x.domain.is_none() && v.y.domain.is_none() && v.axes.values().all(|ax| ax.domain.is_none());
             t.check(21, null, || format!("{} · mode {mode}: the view's domains are not null: {}", f.name, v.to_json()));
         }
-        if f.name == "one" {
+        if f.base == "one" {
             // Rule 22: one point in a padded domain.
-            let x = data.first_table().and_then(|tb| probe::x_column(tb).map(|i| tb.columns()[i].get(0)));
+            // Without an x column (as categories) its x is its position, 0.
+            let x = data.first_table().map(|tb| probe::x_column(tb).map_or(0.0, |i| tb.columns()[i].get(0)));
             let padded = matches!((domain, x), (Some([lo, hi]), Some(x)) if lo < x && x < hi);
             t.check(22, padded, || format!("one · mode {mode}: the x domain {domain:?} does not pad the point at {x:?}"));
         }
@@ -746,7 +876,7 @@ fn run_job(job: &Job) -> Tally {
                     if (cols, rows) != (1, 1) {
                         let case = what(env_name, (cols, rows), time);
                         t.check(8, &g == want, || format!("{case}: {}", common::first_difference(want, &g)));
-                        if f.name == "duplicate-x" {
+                        if f.base == "duplicate-x" {
                             t.check(26, &g == want, || format!("{case}: duplicate x drawn twice differs: {}", common::first_difference(want, &g)));
                         }
                     }
@@ -798,11 +928,16 @@ fn run_job(job: &Job) -> Tally {
         }
     }
     // Rule 11: one ink tells series apart.
-    if f.name == "multi-4" {
+    if f.base == "multi-4" {
         check_series_apart(&mut t, entry, &options, &data, mode);
     }
-    // Rule 26: unsorted x draws its sorted copy's frame.
-    if f.name == "unsorted-x" {
+    // Rule 26: unsorted x draws its sorted copy's frame; without an x (as
+    // categories) the data's order is the order drawn.
+    let has_x = data.first_table().and_then(probe::x_column).is_some();
+    if f.base == "unsorted-x" && !has_x {
+        check_category_order(&mut t, entry, &options, &data, &sizes, &format!("{} · mode {mode}", f.name));
+    }
+    if f.base == "unsorted-x" && has_x {
         if let Ok(mut s) = fresh(entry, &options, &probe::sorted_copy(&data)) {
             for (e, (env_name, env)) in envs.iter().enumerate() {
                 for (si, &(cols, rows)) in sizes.iter().enumerate().filter(|&(_, &s)| s != (1, 1)) {
@@ -831,7 +966,7 @@ fn every_chart_keeps_the_contract() {
     let slugs: Vec<&str> = registry::metas().map(|m| m.slug).collect();
     let mut jobs = Vec::new();
     for &entry in &charts {
-        for f in accepted(entry) {
+        for f in cases(entry) {
             for &mode in entry.meta.modes {
                 jobs.push(Job { entry, fixture: f, mode });
             }
@@ -843,6 +978,9 @@ fn every_chart_keeps_the_contract() {
         .map(|e| {
             let mut t = check_meta(e, &slugs);
             t.merge(check_shapes(e));
+            if !cases(e).iter().any(|c| c.base == "multi-4") {
+                t.skip(11, "no multi-4 case: none of its shapes holds more than one series (ohlcv is one instrument)");
+            }
             (e.meta.slug, t)
         })
         .collect();
@@ -869,14 +1007,14 @@ fn by_chart<J>(charts: &[&'static Entry], jobs: &[J], entry: impl Fn(&J) -> &'st
 struct ReplaceJob {
     entry: &'static Entry,
     mode: &'static str,
-    from: &'static Fixture,
+    from: Case,
 }
 
 /// Rule 15 for one chart, mode and first fixture: replacing it with each
 /// other accepted fixture draws what that fixture alone draws, at the
 /// default view and with a cursor set by a hover before the replace (the
 /// fresh chart then given the view the replaced one holds).
-fn replace_job(job: &ReplaceJob, onto: &[&'static Fixture], datas: &[Data]) -> Tally {
+fn replace_job(job: &ReplaceJob, onto: &[Case], datas: &[Data]) -> Tally {
     let began = Instant::now();
     let mut t = Tally::default();
     let (entry, mode, a) = (job.entry, job.mode, job.from);
@@ -924,22 +1062,26 @@ fn replace_job(job: &ReplaceJob, onto: &[&'static Fixture], datas: &[Data]) -> T
 fn replace_is_whole() {
     let start = Instant::now();
     let charts = common::charts();
-    let fixtures: Vec<&'static Fixture> = FIXTURES.iter().collect();
-    let datas: Vec<Data> = fixtures.iter().map(|f| f.generate()).collect();
+    // Each case's data generated once, by name.
+    let mut generated: Vec<(&'static str, Data)> = Vec::new();
     let mut jobs = Vec::new();
     for &entry in &charts {
-        for f in accepted(entry) {
+        for f in cases(entry) {
+            if generated.iter().all(|(n, _)| *n != f.name) {
+                generated.push((f.name, f.generate()));
+            }
             for &mode in entry.meta.modes {
                 jobs.push(ReplaceJob { entry, mode, from: f });
             }
         }
     }
+    let data_of = |name: &str| generated.iter().find(|(n, _)| *n == name).map(|(_, d)| d.clone()).unwrap_or_default();
     let results = parallel(
         &jobs,
         |j| j.from.rows,
         |j| {
-            let onto: Vec<&'static Fixture> = accepted(j.entry);
-            let ds: Vec<Data> = onto.iter().map(|f| datas[fixtures.iter().position(|g| g.name == f.name).unwrap_or(0)].clone()).collect();
+            let onto: Vec<Case> = cases(j.entry);
+            let ds: Vec<Data> = onto.iter().map(|f| data_of(f.name)).collect();
             replace_job(j, &onto, &ds)
         },
     );
@@ -953,7 +1095,7 @@ fn replace_is_whole() {
 fn interaction_jobs(charts: &[&'static Entry]) -> Vec<Job> {
     let mut jobs = Vec::new();
     for &entry in charts {
-        for f in accepted(entry) {
+        for f in cases(entry) {
             for &mode in entry.meta.modes {
                 if f.rows <= 100_000 || mode == entry.meta.modes[0] {
                     jobs.push(Job { entry, fixture: f, mode });
@@ -1088,9 +1230,9 @@ fn input_is_deterministic() {
     let charts = common::charts();
     let mut jobs = Vec::new();
     for &entry in &charts {
-        let fs = accepted(entry);
-        let picked: Vec<&'static Fixture> = {
-            let named: Vec<_> = fs.iter().copied().filter(|f| f.name == "sine-1k" || f.name == "multi-4").collect();
+        let fs = cases(entry);
+        let picked: Vec<Case> = {
+            let named: Vec<_> = fs.iter().copied().filter(|f| f.form.is_none() && (f.base == "sine-1k" || f.base == "multi-4")).collect();
             if named.is_empty() {
                 fs.into_iter().filter(|f| f.rows > 2 && f.rows <= 10_000).collect()
             } else {
@@ -1160,21 +1302,25 @@ fn input_is_deterministic() {
 /// The probes of `hits_name_what_was_drawn`: size and view.
 const HIT_CASES: [(usize, usize, bool); 3] = [(80, 24, false), (40, 12, false), (80, 24, true)];
 
-/// What one hit walk found: the chart's plot and x mapping at one case, and
-/// the hits at up to 512 seeded cells.
+/// What one hit walk found at one case: the frame, the chart's plot and its
+/// x domain, the hit at every cell, and the hits at up to 512 seeded cells.
 struct Walk {
     case: String,
     frame: Grid,
     plot: Plot,
+    domain: [f64; 2],
     axis: Axis,
     held: Held,
-    hits: Vec<((usize, usize), glyphplot::chart::Hit)>,
+    /// `hit` at the centre of every cell, row-major.
+    every: Vec<Option<Hit>>,
+    hits: Vec<((usize, usize), Hit)>,
     patch: Option<ViewPatch>,
 }
 
-/// Draws `entry` on `f` in `mode` at one hit case and walks up to 512 seeded
-/// cells with `hit`; `None` when the chart has no plot there (no data).
-fn hit_walk(t: &mut Tally, entry: &Entry, f: &Fixture, mode: &str, (cols, rows, zoomed): (usize, usize, bool)) -> Option<Walk> {
+/// Draws `entry` on `f` in `mode` at one hit case, asks `hit` at every cell
+/// and picks up to 512 seeded cells of them; `None` when the chart has no
+/// plot there (no data).
+fn hit_walk(t: &mut Tally, entry: &Entry, f: &Case, mode: &str, (cols, rows, zoomed): (usize, usize, bool)) -> Option<Walk> {
     let data = f.generate();
     let options = Options::parse(&mode_options(entry, mode)).expect("options");
     let case = format!("{} · mode {mode} · {cols}×{rows} · {}", f.name, if zoomed { "zoomed" } else { "default view" });
@@ -1190,7 +1336,9 @@ fn hit_walk(t: &mut Tally, entry: &Entry, f: &Fixture, mode: &str, (cols, rows, 
         };
         let mut c = fresh_with(entry, &options, &data, patch.as_ref())?;
         let frame = draw(c.as_mut(), 0.0, &Env::plain(), cols, rows);
-        let Some((plot, solid)) = Plot::find(c.as_ref(), cols, rows) else { return Ok(None) };
+        let every: Vec<Option<Hit>> = (0..cols * rows).map(|i| c.hit(CellPos::center(i % cols, i / cols))).collect();
+        let answers: Vec<bool> = every.iter().map(Option::is_some).collect();
+        let Some((plot, solid)) = Plot::from_hits(&answers, cols, rows) else { return Ok(None) };
         t.check(19, solid, || format!("{case}: the cells hit answers at are not a rectangle"));
         let Some(domain) = domain_of(c.as_ref()) else {
             t.check(19, false, || format!("{case}: hit answers but the chart reports no x domain"));
@@ -1200,9 +1348,9 @@ fn hit_walk(t: &mut Tally, entry: &Entry, f: &Fixture, mode: &str, (cols, rows, 
         let mut r = SplitMix64::new(f.seed ^ 0x6869_7473 ^ (cols * 1000 + rows) as u64 ^ u64::from(zoomed));
         let all = cols * rows;
         let cells: Vec<usize> = if all <= 512 { (0..all).collect() } else { (0..512).map(|_| r.below(all as u64) as usize).collect() };
-        let hits = cells.into_iter().filter_map(|i| c.hit(CellPos::center(i % cols, i / cols)).map(|h| ((i % cols, i / cols), h))).collect();
+        let hits = cells.into_iter().filter_map(|i| every[i].clone().map(|h| ((i % cols, i / cols), h))).collect();
         t.frames += 1;
-        Ok(Some(Walk { case, frame, plot, axis, held: Held::new(&data), hits, patch }))
+        Ok(Some(Walk { case, frame, plot, domain, axis, held: Held::new(&data), every, hits, patch }))
     });
     match found {
         Err(p) => {
@@ -1223,17 +1371,78 @@ fn probe_dot(c: usize, x0: usize) -> i64 {
     cells::nearest(c as f64 + 0.5 - x0 as f64, 2).map_or(0, |(_, d)| d)
 }
 
+/// Whether the datum a hit names is drawn: its y finite, and its x in the
+/// x domain drawn or it a row of a bucket drawn as one mark (a hit with an
+/// aggregate: a resampled candle names a row of its bucket, which may begin
+/// before the view). A hit may name the nearest datum past the view's edge,
+/// which is not drawn; it reports the probe's cell for it.
+fn drawn(h: &Hit, [lo, hi]: [f64; 2]) -> bool {
+    h.y.is_finite() && ((lo..=hi).contains(&h.x) || h.aggregate.is_some())
+}
+
+/// A datum's row and the cell (column, row) it is drawn in.
+type Placed = (usize, (usize, usize));
+
+/// Where a walk's data are drawn, as `hit` reports it from every plot cell:
+/// each drawn datum (series and row) with the cells reported for it, and
+/// each series' drawn data in row order with the first of them.
+struct Places {
+    cells: BTreeMap<(String, usize), BTreeSet<(usize, usize)>>,
+    by_series: BTreeMap<String, Vec<Placed>>,
+    /// The rows each drawn datum's mark aggregates (a resampled candle's
+    /// bucket), 1 for a datum drawn alone.
+    rows: BTreeMap<(String, usize), u64>,
+}
+
+impl Places {
+    fn of(every: &[Option<Hit>], domain: [f64; 2]) -> Places {
+        let mut cells: BTreeMap<(String, usize), BTreeSet<(usize, usize)>> = BTreeMap::new();
+        let mut rows: BTreeMap<(String, usize), u64> = BTreeMap::new();
+        for h in every.iter().flatten().filter(|h| drawn(h, domain)) {
+            cells.entry((h.series.clone(), h.index)).or_default().insert((h.col, h.row));
+            rows.insert((h.series.clone(), h.index), h.aggregate.as_ref().map_or(1, |a| a.count));
+        }
+        let mut by_series: BTreeMap<String, Vec<Placed>> = BTreeMap::new();
+        for ((s, i), at) in &cells {
+            if let Some(&first) = at.iter().next() {
+                by_series.entry(s.clone()).or_default().push((*i, first));
+            }
+        }
+        Places { cells, by_series, rows }
+    }
+
+    /// Whether every series' places run with its rows: by `key`,
+    /// non-decreasing, or with `either`, non-increasing too.
+    fn ordered(&self, key: impl Fn((usize, usize)) -> usize, either: bool) -> bool {
+        self.by_series.values().all(|v| {
+            let up = v.windows(2).all(|w| key(w[0].1) <= key(w[1].1));
+            let down = v.windows(2).all(|w| key(w[0].1) >= key(w[1].1));
+            up || (either && down)
+        })
+    }
+}
+
 /// Rules 19 and 20 for one chart, fixture and mode.
 ///
 /// Rule 19, at 80 × 24 and 40 × 12 at the default view and at 80 × 24
-/// zoomed: for up to 512 seeded cells, `hit` names a datum of the data as
-/// held or nothing; the datum's x maps by the cell mapping into the column
-/// `hit` says it is drawn in, and the frame inked that cell when its y is
-/// finite; and the datum is the one a snap to the nearest x may name: in the
-/// dot column under the probe when that column holds a datum, else the
-/// nearest datum on its left or its right. (The plan's first wording,
-/// "maps into that cell's column", is in `rules_as_worded`, ignored: it
-/// fails on sparse data.)
+/// zoomed, asks the chart where it drew a datum (`Hit::col` and `row`)
+/// rather than assuming x maps linearly to columns, which a band, an index
+/// time scale or a resampled candle does not. From `hit` at every plot cell:
+/// a datum of finite y is reported in one cell wherever it is hit from, and
+/// each series' cells run in its rows' order along the columns (or, for
+/// bars across, the rows: the place axis). For up to 512 seeded cells,
+/// `hit` names a datum of the data as held (its series, row, x and y; x a
+/// category's index where the data has no x) or nothing; the datum is in
+/// view, or the nearest datum past the view's edge; when its y is finite
+/// its cell is in the plot and the frame inked it (a mark chart's mark),
+/// and along the place axis its cell is the nearest to the probe of its
+/// series' cells. For a line-like chart (`sample` or `spanGaps` in its
+/// options) x is linear, and the datum's x maps by the cell mapping into
+/// the column `hit` reports, and is the one a snap to the nearest x may
+/// name: in the dot column under the probe when that column holds a datum,
+/// else the nearest datum on its left or its right. (The plan's first
+/// wording, "maps into that cell's column", is in `rules_as_worded`,
+/// ignored: it fails on sparse data.)
 ///
 /// Rule 20, for up to 24 of those cells: a hover there sets the view's
 /// cursor to the datum `hit` names, and the frame's readout names its series
@@ -1243,27 +1452,102 @@ fn hits_job(job: &Job) -> Tally {
     let mut t = Tally::default();
     let (entry, f, mode) = (job.entry, job.fixture, job.mode);
     let options = Options::parse(&mode_options(entry, mode)).expect("options");
+    let linear = line_like(entry);
     for hc in HIT_CASES {
-        let Some(w) = hit_walk(&mut t, entry, f, mode, hc) else { continue };
-        let Walk { case, frame, plot, axis, held, hits, patch } = w;
-        // Which dot columns hold a datum's x.
+        let Some(w) = hit_walk(&mut t, entry, &f, mode, hc) else { continue };
+        let Walk { case, frame, plot, domain, axis, held, every, hits, patch } = w;
+        // One place a datum, and places in the data's order.
+        let places = Places::of(&every, domain);
+        for ((s, i), at) in &places.cells {
+            t.check(19, at.len() == 1, || format!("{case}: hit reports {s} row {i} drawn in {} cells: {:?}…", at.len(), at.iter().take(4).collect::<Vec<_>>()));
+        }
+        let along_cols = places.ordered(|(c, _)| c, false);
+        let along_rows = places.ordered(|(_, r)| r, true);
+        t.check(19, along_cols || along_rows, || {
+            let first: Vec<_> = places.by_series.iter().map(|(s, v)| (s, v.iter().take(6).collect::<Vec<_>>())).take(2).collect();
+            format!("{case}: the cells hit reports do not run in the data's order along the columns or the rows: {first:?}")
+        });
+        let along_cols = along_cols || !along_rows;
+        let place = |(c, r): (usize, usize)| if along_cols { c } else { r };
+        // The snap moves one way: along the place axis, each series' named
+        // rows never go back.
+        let (cols, rows) = (frame.cols(), frame.rows());
+        let lines: Vec<Vec<usize>> = if along_cols {
+            (plot.y..plot.y + plot.h).map(|r| (plot.x..plot.x + plot.w).map(|c| r * cols + c).collect()).collect()
+        } else {
+            (plot.x..plot.x + plot.w).map(|c| (plot.y..plot.y + plot.h).map(|r| r * cols + c).collect()).collect()
+        };
+        let _ = rows;
+        for line in &lines {
+            let mut last: BTreeMap<&str, (usize, usize)> = BTreeMap::new();
+            let mut ways: BTreeMap<&str, std::cmp::Ordering> = BTreeMap::new();
+            for &i in line {
+                let Some(h) = &every[i] else { continue };
+                if let Some(&(prev, at)) = last.get(h.series.as_str()) {
+                    let way = h.index.cmp(&prev);
+                    let back = if along_cols {
+                        way == std::cmp::Ordering::Less
+                    } else {
+                        way != std::cmp::Ordering::Equal && *ways.entry(h.series.as_str()).or_insert(way) != way
+                    };
+                    t.check(19, !back, || {
+                        format!(
+                            "{case}: the snap goes back: {} row {prev} at cell {},{}, then row {} at cell {},{}",
+                            h.series,
+                            at % cols,
+                            at / cols,
+                            h.index,
+                            i % cols,
+                            i / cols
+                        )
+                    });
+                }
+                last.insert(h.series.as_str(), (h.index, i));
+            }
+        }
+        // Which dot columns hold a datum's x, for a line-like chart.
         let mut full = vec![false; axis.dots()];
         for &x in &held.xs {
             if let Some(k) = axis.dot_in(x) {
                 full[k] = true;
             }
         }
+        let [lo, hi] = domain;
         for &((c, r), ref h) in &hits {
             let at = format!("{case} · cell {c},{r}");
             let named = held.datum(&h.series, h.index);
             let real = named.is_some_and(|(x, y)| probe::same(x, h.x) && probe::same(y, h.y));
             t.check(19, real, || format!("{at}: hit names {} row {} at ({}, {}), but the data holds {named:?}", h.series, h.index, h.x, h.y));
+            // In view, a row of a bucket drawn, or the nearest datum past
+            // an edge.
+            let in_view = drawn(h, domain)
+                || (lo..=hi).contains(&h.x)
+                || (h.x < lo && held.xs.iter().rev().find(|&&x| x < lo) == Some(&h.x))
+                || (h.x > hi && held.xs.iter().find(|&&x| x > hi) == Some(&h.x));
+            t.check(19, in_view, || format!("{at}: hit names x {}, outside the view {lo}..{hi} and not the nearest datum past it", h.x));
+            if drawn(h, domain) {
+                let inked = plot.contains(h.col, h.row) && probe::inked(frame.glyph(h.col, h.row));
+                t.check(19, inked, || format!("{at}: hit says {} row {} is drawn at {},{}, which is blank or off the plot", h.series, h.index, h.col, h.row));
+                // The nearest of its series' places to the probe, give or
+                // take the cell: a place is a position rounded down to its
+                // cell, and the snap measures from the dot column under the
+                // probe, so a datum nearer by position may lie one cell
+                // farther by cells, never two.
+                let p = place((c, r));
+                let d = place((h.col, h.row)).abs_diff(p);
+                let least = places.by_series.get(&h.series).and_then(|v| v.iter().map(|&(_, q)| place(q).abs_diff(p)).min());
+                t.check(19, least.is_some_and(|l| d <= l + 1), || {
+                    format!(
+                        "{at}: hit names {} row {} drawn {d} cells from the probe, but one of its series is drawn {least:?} cells from it",
+                        h.series, h.index
+                    )
+                });
+            }
+            if !linear {
+                continue;
+            }
             if let Some(cell) = axis.cell_in(h.x) {
                 t.check(19, plot.x + cell == h.col, || format!("{at}: x {} maps to column {}, but hit says {}", h.x, plot.x + cell, h.col));
-                if h.y.is_finite() && plot.contains(h.col, h.row) {
-                    let g = frame.glyph(h.col, h.row);
-                    t.check(19, probe::inked(g), || format!("{at}: hit says {} row {} is drawn at {},{}, which is blank", h.series, h.index, h.col, h.row));
-                }
             }
             let k = probe_dot(c, plot.x);
             let ok = if full.get(k as usize).copied().unwrap_or(false) {
@@ -1334,8 +1618,8 @@ fn hits_name_what_was_drawn() {
     let jobs = interaction_jobs(&charts);
     let results = parallel(&jobs, |j| j.fixture.rows * j.fixture.series, hits_job);
     let tallies = by_chart(&charts, &jobs, |j| j.entry, results);
-    // A mark chart (scatter, candle, bar) must also have drawn its mark in
-    // the probed cell; no registered chart is one yet.
+    // A mark chart (candles, bar) has drawn its mark in the cell hit
+    // reports: `hits_job` checks the cell is inked for every chart.
     report("hits, rules 19 and 20", &[4, 19, 20], &tallies, start.elapsed());
 }
 
@@ -1364,7 +1648,7 @@ fn rules_as_worded() {
             let mut t = Tally::default();
             let (entry, f, mode) = (job.entry, job.fixture, job.mode);
             for hc in HIT_CASES {
-                let Some(w) = hit_walk(&mut t, entry, f, mode, hc) else { continue };
+                let Some(w) = hit_walk(&mut t, entry, &f, mode, hc) else { continue };
                 for ((c, r), h) in &w.hits {
                     let cell = w.axis.cell_in(h.x).map(|k| w.plot.x + k);
                     t.check(19, cell == Some(*c), || format!("{} · cell {c},{r}: hit names x {}, in column {cell:?}", w.case, h.x));
@@ -1381,7 +1665,7 @@ fn rules_as_worded() {
                         let plot = Plot::find(c.as_ref(), cols, rows).map(|(p, _)| p);
                         match (*env_name, plot) {
                             ("mono", _) if (cols, rows) == (80, 24) => check_one_ink(&mut t, &g, plot, &case, true),
-                            ("plain", Some(p)) => check_ticks(&mut t, &g, p, &case, true),
+                            ("plain", Some(p)) => check_ticks(&mut t, &g, p, &[], &case, true),
                             _ => {}
                         }
                     }
@@ -1401,7 +1685,7 @@ fn rules_as_worded() {
 /// One unit of `downsampling_is_exact`: a chart, a fixture, a mode and a view.
 struct SampleJob {
     entry: &'static Entry,
-    fixture: &'static Fixture,
+    fixture: Case,
     mode: &'static str,
     view: &'static str,
 }
@@ -1427,7 +1711,7 @@ fn downsampling_is_exact() {
             tallies[i].1.skip(27, "not line-like: META.options has no `sample`");
             continue;
         }
-        for f in accepted(entry).into_iter().filter(|f| f.name != "unsorted-x") {
+        for f in cases(entry).into_iter().filter(|f| f.base != "unsorted-x") {
             for &mode in entry.meta.modes {
                 for (view, _, _) in SAMPLE_VIEWS {
                     jobs.push(SampleJob { entry, fixture: f, mode, view });
@@ -1445,7 +1729,7 @@ fn downsampling_is_exact() {
             let data = f.generate();
             let (_, from, to) = SAMPLE_VIEWS.iter().copied().find(|v| v.0 == job.view).unwrap_or(SAMPLE_VIEWS[0]);
             let mut variants = vec![serde_json::json!({ "mode": mode })];
-            if matches!(f.name, "nan-gaps" | "inf") && has_option(entry, "spanGaps") {
+            if matches!(f.base, "nan-gaps" | "inf") && has_option(entry, "spanGaps") {
                 variants.push(serde_json::json!({ "mode": mode, "spanGaps": true }));
             }
             for v in variants {
@@ -1488,16 +1772,16 @@ fn downsampling_is_exact() {
 
 /// The fixture a chart's non-default modes are snapshotted on: `sine-1k`
 /// when it accepts it, else its first accepted fixture of more than two rows.
-fn mode_fixture(entry: &Entry) -> Option<&'static Fixture> {
+fn mode_fixture(entry: &Entry) -> Option<Case> {
     let fs = accepted(entry);
-    fs.iter().find(|f| f.name == "sine-1k").or_else(|| fs.iter().find(|f| f.rows > 2)).copied()
+    fs.iter().find(|f| f.name == "sine-1k").or_else(|| fs.iter().find(|f| f.rows > 2)).map(|&f| Case::native(f))
 }
 
 /// The snapshot files a chart must have: one a fixture it accepts in its
 /// default mode, and `<mode>-<fixture>.snap` for each other mode
 /// (REQ-SNAP-010).
 fn snapshot_jobs(entry: &'static Entry) -> Vec<Job> {
-    let mut jobs: Vec<Job> = accepted(entry).into_iter().map(|f| Job { entry, fixture: f, mode: entry.meta.modes[0] }).collect();
+    let mut jobs: Vec<Job> = accepted(entry).into_iter().map(|f| Job { entry, fixture: Case::native(f), mode: entry.meta.modes[0] }).collect();
     if let Some(f) = mode_fixture(entry) {
         jobs.extend(entry.meta.modes[1..].iter().map(|&mode| Job { entry, fixture: f, mode }));
     }
@@ -1622,7 +1906,7 @@ fn every_chart_matches_its_snapshots() {
 /// size from 1 × 1 to 320 × 120 for fixtures of at most 10,000 rows a
 /// series; for the 100k and 1M fixtures, the four corners, 1 × n and n × 1
 /// edges, and 256 sizes from SplitMix64 seeded by the fixture's seed.
-fn layout_sizes(f: &Fixture) -> Vec<(usize, usize)> {
+fn layout_sizes(f: &Case) -> Vec<(usize, usize)> {
     if f.rows <= 10_000 {
         return (1..=120).flat_map(|r| (1..=320).map(move |c| (c, r))).collect();
     }
@@ -1639,7 +1923,7 @@ fn layout_sizes(f: &Fixture) -> Vec<(usize, usize)> {
 
 /// One unit of `every_size_draws_without_panic`: a chart, a fixture and a
 /// band of sizes.
-type SizeJob = (&'static Entry, &'static Fixture, Vec<(usize, usize)>);
+type SizeJob = (&'static Entry, Case, Vec<(usize, usize)>);
 
 /// REQ-LAYOUT-040: every chart draws without a panic at every size from
 /// 1 × 1 to 320 × 120 with every fixture it accepts, in its default mode
@@ -1653,8 +1937,8 @@ fn every_size_draws_without_panic() {
     let charts = common::charts();
     let mut jobs: Vec<SizeJob> = Vec::new();
     for &entry in &charts {
-        for f in accepted(entry) {
-            let all = layout_sizes(f);
+        for f in cases(entry) {
+            let all = layout_sizes(&f);
             for band in all.chunks(320 * 8) {
                 jobs.push((entry, f, band.to_vec()));
             }
@@ -1748,18 +2032,18 @@ fn selftest_rejects_broken_charts() {
         t.fails.get(&rule).copied().unwrap_or(0) > 0 && t.examples.iter().any(|e| e.starts_with(&prefix) && e.contains(says))
     };
     let line = entry("line");
-    let control = run_job(&Job { entry: line, fixture: sine, mode: "line" });
+    let control = run_job(&Job { entry: line, fixture: Case::native(sine), mode: "line" });
     assert!(control.ok(), "the line chart passes: {:?}", control.examples);
     for (slug, rule, says) in [("selftest-random", 8, "cell(s) differ"), ("selftest-charset", 5, "is outside the font and the label text")] {
-        let t = run_job(&Job { entry: entry(slug), fixture: sine, mode: "line" });
+        let t = run_job(&Job { entry: entry(slug), fixture: Case::native(sine), mode: "line" });
         assert!(rejects(&t, rule, says), "{slug} is not rejected by rule {rule} ({says:?}): fails {:?}, {:?}", t.fails, t.examples);
     }
-    let onto: Vec<&'static Fixture> = ["sine-1k", "two"].iter().filter_map(|n| fixtures::fixture(n)).collect();
+    let onto: Vec<Case> = ["sine-1k", "two"].iter().filter_map(|n| fixtures::fixture(n)).map(Case::native).collect();
     let datas: Vec<Data> = onto.iter().map(|f| f.generate()).collect();
-    let control = replace_job(&ReplaceJob { entry: line, mode: "line", from: sine }, &onto, &datas);
+    let control = replace_job(&ReplaceJob { entry: line, mode: "line", from: Case::native(sine) }, &onto, &datas);
     assert!(control.ok(), "the line chart passes rule 15: {:?}", control.examples);
     let stateful = entry("selftest-stateful");
-    let t = replace_job(&ReplaceJob { entry: stateful, mode: "line", from: sine }, &onto, &datas);
+    let t = replace_job(&ReplaceJob { entry: stateful, mode: "line", from: Case::native(sine) }, &onto, &datas);
     assert!(rejects(&t, 15, "then two"), "selftest-stateful is not rejected by rule 15: fails {:?}, {:?}", t.fails, t.examples);
     // Rule 14's case, shown directly: batches of 1, 7, ⌊n/3⌋ and the rest
     // against a replace.

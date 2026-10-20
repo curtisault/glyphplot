@@ -3,6 +3,7 @@
 //! draw from its data, panics caught as failures, a pool of threads, and the
 //! tally each check adds to (REQ-CONTRACT-010, REQ-CONTRACT-020).
 
+pub mod form;
 pub mod probe;
 pub mod schema;
 pub mod snap;

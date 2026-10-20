@@ -68,6 +68,62 @@ function daily(n: number, seed: number, a = "north", b = "south"): Record<string
   return { t, [a]: s1, [b]: s2 };
 }
 
+/** SplitMix64, as `crates/glyphplot/src/fixtures.rs` has it: the same stream, so the page draws the fixtures' own data. */
+function splitmix(seed: bigint): { f64: () => number; below: (n: number) => number } {
+  const M = (1n << 64n) - 1n;
+  let s = seed & M;
+  const next = (): bigint => {
+    s = (s + 0x9e3779b97f4a7c15n) & M;
+    let z = s;
+    z = ((z ^ (z >> 30n)) * 0xbf58476d1ce4e5b9n) & M;
+    z = ((z ^ (z >> 27n)) * 0x94d049bb133111ebn) & M;
+    return z ^ (z >> 31n);
+  };
+  return { f64: () => Number(next() >> 11n) / 9_007_199_254_740_992, below: (n) => Number(next() % BigInt(n)) };
+}
+
+/** The `ohlcv-days` fixture's rows: limit down at row 250, no trades at row 333. */
+const LIMIT_DOWN_ROW = 250;
+const ZERO_VOLUME_ROW = 333;
+
+/** The `ohlcv-days` fixture (fixtures.rs `ohlcv_days`): 500 weekday bars from Monday 2024-10-21, generated as the core generates it. */
+function ohlcvDays(n = 500): { t: Date[]; open: number[]; high: number[]; low: number[]; close: number[]; volume: number[] } {
+  // The fixture's seed: "glyplot" and its number, 19.
+  const r = splitmix(0x676c_7970_6c6f_7400n + 19n);
+  const out = { t: [] as Date[], open: [] as number[], high: [] as number[], low: [] as number[], close: [] as number[], volume: [] as number[] };
+  let day = 20_017;
+  let last = 100;
+  for (let i = 0; i < n; i++) {
+    while ((day + 4) % 7 === 0 || (day + 4) % 7 === 6) day++;
+    out.t.push(new Date(day * DAY));
+    day++;
+    const open = last * (1 + 0.01 * (r.f64() - 0.5));
+    let bar: [number, number, number, number];
+    let volume: number;
+    if (i === LIMIT_DOWN_ROW) {
+      const close = open * 0.9;
+      bar = [open, open, close, close];
+      volume = 5_000_000;
+    } else if (i === ZERO_VOLUME_ROW) {
+      bar = [last, last, last, last];
+      volume = 0;
+    } else {
+      const close = open * (1 + 0.04 * (r.f64() - 0.5));
+      const high = (open > close ? open : close) * (1 + 0.01 * r.f64());
+      const low = (open < close ? open : close) * (1 - 0.01 * r.f64());
+      bar = [open, high, low, close];
+      volume = 100_000 + r.below(900_000);
+    }
+    out.open.push(bar[0]);
+    out.high.push(bar[1]);
+    out.low.push(bar[2]);
+    out.close.push(bar[3]);
+    out.volume.push(volume);
+    last = bar[3];
+  }
+  return out;
+}
+
 // ------------------------------------------------------------ the environment and the pass
 
 const STORE = "glyphplot-checklist-v0.5.0";
@@ -622,6 +678,76 @@ async function backs(): Promise<void> {
   });
 }
 
+/** Case 25: candles on ohlcv-days, scrubbed with a finger. */
+function candles(): void {
+  const el = plot("candles-chart");
+  const d = ohlcvDays();
+  el.data = d;
+  const day = (i: number): string => d.t[i]?.toISOString().slice(0, 10) ?? "?";
+  $("#candles-status").textContent = `${d.t.length} days, ${day(0)} to ${day(d.t.length - 1)}; limit down on ${day(LIMIT_DOWN_ROW)} (row ${LIMIT_DOWN_ROW}); no trades on ${day(ZERO_VOLUME_ROW)} (row ${ZERO_VOLUME_ROW})`;
+  const log = logger($("#candles-log"));
+  for (const t of ["plot-hover", "plot-view"]) el.addEventListener(t, (e) => log(short(t, (e as CustomEvent).detail)));
+}
+
+/** Cases 26 and 27: each candle mode on the last 16 days, and the volume pane around the limit-down day. */
+function candleModes(): void {
+  const d = ohlcvDays();
+  const at = (i: number): number => d.t[i]?.getTime() ?? 0;
+  const n = d.t.length;
+  for (const id of ["mode-candle", "mode-hollow", "mode-ohlc"]) {
+    const el = plot(id);
+    el.data = d;
+    el.view = { x: { domain: [at(n - 16) - DAY / 2, at(n - 1) + DAY / 2] } };
+  }
+  for (const id of ["volume-on", "volume-off"]) {
+    const el = plot(id);
+    el.data = d;
+    el.view = { x: { domain: [at(LIMIT_DOWN_ROW - 10), at(ZERO_VOLUME_ROW + 10)] } };
+  }
+}
+
+/** Case 28: bars vertical, horizontal, grouped and stacked, with negative values. */
+function bars(): void {
+  const category = ["North Atlantic distribution centre", "Gulf coast", "Great Lakes", "Pacific northwest", "Mid-Atlantic", "Caribbean port"];
+  const change = [12.5, -5.25, 8, -11.75, 3.125, 7.5];
+  for (const id of ["bar-vertical", "bar-horizontal"]) plot(id).data = { category, change };
+  const three = { category: category.slice(0, 5), north: [14, 9, -6, 11, 4], south: [-8, 12, 7, -3, 10], west: [5, -4, 9, 6, -12] };
+  for (const id of ["bar-grouped", "bar-stacked"]) plot(id).data = three;
+}
+
+/** Case 29: three sparklines fed one stream through append(). */
+function sparklines(): void {
+  const ids = ["spark-line", "spark-area", "spark-column"];
+  const r = rng(73);
+  const x: number[] = [];
+  const y: number[] = [];
+  let w = 50;
+  for (let i = 0; i < 60; i++) {
+    w += (r() - 0.5) * 4;
+    x.push(i);
+    y.push(Math.round(w * 100) / 100);
+  }
+  for (const id of ids) plot(id).data = { x, cpu: y };
+  const status = $("#spark-status");
+  let i = x.length;
+  let timer: ReturnType<typeof setInterval> | undefined;
+  const tick = (): void => {
+    w += (r() - 0.5) * 4;
+    const v = Math.round(w * 100) / 100;
+    for (const id of ids) plot(id).append({ x: i, cpu: v });
+    status.textContent = `${i + 1} rows; last appended x ${i}, cpu ${v}`;
+    i++;
+  };
+  $("#spark-start").addEventListener("click", () => {
+    if (timer === undefined) timer = setInterval(tick, 200);
+  });
+  $("#spark-stop").addEventListener("click", () => {
+    clearInterval(timer);
+    timer = undefined;
+    status.textContent = `stopped at ${i} rows`;
+  });
+}
+
 // ------------------------------------------------------------ start
 
 showEnv();
@@ -649,6 +775,10 @@ fit();
 link();
 brushLegend();
 timeZone();
+candles();
+candleModes();
+bars();
+sparklines();
 void backs().catch((e: unknown) => console.error(`test.html: back colours case: ${String(e)}`));
 void mounts().catch((e: unknown) => console.error(`test.html: mount cases: ${String(e)}`));
 void panic().catch((e: unknown) => console.error(`test.html: panic case: ${String(e)}`));

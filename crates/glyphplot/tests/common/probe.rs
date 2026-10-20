@@ -85,7 +85,9 @@ pub fn sorted_copy(data: &Data) -> Data {
 }
 
 /// The data as a chart holds it, for looking up the datum a hit names: the
-/// sorted copy's columns.
+/// sorted copy's columns. Data without an x column (categories, a `values`
+/// column) is held in its own order, and a row's x is its position there,
+/// as a band chart's x is its category's index.
 pub struct Held {
     table: Option<Table>,
     x: Option<usize>,
@@ -101,6 +103,7 @@ impl Held {
         let x = table.as_ref().and_then(x_column);
         let mut xs: Vec<f64> = match (&table, x) {
             (Some(t), Some(xi)) => (0..t.len()).map(|r| t.columns()[xi].get(r)).filter(|v| v.is_finite()).collect(),
+            (Some(t), None) => (0..t.len()).map(|r| r as f64).collect(),
             _ => Vec::new(),
         };
         xs.sort_by(f64::total_cmp);
@@ -109,14 +112,15 @@ impl Held {
 
     /// The x and y of row `index` of series `series`: a column of that name
     /// (a wide table), or the row of a long table whose series label is
-    /// `series`, its y from the column of role y. `None` when the table has
-    /// no such row or series.
+    /// `series`, its y from the column of role y. x is the row's position
+    /// when the data has no x. `None` when the table has no such row or
+    /// series.
     pub fn datum(&self, series: &str, index: usize) -> Option<(f64, f64)> {
         let t = self.table.as_ref()?;
         if index >= t.len() {
             return None;
         }
-        let x = t.columns()[self.x?].get(index);
+        let x = self.x.map_or(index as f64, |xi| t.columns()[xi].get(index));
         if let Some(c) = t.by_name(series).filter(|c| c.role != Some(Role::Series)) {
             return Some((x, c.get(index)));
         }

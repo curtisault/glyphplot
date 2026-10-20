@@ -11,7 +11,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { BUILD, PKG, SCHEMAS, manifest, types, moduleOfType, series, commitColumns, schemas, schema, check } from "./support/wasm.mjs";
+import { BUILD, PKG, SCHEMAS, manifest, types, moduleOfType, series, commitColumns, schemas, schema, check, fixtureIndex, fixtureData } from "./support/wasm.mjs";
 
 const BASE = "https://github.com/curtisault/glyphplot/spec/schemas/";
 const read = (p) => JSON.parse(readFileSync(p, "utf8"));
@@ -91,16 +91,31 @@ test(`${BUILD}: each module's charts_json, meta_json, default options, view_json
     if (m.options !== null) check(options, m.options, `${type} default options`);
     check(view, JSON.parse(c.view_json()), `${type} view_json before data`);
     check(table, JSON.parse(c.table_json(10)), `${type} table_json before data`);
-    const s = series(1000);
-    commitColumns(c, memory, s.descriptor, [s.xs, s.ys]);
+    // A series chart gets 1,000 points; another its first fixture (candles
+    // ohlcv-days, bar categorical-12), whose table lists what is in view.
+    const takesSeries = m.shapes.includes("series");
+    if (takesSeries) {
+      const s = series(1000);
+      commitColumns(c, memory, s.descriptor, [s.xs, s.ys]);
+    } else {
+      const f = fixtureIndex().fixtures.find((x) => m.shapes.includes(x.shape));
+      assert.ok(f, `${type}: a fixture of its shapes`);
+      const { descriptor, columns } = fixtureData(f);
+      commitColumns(c, memory, descriptor, columns);
+    }
     c.frame(0, false);
     check(view, JSON.parse(c.view_json()), `${type} view_json`);
     for (const n of [0, 2, 10, 5000]) {
       const t = JSON.parse(c.table_json(n));
       check(table, t, `${type} table_json(${n})`);
       assert.ok(t.rows.length <= Math.max(n, 0), `${type} table_json(${n}) holds at most ${n} rows`);
-      assert.equal(t.total, 1000);
-      assert.deepEqual(t.domain, [0, 999], `${type} table_json(${n}): the fitted x domain in data units`);
+      if (takesSeries) {
+        assert.equal(t.total, 1000);
+        assert.deepEqual(t.domain, [0, 999], `${type} table_json(${n}): the fitted x domain in data units`);
+      } else {
+        assert.ok(t.total > 0 && t.rows.length <= t.total, `${type} table_json(${n}): ${t.total} rows in view`);
+        assert.ok(t.domain[0] < t.domain[1], `${type} table_json(${n}): an x domain in data units`);
+      }
     }
     c.input(4, 40.5, 12.5, 0, -3, 0, 2, 0);
     c.input(0, 30.5, 12.5, 0, 0, 0, 0, 0);
