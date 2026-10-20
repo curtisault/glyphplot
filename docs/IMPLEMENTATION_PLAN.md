@@ -340,7 +340,7 @@ testing.md, with the milestone each rule lands in.
 | 7 | good first frame | Every non-empty fixture inks the plot area at the default view: ≥ 1 cell for `one`; otherwise ≥ 2% of plot cells, or a cell in at least half the plot's columns (a flat line at 320 × 120 inks 315 of 37,170 plot cells) | v0.3.0 |
 | 8 | determinism | Two fresh charts given the same data, options, view and `t` draw the same frame | v0.3.0 |
 | 9 | out-of-order calls | One chart asked for t = 6, 1, 2.5, 0 with `view()`, `hit()` and a repeated `frame()` between draws what a fresh chart draws in order | v0.3.0 |
-| 10 | one ink | `mono` frames keep rules 3–7 and pass the one-ink checks (ink 1–90%, no slab, glyphs in the font) | v0.4.0 |
+| 10 | one ink | `mono` frames keep rules 3–7 and pass the one-ink checks: ink in at least 1% of cells, no slab (no grid row or column, nor the whole plot, one glyph), glyphs in the font. (Until v0.4.0 the cap was 90% ink, which a correct one-ink area at 80 × 24 passes, at 91.8%.) | v0.4.0 |
 | 11 | one ink tells series apart | In `multi-4`, each series draws a glyph or pattern the others do not | v0.4.0 |
 | 12 | paper | `paper` frames keep rules 3–6 | v0.4.0 |
 | 13 | resize | A chart drawn at A, then B, then A draws its first A frame again; its B frame equals a fresh chart's; its view is unchanged in data units | v0.4.0 |
@@ -349,12 +349,12 @@ testing.md, with the milestone each rule lands in.
 | 16 | view round trip | `set_view(view())` changes nothing; a view through JSON onto a fresh chart draws the same frame | v0.4.0 |
 | 17 | input is deterministic | A scripted input list on two fresh charts gives the same events, views and frames; the resulting view on a third gives that frame | v0.4.0 |
 | 18 | events validate | Every event serialises to JSON that `events.schema.json` accepts | v0.4.0 |
-| 19 | hit names what was drawn | For up to 512 seeded plot cells, a named datum maps into that cell's column by the cell-mapping module; for a mark chart the frame drew its mark there | v0.4.0 |
+| 19 | hit names what was drawn | For up to 512 seeded plot cells, a named datum lies in the dot column under the probe when that column holds one, else it is the nearest datum on its left or right (hits snap, REQ-HIT-010); the datum is in the data, its x maps to the hit's column by the cell-mapping module, and that cell is inked; for a mark chart the frame drew its mark there | v0.4.0 |
 | 20 | hit and readout agree | The readout for a cursor at a cell names the datum `hit` returns there | v0.4.0 |
 | 21 | empty data | `empty` draws axes or "no data", `hit` is none, domains null | v0.4.0 |
 | 22 | one point | `one` draws its point in a padded domain; no label reads `NaN`, `inf` or `-0` | v0.4.0 |
 | 23 | gaps break lines | In line-like modes no dot column inside a NaN run is inked, unless `spanGaps` | v0.4.0 |
-| 24 | tick labels distinct and fitting | No two labels on an axis are equal; none overruns its gutter | v0.4.0 |
+| 24 | tick labels distinct and fitting | No two labels on a numeric axis are equal and numeric labels are in order; no two neighbouring labels are equal on any axis (d3's hourly time format writes `01 AM` each day); none overruns its gutter | v0.4.0 |
 | 25 | log-invalid values | Values ≤ 0 on a log scale are skipped, no panic, no NaN cells | v0.4.0 |
 | 26 | unsorted and duplicate x | `unsorted-x` draws its sorted copy's frame; `duplicate-x` is deterministic | v0.4.0 |
 | 27 | downsampling is exact | A line-like frame of x-sorted data equals the frame from every segment | v0.4.0 |

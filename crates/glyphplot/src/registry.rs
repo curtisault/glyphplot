@@ -119,7 +119,7 @@ mod tests {
         }
     }
 
-    #[cfg(feature = "all")]
+    #[cfg(all(feature = "all", not(feature = "contract-selftest")))]
     #[test]
     fn all_holds_every_family() {
         let names: Vec<&str> = FAMILIES.iter().map(|f| f.name).collect();

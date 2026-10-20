@@ -103,11 +103,18 @@ fn neighbours(values: &[f64], i: usize) -> [f64; 2] {
 }
 
 /// The readout of the view's cursor, `None` without one: `<x name> <x>`,
-/// then `  <series> <y>` when it snapped to a datum (REQ-LINE-040).
+/// then `  <series> <y>` when it snapped to a datum (REQ-LINE-040). A cursor
+/// naming a datum (series and row) writes that datum's x and y from the
+/// data, not the view's copies, so a view read back from JSON whose numbers
+/// came back an ulp off still writes the same readout (contract rule 16).
 pub(super) fn text(data: &Prepared, view: &View, geom: &Geom, locale: &Locale, formats: &mut Formats) -> Option<String> {
     let c = view.cursor.as_ref()?;
-    let x = c.x?;
     let at = c.series.as_deref().and_then(|name| data.find(name)).and_then(|s| Some((s, data.pos(s, usize::try_from(c.index?).ok()?)?)));
+    let x = at.map(|(s, i)| data.xs(s)[i]).filter(|x| x.is_finite()).or(c.x)?;
+    let y = match at {
+        Some((s, i)) => Some(data.ys(s)[i]).filter(|y| y.is_finite()).or(c.y),
+        None => c.y,
+    };
     let near_x = at.map_or([f64::NAN; 2], |(s, i)| neighbours(data.xs(s), i));
     let mut out = String::with_capacity(48);
     out.push_str(&data.x_name);
@@ -124,7 +131,7 @@ pub(super) fn text(data: &Prepared, view: &View, geom: &Geom, locale: &Locale, f
     if let Some(series) = &c.series {
         out.push_str("  ");
         out.push_str(series);
-        if let Some(y) = c.y {
+        if let Some(y) = y {
             let near_y = at.map_or([f64::NAN; 2], |(s, i)| neighbours(data.ys(s), i));
             out.push(' ');
             formats.number(y, geom.y_step, &near_y, locale, &mut out);

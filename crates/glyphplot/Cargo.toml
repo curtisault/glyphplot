@@ -16,6 +16,10 @@ default = ["all", "text"]
 all = ["line"]
 line = []
 text = []
+# Three broken charts the contract must reject, in a `selftest` family
+# (REQ-CONTRACT-060): for `cargo test --features contract-selftest --test
+# contract selftest` only, never in a default or wasm build.
+contract-selftest = ["line"]
 
 # The core's only normal dependencies (REQ-ARCH-010).
 [dependencies]
