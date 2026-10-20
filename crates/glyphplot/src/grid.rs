@@ -48,6 +48,17 @@ impl Grid {
         self.backs.resize(n, NO_BACK);
     }
 
+    /// Makes this grid a copy of `other`, its size and every cell, reusing the
+    /// allocation when it is large enough: how a frame starts from its cached
+    /// base before the overlay is drawn (REQ-OVERLAY-010).
+    pub fn copy_from(&mut self, other: &Grid) {
+        self.cols = other.cols;
+        self.rows = other.rows;
+        self.glyphs.clone_from(&other.glyphs);
+        self.inks.clone_from(&other.inks);
+        self.backs.clone_from(&other.backs);
+    }
+
     /// Resets every cell to `BLANK` in ink 0 with `NO_BACK` (REQ-GRID-030).
     pub fn clear(&mut self) {
         self.glyphs.fill(BLANK);
@@ -243,7 +254,18 @@ fn clip_span(start: i32, len: i32, size: usize) -> (usize, usize) {
 /// nearest whole coordinate, a half rounding away from the start. The visible
 /// stretch is found by search, so a line from far off the grid costs only its
 /// visible points. The grid and the canvases both draw with it.
-pub(crate) fn line_points(x0: i64, y0: i64, x1: i64, y1: i64, w: i64, h: i64, mut plot: impl FnMut(i64, i64)) {
+pub(crate) fn line_points(x0: i64, y0: i64, x1: i64, y1: i64, w: i64, h: i64, plot: impl FnMut(i64, i64)) {
+    // Coordinates within ±2^30 keep every product below 2^62: the same
+    // points in `i64`, several times faster than in `i128`.
+    const SMALL: i64 = 1 << 30;
+    if [x0, y0, x1, y1].iter().all(|v| v.abs() < SMALL) && w < SMALL && h < SMALL {
+        return line_points_small(x0, y0, x1, y1, w, h, plot);
+    }
+    line_points_wide(x0, y0, x1, y1, w, h, plot);
+}
+
+/// [`line_points`] in `i128`, for any coordinates.
+fn line_points_wide(x0: i64, y0: i64, x1: i64, y1: i64, w: i64, h: i64, mut plot: impl FnMut(i64, i64)) {
     let (dx, dy) = (i128::from(x1) - i128::from(x0), i128::from(y1) - i128::from(y0));
     let steps = dx.abs().max(dy.abs());
     // The point `i` steps along: the major axis moves one a step, the minor
@@ -282,6 +304,43 @@ pub(crate) fn line_points(x0: i64, y0: i64, x1: i64, y1: i64, w: i64, h: i64, mu
         }
         plot(p.0 as i64, p.1 as i64);
         i += 1;
+    }
+}
+
+/// [`line_points`] for coordinates within ±2^30, in `i64`: the same points
+/// by the same formula, the visible stretch found by search.
+fn line_points_small(x0: i64, y0: i64, x1: i64, y1: i64, w: i64, h: i64, mut plot: impl FnMut(i64, i64)) {
+    let (dx, dy) = (x1 - x0, y1 - y0);
+    let steps = dx.abs().max(dy.abs());
+    let at = |i: i64| -> (i64, i64) {
+        let along = |start: i64, d: i64| -> i64 {
+            if steps == 0 {
+                return start;
+            }
+            start + (2 * i * d.abs() + steps).div_euclid(2 * steps) * d.signum()
+        };
+        (along(x0, dx), along(y0, dy))
+    };
+    let inside = |(x, y): (i64, i64)| x >= 0 && y >= 0 && x < w && y < h;
+    let before = |(x, y): (i64, i64)| (dx > 0 && x < 0) || (dx < 0 && x >= w) || (dy > 0 && y < 0) || (dy < 0 && y >= h);
+    let mut lo = 0;
+    if !inside((x0, y0)) {
+        let mut hi = steps;
+        while lo < hi {
+            let mid = lo + (hi - lo) / 2;
+            if before(at(mid)) {
+                lo = mid + 1;
+            } else {
+                hi = mid;
+            }
+        }
+    }
+    for i in lo..=steps {
+        let p = at(i);
+        if !inside(p) {
+            break;
+        }
+        plot(p.0, p.1);
     }
 }
 
@@ -494,5 +553,16 @@ mod tests {
         assert!(std::panic::catch_unwind(|| grid.ink(0, 2)).is_err());
         assert!(std::panic::catch_unwind(|| grid.back(5, 5)).is_err());
         assert_eq!(grid.glyph(2, 1), BLANK);
+    }
+
+    proptest::proptest! {
+        /// The `i64` path draws the points the `i128` one does.
+        #[test]
+        fn small_lines_match_wide_lines(x0 in -300i64..300, y0 in -300i64..300, x1 in -300i64..300, y1 in -300i64..300, w in 0i64..200, h in 0i64..200) {
+            let (mut a, mut b) = (Vec::new(), Vec::new());
+            line_points_small(x0, y0, x1, y1, w, h, |x, y| a.push((x, y)));
+            line_points_wide(x0, y0, x1, y1, w, h, |x, y| b.push((x, y)));
+            proptest::prop_assert_eq!(a, b);
+        }
     }
 }

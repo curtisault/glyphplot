@@ -597,7 +597,7 @@ mod tests {
         let t = dst.first_table().unwrap().by_name("t").unwrap();
         assert_eq!(t.zone.as_deref(), Some("America/New_York"));
         // 2026-11-01T06:00:00Z, when New York leaves daylight time, is a row.
-        let change = (crate::data::rfc3339::days_from_civil(2026, 11, 1) * 86_400 + 6 * 3600) as f64 * 1000.0;
+        let change = (crate::time::days_from_civil(2026, 11, 1) * 86_400 + 6 * 3600) as f64 * 1000.0;
         assert_eq!(t.nums().unwrap().iter().position(|&v| v == change), Some(750));
 
         let cats = generate("categorical-12").unwrap();

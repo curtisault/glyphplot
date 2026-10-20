@@ -15,7 +15,8 @@ glyphplot = { path = "../glyphplot", default-features = false }
 wasm-bindgen = "0.2"
 
 # The core's families, mirrored (REQ-ARCH-040), and `debug` for the debug
-# build (the panic hook arrives with the `Chart` object in Phase 3).
+# build: the panic hook and the `debug-panic` chart (REQ-WASM-060), which a
+# release module never has. `mise run build:wasm:debug` builds `all debug`.
 [features]
 default = ["all"]
 all = ["line"]

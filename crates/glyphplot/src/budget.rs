@@ -3,8 +3,13 @@
 //! module's budget to `web/pkg/budgets.json`, where `mise run size`, the
 //! contract and the benches read it.
 
-/// What a chart, and so its module, may cost.
-#[derive(Clone, Copy, Debug, PartialEq)]
+use serde::Serialize;
+
+/// What a chart, and so its module, may cost. Serialised as
+/// budgets.schema.json's `$defs/budget`: `gzip`, `frameMs`, `worstMs`,
+/// `inputMs` (REQ-CHART-020, REQ-MANIFEST-010).
+#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Budget {
     /// The module's `glyphplot_bg.wasm`, gzip -9, in bytes (REQ-SIZE-010).
     pub gzip: u32,
@@ -37,5 +42,11 @@ mod tests {
     fn default_is_350_kb_with_a_warning_at_half() {
         assert_eq!(Budget::DEFAULT.gzip, 350 * 1024);
         assert_eq!(Budget::DEFAULT.gzip_warning(), 179_200);
+    }
+
+    #[test]
+    fn serialises_as_the_schema_names_it() {
+        let json = serde_json::to_string(&Budget::DEFAULT).unwrap();
+        assert_eq!(json, r#"{"gzip":358400,"frameMs":4.0,"worstMs":16.0,"inputMs":0.5}"#);
     }
 }

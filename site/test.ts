@@ -1,0 +1,485 @@
+// site/test.html: the owner's checklist (REQ-TEST-040). One <glyph-plot> (or
+// one mount()) per rendering and interaction case, its data set from here, a
+// mark and a note per case kept in this browser, and a button that copies the
+// pass as Markdown. Plain TypeScript over the shell's own modules: no Elm.
+
+import * as gp from "glyphplot";
+import { config, type GlyphPlot } from "glyphplot/element";
+
+declare global {
+  interface Window {
+    gp: typeof gp;
+    gpReady: true;
+  }
+}
+window.gp = gp;
+
+const $ = <T extends Element = HTMLElement>(sel: string): T => {
+  const el = document.querySelector<T>(sel);
+  if (!el) throw new Error(`test.html: no ${sel}`);
+  return el;
+};
+const plot = (id: string): GlyphPlot => $<GlyphPlot>(`#${id}`);
+
+// ------------------------------------------------------------ data
+
+/** A deterministic generator (mulberry32), so every pass draws the same data. */
+function rng(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/** n points of `names.length` waves over x = 0 … n−1. */
+function waves(n: number, names: string[], seed = 1): Record<string, number[]> {
+  const r = rng(seed);
+  const out: Record<string, number[]> = { x: [] };
+  names.forEach((s) => (out[s] = []));
+  for (let i = 0; i < n; i++) {
+    out["x"]?.push(i);
+    names.forEach((s, k) => out[s]?.push(Math.sin(i / (9 + 4 * k) + k) * (10 + 3 * k) + (r() - 0.5) * 2 + 5 * k));
+  }
+  return out;
+}
+
+const DAY = 86_400_000;
+const START = Date.UTC(2025, 0, 1);
+
+/** Daily values of two series from 2025-01-01, as rows with Date x (a timestamp column). */
+function daily(n: number, seed: number, a = "north", b = "south"): Record<string, (Date | number)[]> {
+  const r = rng(seed);
+  const t: Date[] = [];
+  const s1: number[] = [];
+  const s2: number[] = [];
+  let w1 = 12;
+  let w2 = 18;
+  for (let i = 0; i < n; i++) {
+    t.push(new Date(START + i * DAY));
+    w1 += (r() - 0.5) * 2;
+    w2 += (r() - 0.5) * 2;
+    s1.push(Math.round((w1 + 8 * Math.sin((2 * Math.PI * i) / 365)) * 10) / 10);
+    s2.push(Math.round((w2 + 6 * Math.sin((2 * Math.PI * i) / 365 + 1)) * 10) / 10);
+  }
+  return { t, [a]: s1, [b]: s2 };
+}
+
+// ------------------------------------------------------------ the environment and the pass
+
+const STORE = "glyphplot-checklist-v0.3.0";
+type Mark = { state: "" | "pass" | "fail" | "na"; note: string };
+const marks: Record<string, Mark> = (() => {
+  try {
+    return JSON.parse(localStorage.getItem(STORE) ?? "{}") as Record<string, Mark>;
+  } catch {
+    return {};
+  }
+})();
+const save = (): void => {
+  try {
+    localStorage.setItem(STORE, JSON.stringify(marks));
+  } catch {
+    // private mode: marks last as long as the page
+  }
+};
+
+let build = "unknown";
+const env = (): [string, string][] => [
+  ["Browser", navigator.userAgent],
+  ["Pixel ratio", String(devicePixelRatio)],
+  ["Viewport", `${innerWidth} × ${innerHeight} CSS px`],
+  ["Scheme", `${matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"}${document.documentElement.dataset["theme"] ? ` (page: ${document.documentElement.dataset["theme"]})` : ""}`],
+  ["Reduced motion", matchMedia("(prefers-reduced-motion: reduce)").matches ? "on" : "off"],
+  ["Pointer", matchMedia("(pointer: coarse)").matches ? "coarse (touch)" : "fine"],
+  ["Build", build],
+  ["Renderer", config.renderer],
+  ["Page", location.href],
+];
+
+function showEnv(): void {
+  const dl = $("#env");
+  dl.replaceChildren();
+  for (const [k, v] of env()) {
+    const dt = document.createElement("dt");
+    dt.textContent = k;
+    const dd = document.createElement("dd");
+    dd.textContent = v;
+    dl.append(dt, dd);
+  }
+}
+
+function addMarks(): void {
+  for (const sec of document.querySelectorAll<HTMLElement>("section.case")) {
+    const id = sec.id;
+    const title = sec.dataset["title"] ?? id;
+    const m = (marks[id] ??= { state: "", note: "" });
+    const box = document.createElement("div");
+    box.className = "result";
+    box.setAttribute("role", "group");
+    box.setAttribute("aria-label", `Result: ${title}`);
+    box.dataset["state"] = m.state;
+    for (const [value, text] of [["pass", "Pass"], ["fail", "Fail"], ["na", "Not run"]] as const) {
+      const label = document.createElement("label");
+      const input = document.createElement("input");
+      input.type = "radio";
+      input.name = `mark-${id}`;
+      input.value = value;
+      input.checked = m.state === value;
+      input.addEventListener("change", () => {
+        m.state = value;
+        box.dataset["state"] = value;
+        save();
+      });
+      label.append(input, text);
+      box.append(label);
+    }
+    const note = document.createElement("input");
+    note.type = "text";
+    note.placeholder = "note (what failed, where)";
+    note.setAttribute("aria-label", `Note: ${title}`);
+    note.value = m.note;
+    note.addEventListener("input", () => {
+      m.note = note.value;
+      save();
+    });
+    box.append(note);
+    sec.append(box);
+  }
+}
+
+/** The pass as Markdown (REQ-TEST-040). */
+export function markdown(): string {
+  const cell = (s: string): string => s.replace(/\|/g, "\\|").replace(/\n/g, " ");
+  const lines = [`### glyphplot v0.3.0 checklist, ${new Date().toISOString().slice(0, 10)}`, ""];
+  for (const [k, v] of env()) lines.push(`- ${k}: ${cell(v)}`);
+  lines.push("", "| # | Case | Result | Note |", "|---|---|---|---|");
+  let i = 0;
+  for (const sec of document.querySelectorAll<HTMLElement>("section.case")) {
+    i++;
+    const m = marks[sec.id] ?? { state: "", note: "" };
+    const result = m.state === "pass" ? "pass" : m.state === "fail" ? "**FAIL**" : m.state === "na" ? "not run" : "—";
+    lines.push(`| ${i} | ${cell(sec.dataset["title"] ?? sec.id)} | ${result} | ${cell(m.note)} |`);
+  }
+  return lines.join("\n");
+}
+
+async function copy(): Promise<void> {
+  const text = markdown();
+  const area = $<HTMLTextAreaElement>("#markdown");
+  area.value = text;
+  area.hidden = false;
+  const status = $("#copied");
+  try {
+    if (!navigator.clipboard) throw new Error("no clipboard API (not a secure context)");
+    await navigator.clipboard.writeText(text);
+    status.textContent = "Copied.";
+  } catch {
+    // http on a phone over the LAN has no clipboard API: select the text and try the old way.
+    area.focus();
+    area.select();
+    const ok = document.execCommand?.("copy") ?? false;
+    status.textContent = ok ? "Copied." : "Select the text below and copy it.";
+  }
+}
+
+// ------------------------------------------------------------ logs
+
+function logger(box: HTMLElement): (line: string) => void {
+  return (line) => {
+    const now = new Date();
+    const stamp = `${now.toTimeString().slice(0, 8)}.${String(now.getMilliseconds()).padStart(3, "0")}`;
+    box.textContent = `${stamp} ${line}\n${box.textContent ?? ""}`.split("\n").slice(0, 200).join("\n");
+  };
+}
+
+const EVENTS = ["plot-ready", "plot-error", "plot-hover", "plot-select", "plot-view", "plot-cursor", "plot-brush"] as const;
+
+function short(type: string, d: unknown): string {
+  if (d === null) return `${type} null`;
+  const o = d as Record<string, unknown>;
+  const num = (v: unknown): string => (typeof v === "number" ? String(Math.round(v * 1000) / 1000) : JSON.stringify(v));
+  switch (type) {
+    case "plot-view": {
+      const v = o["view"] as { x?: { domain?: unknown } } | undefined;
+      const dom = v?.x?.domain;
+      return `${type} ${String(o["source"])} ${String(o["cause"])} final=${String(o["final"])} x=${Array.isArray(dom) ? dom.map(num).join("…") : "fit"}`;
+    }
+    case "plot-hover":
+      return `${type} ${String(o["source"])} ${String(o["series"])}[${String(o["index"])}] x=${num(o["x"])} y=${num(o["y"])}`;
+    case "plot-brush":
+      return `${type} ${String(o["source"])} x=${Array.isArray(o["x"]) ? (o["x"] as unknown[]).map(num).join("…") : "—"} final=${String(o["final"])}`;
+    default:
+      return `${type} ${JSON.stringify(d).slice(0, 160)}`;
+  }
+}
+
+function logEvents(el: HTMLElement, box: HTMLElement): (line: string) => void {
+  const log = logger(box);
+  for (const t of EVENTS) el.addEventListener(t, (e) => log(short(t, (e as CustomEvent).detail)));
+  return log;
+}
+
+// ------------------------------------------------------------ the cases
+
+/** The theme object a JS-API mount gets on this page: the light set on a light page. */
+function pageTheme(): gp.Theme {
+  const dark = document.documentElement.dataset["theme"] === "dark" || (document.documentElement.dataset["theme"] !== "light" && matchMedia("(prefers-color-scheme: dark)").matches);
+  return dark ? {} : { paper: true };
+}
+
+/** Cases 1 and 2: the JS API's mount() on a <pre> and on canvases with each renderer. */
+async function mounts(): Promise<void> {
+  const data = waves(160, ["a", "b"], 3);
+  const dpr = devicePixelRatio || 1;
+  const cw = Math.round(0.6 * 13 * dpr);
+  const cols = 40;
+  const rows = 10;
+  for (const el of document.querySelectorAll<HTMLCanvasElement | HTMLPreElement>("[data-mount]")) {
+    const kind = el.dataset["mount"] ?? "canvas";
+    const c = gp.chart("line", { data });
+    await c.ready;
+    const palette = c.palette(pageTheme());
+    const stats = document.querySelector<HTMLOutputElement>(`[data-stats="${kind}"]`);
+    const m = gp.mount(el, c, {
+      input: true,
+      renderer: kind === "atlas" ? "atlas" : "text",
+      palette,
+      paintGround: false,
+      waitForSize: true,
+      onFrame: (_g, s) => {
+        if (stats && s) stats.textContent = `last frame: ${s.cells} of ${cols * rows} cells redrawn${s.full ? " (full)" : ""}`;
+      },
+    });
+    if (el instanceof HTMLCanvasElement) Object.assign(el.style, { width: `${(cols * cw) / dpr}px`, height: `${(rows * cw * 2) / dpr}px` });
+    else Object.assign(el.style, { fontSize: `${cw / 0.6 / dpr}px`, lineHeight: `${(cw * 2) / dpr}px` });
+    m.resize(cols, rows, cw);
+  }
+}
+
+function modes(): void {
+  for (const id of ["mode-line", "mode-step", "mode-area"]) plot(id).data = waves(48, ["up", "down"], 7);
+}
+
+function gaps(): void {
+  const d = waves(120, ["y"], 11);
+  const y = (d["y"] ?? []).map((v, i) => ((i >= 30 && i < 38) || (i >= 75 && i < 80) ? null : v));
+  for (const id of ["gaps-off", "gaps-on"]) plot(id).data = { x: d["x"] ?? [], y };
+}
+
+function million(): void {
+  const el = plot("million-chart");
+  const status = $("#million-status");
+  const n = 1_000_000;
+  const x = new Float64Array(n);
+  const y = new Float64Array(n);
+  const r = rng(42);
+  let w = 0;
+  for (let i = 0; i < n; i++) {
+    x[i] = i;
+    w += r() - 0.5;
+    y[i] = w + (i % 99_991 === 0 ? 40 : 0); // a spike every ~100k points: M4 must keep them
+  }
+  el.data = { x, y };
+  let near = 0;
+  const io = new IntersectionObserver(
+    (entries) => {
+      if (entries.some((e) => e.isIntersecting) && near === 0) {
+        near = performance.now();
+        io.disconnect();
+      }
+    },
+    { rootMargin: "100% 0px" },
+  );
+  io.observe(el);
+  el.addEventListener("plot-ready", () => {
+    status.textContent = `first frame ${Math.round(performance.now() - near)} ms after the chart came within a screen (performance.now(), this page load)`;
+  });
+}
+
+function mono(): void {
+  plot("mono-chart").data = waves(150, ["solid", "dashed", "dotted"], 5);
+}
+
+function lightDark(): void {
+  for (const id of ["theme-light", "theme-dark"]) plot(id).data = waves(100, ["a", "b", "c"], 9);
+}
+
+function themeSwitch(): void {
+  const el = plot("theme-chart");
+  el.data = waves(100, ["a", "b", "c", "d"], 13);
+  const status = $("#theme-status");
+  let frames = 0;
+  const show = (): void => {
+    status.textContent = `frames drawn: ${frames}; data-theme: ${document.documentElement.dataset["theme"] || "(system)"}`;
+  };
+  void el.ready.then(() => {
+    const c = el.chart;
+    if (!c) return;
+    const frame = c.frame.bind(c);
+    c.frame = (t?: number, paper?: boolean) => {
+      frames++;
+      show();
+      return frame(t, paper);
+    };
+    show();
+  });
+  for (const b of document.querySelectorAll<HTMLButtonElement>("[data-page-theme]")) {
+    b.addEventListener("click", () => {
+      const v = b.dataset["pageTheme"];
+      if (v) document.documentElement.dataset["theme"] = v;
+      else delete document.documentElement.dataset["theme"];
+      showEnv();
+      show();
+    });
+  }
+  $("#theme-prop").addEventListener("click", () => el.style.setProperty("--glyphplot-series-1", "#d81b60"));
+  $("#theme-object").addEventListener("click", () => {
+    el.theme = { series: ["#e66100", "#5d3a9b", "#1a85ff", "#40b0a6"] };
+  });
+  $("#theme-clear").addEventListener("click", () => {
+    el.style.removeProperty("--glyphplot-series-1");
+    el.theme = null;
+  });
+}
+
+function wideLabels(): void {
+  const el = plot("wide-chart");
+  el.options = { title: "売上高 (百万円) – Umsatz je Quartal" };
+  const d = waves(80, ["Umsatz", "Kosten"], 17);
+  for (const k of ["Umsatz", "Kosten"]) d[k] = (d[k] ?? []).map((v) => 1_234_500_000 + v * 25_000_000);
+  el.data = d;
+}
+
+function resize(): void {
+  const el = plot("resize-chart");
+  const box = $("#resize-box");
+  const out = $("#resize-status");
+  el.data = waves(200, ["a", "b"], 19);
+  const show = (): void => {
+    const dom = (el.view["x"] as { domain?: unknown } | undefined)?.domain;
+    out.textContent = `${el.cols} × ${el.rows} cells, box ${Math.round(box.getBoundingClientRect().width)} px; x domain ${Array.isArray(dom) ? dom.map((v: number) => v.toFixed(2)).join(" … ") : "fitted"}`;
+  };
+  new ResizeObserver(() => requestAnimationFrame(show)).observe(box);
+  el.addEventListener("plot-ready", show);
+  el.addEventListener("plot-view", show);
+  for (const b of document.querySelectorAll<HTMLButtonElement>("[data-width]")) {
+    b.addEventListener("click", () => {
+      box.style.width = b.dataset["width"] ?? "";
+    });
+  }
+}
+
+function script(): void {
+  const el = plot("script-chart");
+  const out = $("#script-view-out");
+  const log = logEvents(el, $("#script-log"));
+  const show = (what: string): void => {
+    requestAnimationFrame(() => {
+      out.textContent = `after ${what}: view.x = ${JSON.stringify(el.view["x"])}`;
+    });
+  };
+  el.data = waves(60, ["a"], 23);
+  let seed = 23;
+  $("#script-data").addEventListener("click", () => {
+    seed++;
+    el.data = waves(60, ["a"], seed);
+    log("(script) data set");
+    show("data");
+  });
+  $("#script-options").addEventListener("click", () => {
+    el.options = { mode: el.options["mode"] === "area" ? "line" : "area" };
+    log(`(script) options set: mode ${String(el.options["mode"])}`);
+    show("options");
+  });
+  $("#script-view").addEventListener("click", () => {
+    el.view = { x: { domain: [20, 40] } };
+    log("(script) view set: x 20…40");
+    show("view");
+  });
+  $("#script-reset").addEventListener("click", () => {
+    el.resetView();
+    log("(script) view reset");
+    show("reset");
+  });
+}
+
+function interaction(): void {
+  const p = plot("pointer-chart");
+  p.data = daily(400, 29);
+  logEvents(p, $("#pointer-log"));
+  for (const id of ["keys-chart", "keys-motion"]) plot(id).data = daily(120, 31);
+  const t = plot("touch-chart");
+  t.data = daily(200, 37);
+  logEvents(t, $("#touch-log"));
+  plot("sr-chart").data = daily(1000, 41, "Oslo", "Lisbon");
+}
+
+/** Case 16: the debug build's `debug-panic` chart beside a healthy one, and the shadow stack around the trap. */
+async function panic(): Promise<void> {
+  const status = $("#panic-status");
+  const m = await gp.manifest();
+  if (m.fallback === null) {
+    build = "release";
+    status.textContent = "This is the release build: the panic case runs under `mise run dev` (the debug build).";
+    showEnv();
+    return;
+  }
+  build = `debug (module ${m.fallback})`;
+  showEnv();
+  const loaded = await gp.loadModule(m.fallback);
+  const before = loaded.stack ? loaded.stack(0) : null;
+  const box = $("#panic-box");
+  const bad = document.createElement("glyph-plot") as GlyphPlot;
+  bad.setAttribute("type", "debug-panic");
+  bad.setAttribute("label", "Panics when framed");
+  bad.setAttribute("loading", "eager");
+  bad.textContent = "This text stays: the chart failed.";
+  bad.data = { x: [0, 1], y: [0, 1] };
+  const good = document.createElement("glyph-plot") as GlyphPlot;
+  good.setAttribute("type", "line");
+  good.setAttribute("label", "Keeps drawing");
+  good.setAttribute("loading", "eager");
+  good.data = waves(80, ["a"], 43);
+  box.append(bad, good);
+  bad.addEventListener("plot-error", (e) => {
+    const after = loaded.stack ? loaded.stack(0) : null;
+    status.textContent = `plot-error: ${String((e as CustomEvent<{ message: string }>).detail.message)}\nshadow stack pointer before ${String(before)}, after ${String(after)}: ${before === after ? "the same" : "MOVED"}`;
+  });
+}
+
+function lazy(): void {
+  const el = plot("lazy-chart");
+  el.data = waves(90, ["a", "b"], 47);
+  el.addEventListener("plot-ready", () => {
+    $("#lazy-status").textContent = `loaded and drawn at scrollY ${Math.round(scrollY)} px (the chart's top is at ${Math.round(el.getBoundingClientRect().top + scrollY)} px)`;
+  });
+}
+
+// ------------------------------------------------------------ start
+
+showEnv();
+addMarks();
+$("#copy").addEventListener("click", () => void copy());
+$("#clear").addEventListener("click", () => {
+  for (const k of Object.keys(marks)) delete marks[k];
+  save();
+  location.reload();
+});
+modes();
+gaps();
+million();
+mono();
+lightDark();
+themeSwitch();
+wideLabels();
+resize();
+script();
+interaction();
+lazy();
+void mounts().catch((e: unknown) => console.error(`test.html: mount cases: ${String(e)}`));
+void panic().catch((e: unknown) => console.error(`test.html: panic case: ${String(e)}`));
+window.gpReady = true;

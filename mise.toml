@@ -28,16 +28,62 @@ wasm-tools = "latest"
 "npm:elm-test" = "0.19.1-revision17"
 # Python scripts with pinned dependencies and no install (fonts, tables, datasets).
 "aqua:astral-sh/uv" = "0.12.23"
-# Reruns a task when files change.
-watchexec = "latest"
+# Reruns a build when files change: `mise run dev` (scripts/dev.sh).
+watchexec = "2.8.0"
 
 [tasks.install]
-description = "The toolchain mise.toml pins (from v0.3.0 also the npm packages)"
-run = "mise install"
+description = "The toolchain mise.toml pins, the npm packages and Playwright's Chromium"
+run = ["mise install", "mise run install:web", "mise run install:chromium"]
 
 [tasks."build:wasm"]
-description = "One release wasm module a chart family into web/pkg, with modules.js, budgets.json and sizes.json"
+description = "One release wasm module a chart family into web/pkg, with modules.js, budgets.json and sizes.json, staged and swapped in whole. web/pkg is shared with dev: this (and test, test:site, size, check) swaps the release build in over dev's debug one, and dev's pages reload onto it until the next change under crates/"
 run = "bash scripts/build-wasm.sh"
+
+[tasks."build:wasm:debug"]
+description = "One debug module, `all` (every family and `debug`), built in target/wasm-debug, staged beside web/pkg and swapped in whole (REQ-BUILD-040); `-- --out <dir>` builds into <dir> instead"
+run = "bash scripts/build-wasm.sh --debug"
+
+[tasks."build:web-debug"]
+description = "The Node tests' debug build: the debug module straight into target/web-debug/pkg (web/pkg untouched), built beside the release one"
+hide = true
+run = "bash scripts/build-wasm.sh --debug --out target/web-debug/pkg"
+
+[tasks."install:web"]
+description = "The web package's pinned npm packages (TypeScript), skipped while web/package-lock.json is unchanged"
+sources = ["web/package.json", "web/package-lock.json"]
+outputs = ["web/node_modules/.package-lock.json"]
+run = "npm ci --prefix web"
+
+[tasks."install:site"]
+description = "The site's pinned npm packages (Vite, Playwright, axe-core), skipped while site/package-lock.json is unchanged"
+sources = ["site/package.json", "site/package-lock.json"]
+outputs = ["site/node_modules/.package-lock.json"]
+run = "npm ci --prefix site"
+
+[tasks."install:chromium"]
+description = "Playwright's headless Chromium for the browser tests and bench:render (a no-op once installed)"
+depends = ["install:site"]
+dir = "site"
+run = "npx playwright install chromium"
+
+[tasks."build:site"]
+description = "site/ built by Vite into site/dist over the release wasm in web/pkg: test.html, blank.html, bench/render.html"
+depends = ["install:site", "build:wasm"]
+dir = "site"
+run = "npx vite build --logLevel warn"
+
+[tasks.dev]
+description = "The debug build served with the checklist page (localhost:5310/test.html), the debug wasm rebuilt into web/pkg on a change under crates/ and the page reloaded (REQ-BUILD-080); `-- --host` for a phone. It shares web/pkg with build:wasm: test, test:site and check swap the release build in, and the pages play it until the next change under crates/"
+depends = ["install:site", "install:web"]
+raw = true
+run = "bash scripts/dev.sh"
+
+[tasks."bench:render"]
+description = "The renderer bench: serves bench/render.html for Chrome and Safari (`-- --host` for the network); `-- --headless` runs it once in headless Chromium and prints the table (REQ-RENDER-010, 050)"
+depends = ["install:chromium"]
+dir = "site"
+raw = true
+run = "node bench/run.mjs"
 
 [tasks."build:font"]
 description = "The bundled font: Iosevka's release subset to web/fonts/glyphplot-mono.woff2 (`-- --check` compares instead)"
@@ -46,6 +92,11 @@ run = "uv run --no-project --with 'fonttools[woff]==4.60.1' --with 'brotli==1.2.
 [tasks.fixtures]
 description = "Capture the pinned d3 packages' output into crates/glyphplot/tests/fixtures (REQ-REF-010)"
 run = ["npm ci --ignore-scripts --prefix scripts/fixtures", "node scripts/fixtures.mjs"]
+
+[tasks.snap]
+description = "Rewrite the snapshots of every chart, or of the types given (REQ-SNAP-030)"
+usage = 'arg "[type]..." help="chart types; every chart when none"'
+run = 'CHART="${usage_type:-}" SNAP=write cargo test -q -p glyphplot --profile contract --test contract every_chart_matches_its_snapshots -- --exact --nocapture'
 
 [tasks.build]
 description = "Everything check builds: the wasm modules"
@@ -56,7 +107,8 @@ description = "Format the Rust code (rustfmt.toml)"
 run = "cargo fmt --all"
 
 [tasks.lint]
-description = "rustfmt, clippy (host and wasm32, with and without debug), rustdoc, each family alone, the octant table, the dependency rules, no generated output in git"
+description = "rustfmt, clippy (host and wasm32, with and without debug), rustdoc, each family alone, tsc on web and site, the octant table, the dependency rules, no generated output in git"
+depends = ["install:web", "install:site"]
 run = [
   "cargo fmt --all --check",
   "cargo clippy --workspace --all-targets -- -D warnings",
@@ -64,18 +116,47 @@ run = [
   "cargo clippy -p glyphplot-wasm --target wasm32-unknown-unknown -- -D warnings",
   "cargo clippy -p glyphplot-wasm --target wasm32-unknown-unknown --features debug -- -D warnings",
   "for f in $(cargo run -q -p glyphplot --example manifest -- families); do cargo check -q -p glyphplot --no-default-features --features $f || exit 1; done",
+  "web/node_modules/.bin/tsc --noEmit -p web",
+  "web/node_modules/.bin/tsc --noEmit -p site",
   "python3 scripts/octants.py --check",
   "bash scripts/deps.sh",
   "bash scripts/generated.sh",
 ]
 
 [tasks."test:rust"]
-description = "Every Rust test in the workspace, built with the contract profile (optimised, no LTO)"
-run = "cargo test --workspace --profile contract"
+description = "Every Rust test in the workspace, built with the contract profile (optimised, no LTO), the wasm crate's debug parts included"
+run = "cargo test --workspace --profile contract --features glyphplot-wasm/debug"
+
+[tasks."test:web"]
+description = "The shell's Node tests (web/test/*.test.mjs), against the release build in web/pkg, then the debug build in target/web-debug (REQ-TEST-020); the fixtures rewritten into target/fixtures first. Reads web/pkg, never writes it"
+alias = "test:wasm"
+depends = ["install:web", "build:wasm", "build:web-debug"]
+run = [
+  "npm run build --prefix web",
+  "rm -rf target/fixtures && cargo run -q --profile contract -p glyphplot --example fixtures -- write target/fixtures",
+  "rm -rf target/web-debug/dist && cp -R web/dist target/web-debug/dist",
+  "node --test 'web/test/*.test.mjs'",
+  "GLYPHPLOT_WEB=target/web-debug node --test 'web/test/*.test.mjs'",
+]
+
+[tasks."test:site"]
+description = "The browser tests: Playwright in headless Chromium against vite preview of the release build (REQ-E2E-010); `--smoke` runs the smoke set alone (REQ-E2E-070)"
+depends = ["build:site", "install:chromium"]
+wait_for = ["test:rust"]
+dir = "site"
+usage = 'flag "--smoke" help="only the smoke set: a first frame, a hover, a drag, a wheel, a key and the axe scans"'
+run = 'if [ "${usage_smoke:-false}" = true ]; then npx playwright test --grep @smoke; else npx playwright test; fi'
+
+[tasks."test:site:smoke"]
+description = "test:site --smoke, the set check runs (REQ-E2E-070); under signoff (GLYPHPLOT_SIGNOFF=1) all of test:site"
+depends = ["build:site", "install:chromium"]
+wait_for = ["test:rust"]
+dir = "site"
+run = 'if [ "${GLYPHPLOT_SIGNOFF:-}" = 1 ]; then npx playwright test; else npx playwright test --grep @smoke; fi'
 
 [tasks.test]
-description = "Every test (from v0.3.0 also the wasm and site tests)"
-depends = ["test:rust"]
+description = "Every test: Rust, the shell's Node tests, and the browser tests' smoke set (all of them under signoff)"
+depends = ["test:rust", "test:web", "test:site:smoke"]
 
 [tasks.size]
 description = "Each module's wasm and JS, raw and gzip -9, against its budget; WASM_GZ_LIMIT overrides it"
@@ -87,5 +168,6 @@ description = "lint, test, build and size: green before every commit"
 depends = ["lint", "test", "build", "size"]
 
 [tasks.signoff]
-description = "The CI, run locally: check on a committed tree (HEAD, or the revision given)"
+description = "The CI, run locally: check on a committed tree (HEAD, or the revision given), with all of test:site (REQ-E2E-070)"
+env = { GLYPHPLOT_SIGNOFF = "1" }
 run = "bash scripts/signoff.sh"

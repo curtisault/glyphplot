@@ -337,7 +337,7 @@ testing.md, with the milestone each rule lands in.
 | 4 | no panic | Every fixture × size × mode × env draws without a panic, 1 × 1 included | v0.3.0 |
 | 5 | charset | Every code point outside label text is in the font's ranges; label text from data may be any Unicode, wide as `set_wide` + `WIDE_TAIL` | v0.3.0 |
 | 6 | colours | Every index below the palette's length, or `NO_BACK` for backs | v0.3.0 |
-| 7 | good first frame | Every non-empty fixture inks the plot area at the default view: ≥ 1 cell for `one`, ≥ 2% of plot cells otherwise | v0.3.0 |
+| 7 | good first frame | Every non-empty fixture inks the plot area at the default view: ≥ 1 cell for `one`; otherwise ≥ 2% of plot cells, or a cell in at least half the plot's columns (a flat line at 320 × 120 inks 315 of 37,170 plot cells) | v0.3.0 |
 | 8 | determinism | Two fresh charts given the same data, options, view and `t` draw the same frame | v0.3.0 |
 | 9 | out-of-order calls | One chart asked for t = 6, 1, 2.5, 0 with `view()`, `hit()` and a repeated `frame()` between draws what a fresh chart draws in order | v0.3.0 |
 | 10 | one ink | `mono` frames keep rules 3–7 and pass the one-ink checks (ink 1–90%, no slab, glyphs in the font) | v0.4.0 |
@@ -474,7 +474,7 @@ Built by `crates/wasm` once per family. The shell is its only consumer
 | `frame(t, paper)` | — | Draws the frame at `t` into the grid | v0.3.0 |
 | `cols()`, `rows()`, `cells_ptr()`, `colors_ptr()`, `backs_ptr()` | integers, pointers | The grid, read as views | v0.3.0 |
 | `text()` | string | The frame as text | v0.3.0 |
-| `summary()`, `table_json(max_rows)` | string | The drawing's label and the hidden table's rows | v0.3.0 |
+| `summary()`, `table_json(max_rows)` | string | The drawing's label, and the hidden table as `{caption, columns, rows, total, domain}`: cells are the core's formatted strings, `domain` the x domain drawn (the slider's min and max) | v0.3.0 |
 | `meta_json()` | string | The type's `Meta` | v0.3.0 |
 | `staging(n)`, `append(n)` | pointer, integer | Streaming: a staging buffer of `n` rows, then commit it; returns rows, dropped, late | v0.6.0 |
 | `set_arrow(bytes)` | integer | An Arrow IPC stream as the new data | v0.6.0 |
@@ -488,6 +488,40 @@ Built by `crates/wasm` once per family. The shell is its only consumer
 | `wide_tail()` | `WIDE_TAIL` (0) |
 | `resolve_palette(theme_json)` | The 255 RGBA entries for a theme (`theme::resolve`, REQ-COLOR-030) |
 | `start()` | Debug builds only: the panic hook |
+| `debug_reference(file, line)`, `debug_fixture_digest(name)` | Debug builds only: the core's answer to one line of a d3 capture, and a fixture's digest, for the reference tests in wasm (REQ-WASM-060) |
+
+<a id="input-encoding"></a>
+### Input encoding
+
+`input(kind, x, y, a, b, buttons, mods, t)` carries one event of
+[input.schema.json](../spec/schemas/input.schema.json) as numbers, so the
+hot path builds no strings (REQ-INPUT-020). `Chart::input` takes the decoded
+event; the wasm crate decodes.
+
+| kind | Code | x, y | a | b | buttons |
+|---|---|---|---|---|---|
+| `move`, `down`, `up` | 0, 1, 2 | position | 0 | 0 | buttons bitmask + 256 × pointer (mouse 0, pen 1, touch 2) |
+| `leave` | 3 | 0 | 0 | 0 | 0 |
+| `wheel` | 4 | position | `dx` | `dy` | 0 |
+| `pinch` | 5 | centre | `scale` | `end` (1 or 0) | 0 |
+| `pan` | 6 | `velocity`, `end` (1 or 0) | `dx` | `dy` | 0 |
+| `tap` | 7 | position | `count` (1 or 2) | 0 | 256 × pointer (mouse 0, pen 1, touch 2) |
+| `press` | 8 | position | 0 | 0 | 0 |
+| `key` | 9 | 0 | key code | 0 | 0 |
+
+`mods` is a bitmask: shift 1, ctrl 2, alt 4, meta 8. `t` is play time in
+seconds. Key codes index this list of `KeyboardEvent.key` values; the shell
+sends no other key:
+
+```
+0 ArrowLeft   1 ArrowRight  2 ArrowUp    3 ArrowDown  4 Home     5 End
+6 PageUp      7 PageDown    8 +          9 =         10 -        11 0
+12 Enter     13 Escape     14 " "       15 ?         16–24 1–9
+25 h  26 j  27 k  28 l  29 f  30 q      (the CLI's)
+```
+
+`input` returns a bitmask: overlay changed 1, base changed 2, events pending
+4.
 
 ### The manifest
 
@@ -576,7 +610,8 @@ keyboard or screen-reader user reads values one at a time (ADR-116).
 Pointer and touch defaults (REQ-INPUT-040, REQ-TOUCH-010): a drag pans,
 Shift+drag brushes, Ctrl or ⌘ with the wheel and a trackpad pinch zoom about
 the pointer, the plain wheel scrolls the page, a double-click resets; on
-touch one finger scrubs, two pan, a pinch zooms, a double-tap resets, a long
+touch one finger scrubs, two pan (until their spread changes by more than
+24 CSS px or 10 %), a pinch zooms, a double-tap resets, a long
 press brushes, and vertical swipes scroll the page (`touch-action: pan-y`).
 Options `drag` and `wheel` change the defaults.
 
@@ -633,9 +668,12 @@ fills computed by glyphplot's own `blocks.ts` from each glyph's Unicode definiti
 | `fillText` per cell, no atlas | 0.9–1.0 ms | 16.6 ms | 21.0 ms |
 | atlas keyed by code point, tinted by compositing | 2.4–2.8 ms | 34.0–35.1 ms | 46.5 ms |
 
-The owner measures both on Chrome and Safari with a GPU in Phase 2 (the
-bench page `discovery/bench/rendering/canvas/` runs as it is) and the plan
-records the choice (REQ-RENDER-050). A full redraw of 320 × 120 braille costs
+The owner measures both on Chrome and Safari with a GPU with
+`mise run bench:render` (site/bench/), and the plan records the choice
+(REQ-RENDER-050). Headless Chromium 156 on 2026-10-19 (3 runs of 60 frames,
+medians), with the shell's renderers: a coloured braille scatter at 80 × 24
+took 1.6 ms with fillText and 3.5 ms with the atlas, and at 320 × 120
+30.9 ms and 61.5 ms. A full redraw of 320 × 120 braille costs
 16–21 ms at best, so a full-screen heatmap that changes every cell holds about
 30 frames a second; charts whose data changes few cells (lines, hovers) are
 unaffected.
@@ -1140,6 +1178,65 @@ Acceptance:
 
 The largest phase: the first chart, the boundary, the shell and the element,
 interactive and accessible from the start (ADR-007).
+
+Done 2026-10-19 by every command acceptance names, with the owner's manual
+pass and renderer measurement still to come. `mise run check` takes 14.5 s
+warm (`time`). It runs:
+- 171 core tests, the contract (rules 1–9 and 29, about 6 s for `line`) and
+  the d3 references;
+- the Node tests against the release build and a debug build in
+  `target/web-debug`;
+- the Playwright smoke set (7 tests).
+`mise run test:site` runs all 39 Playwright tests. Differences from the
+tasks:
+- Built in three waves, with the plan's boundary table as the contract
+  between them:
+  - the Rust framework and line chart, beside the TypeScript shell;
+  - the wasm boundary, beside the contract and snapshots;
+  - the site and Playwright, beside the Node tests, then a pass that fixed
+    what the tests found.
+  The boundary's numbers needed an encoding table, now under
+  [Input encoding](#input-encoding).
+- Contract rule 7 counted 2 % of plot cells, which a flat line at
+  320 × 120 cannot reach (315 of 37,170). It now also passes a cell in half
+  the plot's columns.
+- The snapshots showed three line-chart faults, now fixed:
+  - small plots niced to a coarse domain and filled two rows;
+  - the readout printed 12 significant digits;
+  - legend keys were dashed in colour.
+- Requirements changed with the code:
+  - REQ-OPT-010: JSON that is not an object now fails, as REQ-WASM-020's
+    message says.
+  - REQ-TOUCH-010: two fingers pan until their spread moves 24 px or 10 %.
+  - REQ-A11Y-030: the slider's min and max are the x domain drawn.
+  - REQ-WASM-060: the debug-only reference exports.
+  - REQ-LOAD-010: `chart()` returns at once and its `ready` rejects.
+  - REQ-MONO-040: a key is drawn as its series is.
+  - REQ-MEM-030: one column of growth on a chart first framed after its
+    first replace.
+- The tests found and fixed these shell faults:
+  - a trap left 240 B of shadow stack each time;
+  - zooms and pinches ended twice;
+  - a canvas theme change drew nothing;
+  - the atlas composited whole rows (700 ms a frame);
+  - us and ns timestamps lost precision (they now cross as an origin plus
+    offsets).
+- Measured in Node 26:
+  - replacing two 1M columns: median 1.58 ms;
+  - an M4 frame over 1M rows: 3.4–4.9 ms;
+  - a 1M-point chart: 16.2 MB of 17.0 MB allowed.
+- The `line` module is 191,283 B gzipped (`mise run size`), against the
+  plan's estimate of about 50 KB. It is under the 358,400 B gate but past
+  half of it, so `size` warns. Phase 3's `size --charts` should find where
+  it goes.
+- Conformance statuses for v0.3.0 were set from whether each row's planned
+  check exists, then corrected by hand where the builders reported a part
+  left. Phase 3 should re-read the `yes` rows that only a test file stands
+  behind.
+- Left for the owner: the `site/test.html` pass on Chrome and Safari, desktop
+  and phone (17 cases, listed on the page), and `mise run bench:render` in
+  Chrome and Safari with a GPU (REQ-RENDER-050). fillText stays the default
+  until then.
 
 Tasks:
 1. `charts/line/`: the `Chart` trait, `META` for `line`, modes `line`, `step`,

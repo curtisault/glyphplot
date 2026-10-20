@@ -8,10 +8,14 @@ repository.workspace = true
 
 # One feature a chart family, each one wasm module (REQ-ARCH-040). `all`, the
 # default, turns on every family; `mise run build:wasm` builds each alone.
+# `text` reads data from JSON text (`Data::from_json`, a descriptor's
+# `values`): on by default for the CLI, native users and the tests, off in the
+# wasm chart modules, which take typed arrays (REQ-DATA-050).
 [features]
-default = ["all"]
+default = ["all", "text"]
 all = ["line"]
 line = []
+text = []
 
 # The core's only normal dependencies (REQ-ARCH-010).
 [dependencies]

@@ -25,10 +25,10 @@ TypeScript shell, and in the terminal by a CLI. Every chart draws data the page
 or the terminal gives it. It is the sibling of unicel (`../animate-unicode`)
 and follows its architecture (ADR-003), sharing no code with it (ADR-013).
 
-**Status: v0.2.0, the core.** The toolchain, the grid and canvases, palette
-and themes, data and fixtures, scales, ticks and formats checked against d3,
-layout and text, and the font are built; no chart is drawn yet. The next
-session builds Phase 2, the line chart end to end.
+**Status: v0.3.0, the line chart end to end.** The core, the `line` chart,
+the wasm boundary, the TypeScript shell and `<glyph-plot>`, the contract and
+snapshots, and the Node and Playwright tests are built. The next session
+builds Phase 3, the contract's other rules and the budgets.
 
 | Path | What |
 |---|---|
@@ -36,10 +36,10 @@ session builds Phase 2, the line chart end to end.
 | `docs/IMPLEMENTATION_PLAN.md` | The plan, phase by phase, with what each one built |
 | `spec/` | The specification: `SPEC.md` (what is built), `ROADMAP.md` (every requirement, by milestone), `adr/`, `schemas/`, `conformance.md` |
 | `crates/glyphplot` | The core and the charts (from Phase 1) |
-| `crates/wasm` | The wasm-bindgen boundary (from Phase 3) |
+| `crates/wasm` | The wasm-bindgen boundary (from Phase 2) |
 | `crates/cli` | The terminal (from its phase) |
-| `web/` | The TypeScript shell and the `<glyph-plot>` element; the npm package (from Phase 3) |
-| `site/` | The Elm site (from its phase) |
+| `web/` | The TypeScript shell and the `<glyph-plot>` element; the npm package (from Phase 2) |
+| `site/` | The checklist page, Playwright tests and renderer bench (from Phase 2); the Elm site (from Phase 6) |
 
 ## Independent of unicel
 
@@ -60,7 +60,10 @@ mise is the only entry point (`mise tasks` lists them all).
   `mise run size` (`WASM_GZ_LIMIT=<bytes>` overrides every budget).
 - `mise run fixtures` (the d3 captures), `mise run build:font` (the font;
   `-- --check` compares).
-- `mise run bench` and `mise run snap` arrive with the phases that need them.
+- `mise run snap [type …]` (rewrite snapshots), `mise run test:site` (all
+  Playwright tests; `check` runs the smoke set), `mise run dev` (the debug
+  build with the checklist page, rebuilt on change), `mise run bench:render`.
+- `mise run bench` arrives with Phase 3.
 
 ## Conventions
 

@@ -156,7 +156,16 @@ pub fn fit_ticks(side: Side, kind: Kind, domain: [f64; 2], len: usize, format: &
         Kind::Time => Scale::time([lo, hi], range),
     };
     let mut fallback = Vec::new();
+    let mut tried: Vec<f64> = Vec::new();
     for count in (1..=(len / per_tick).max(1)).rev() {
+        // A count that gives the ticks the last one gave gives its labels
+        // and its fit too (the format's precision comes from the same step):
+        // skip it rather than format them again.
+        let values = scale.ticks(count as f64);
+        if !tried.is_empty() && values == tried {
+            continue;
+        }
+        tried = values;
         let ticks = place(&scale, &axis, count as f64, format, locale, x);
         if ticks.is_empty() {
             continue;

@@ -6,7 +6,7 @@ This document holds every requirement of glyphplot not yet built, grouped by
 area, each naming the milestone that ships it. When a milestone lands, its
 requirements move into [SPEC.md](SPEC.md) with their IDs unchanged, a line
 in their old section says where they went, and the milestone's row in §20
-says when it was built. v0.1.0 and v0.2.0 have shipped. IDs go up in tens within an area so a requirement
+says when it was built. v0.1.0 to v0.3.0 have shipped. IDs go up in tens within an area so a requirement
 can be added between two others (`REQ-DATA-045`); an ID is never reused,
 even after its requirement is removed.
 
@@ -53,9 +53,7 @@ plan's phases, one each (§20).
 ### 1.1 Layers (ARCH)
 
 - Shipped in v0.1.0 and moved to [SPEC.md](SPEC.md) §2.1: REQ-ARCH-010, REQ-ARCH-040, REQ-ARCH-060, REQ-ARCH-070.
-- REQ-ARCH-020: The wasm crate (`crates/wasm`) and the CLI (`crates/cli`) MUST reach charts only through the core's registry and define no chart of their own, except the debug charts of REQ-WASM-060. (v0.3.0)
-- REQ-ARCH-030: The shell (`web/src`) MUST be the only consumer of the wasm API; the site MUST reach charts only through the shell's exports and `<glyph-plot>`. (v0.3.0)
-- REQ-ARCH-050: A chart MUST use only the core's shared modules and its own family folder `crates/glyphplot/src/charts/<family>/`, never another family's; `mise run lint` MUST check every family alone (`cargo check -p glyphplot --no-default-features --features <family>`). (v0.3.0)
+- Shipped in v0.3.0 and moved to [SPEC.md](SPEC.md) §2.1: REQ-ARCH-020, REQ-ARCH-030, REQ-ARCH-050.
 - REQ-ARCH-080: The CLI MUST link the core natively with every family and every pack, without wasm. (v0.8.0)
 
 ### 1.2 Independence (INDEP)
@@ -67,15 +65,14 @@ REQ-VENDOR-010 and REQ-VENDOR-020 were withdrawn on 2026-10-18 by ADR-013, befor
 ### 1.3 Tasks (BUILD)
 
 - Shipped in v0.1.0 and moved to [SPEC.md](SPEC.md) §16.1: REQ-BUILD-010, REQ-BUILD-020, REQ-BUILD-030, REQ-BUILD-050, REQ-BUILD-060.
-- REQ-BUILD-040: `mise run build:wasm:debug` MUST build one module, `all`, with every family and the `debug` feature, in its own cargo target dir, staged beside `web/pkg` and swapped in whole, so a failed build leaves the last good `web/pkg`. (v0.3.0)
+- Shipped in v0.3.0 and moved to [SPEC.md](SPEC.md) §16.1: REQ-BUILD-040, REQ-BUILD-080.
 - Shipped in v0.2.0 and moved to [SPEC.md](SPEC.md) §16.1: REQ-BUILD-070.
-- REQ-BUILD-080: `mise run dev` MUST serve the debug build with the checklist page and rebuild the debug wasm when a file under `crates/` changes, reloading the page. (v0.3.0)
 - REQ-BUILD-090: `mise run check` SHOULD finish in under five minutes from a warm cache on the reference machine. (v0.4.0)
 
 ### 1.4 Lint (LINT)
 
 - Shipped in v0.1.0 and moved to [SPEC.md](SPEC.md) §16.2: REQ-LINT-010, REQ-LINT-030.
-- REQ-LINT-020: From the milestone each lands in, `mise run lint` MUST also run `tsc --noEmit` for `web` (v0.3.0) and `site` (v0.7.0) and `elm-format --validate` on `site/src` and `site/tests` (v0.7.0). (v0.3.0)
+- Shipped in v0.3.0 and moved to [SPEC.md](SPEC.md) §16.2: REQ-LINT-020.
 - Shipped in v0.2.0 and moved to [SPEC.md](SPEC.md) §16.2: REQ-LINT-040.
 
 ### 1.5 Local CI (CI)
@@ -94,12 +91,11 @@ REQ-VENDOR-010 and REQ-VENDOR-020 were withdrawn on 2026-10-18 by ADR-013, befor
 ### 2.2 Sub-cell canvases and cell mapping (CANVAS)
 
 - Shipped in v0.2.0 and moved to [SPEC.md](SPEC.md) §3.2: REQ-CANVAS-010, REQ-CANVAS-020, REQ-CANVAS-030.
-- REQ-CANVAS-040: A colour canvas cell MUST take the colour of the series highest in z-order among its lit dots (REQ-CHART-060). (v0.3.0)
+- Shipped in v0.3.0 and moved to [SPEC.md](SPEC.md) §3.2: REQ-CANVAS-040.
 
 ### 2.3 Charsets (CHAR)
 
-- REQ-CHAR-010: Every code point a chart draws outside label text MUST be in the bundled font's ranges (REQ-FONT-010); label text that comes from data or options MAY be any Unicode scalar value. (v0.3.0)
-- REQ-CHAR-020: A double-width glyph MUST be drawn with `set_wide` and its `WIDE_TAIL`, and a `WIDE_TAIL` MUST follow only a double-width glyph in the same row. (v0.3.0)
+- Shipped in v0.3.0 and moved to [SPEC.md](SPEC.md) §3.3: REQ-CHAR-010, REQ-CHAR-020.
 
 ### 2.4 Colour (COLOR)
 
@@ -113,11 +109,8 @@ REQ-VENDOR-010 and REQ-VENDOR-020 were withdrawn on 2026-10-18 by ADR-013, befor
 ### 3.1 The data contract (DATA)
 
 - Shipped in v0.2.0 and moved to [SPEC.md](SPEC.md) §4.1: REQ-DATA-010, REQ-DATA-020, REQ-DATA-030, REQ-DATA-040, REQ-DATA-080, REQ-DATA-090, REQ-DATA-110, REQ-DATA-130.
-- REQ-DATA-050: The wasm boundary MUST take column values only as typed arrays (a `Vec<f64>` argument, or a buffer the chart reserved and the shell filled) plus a descriptor without `values`; no chart module MUST contain a CSV or JSON data parser, which `mise run size --charts` checks by symbol. (v0.3.0)
-- REQ-DATA-060: The shell MUST read `memory.buffer` only after the call that returns a buffer's address; a Node test MUST fill a reserved 1,000,000-row column across a memory growth and check its sum. (v0.3.0)
-- REQ-DATA-070: Replacing a chart's data with two 1,000,000-row `Float64Array` columns MUST take at most 10 ms (median of 5) in Node on the reference machine and grow wasm memory by at most 1.1 times the columns' bytes. (v0.3.0)
+- Shipped in v0.3.0 and moved to [SPEC.md](SPEC.md) §4.1: REQ-DATA-050, REQ-DATA-060, REQ-DATA-070, REQ-DATA-120.
 - REQ-DATA-100: `unit`, `scale` and `offset` MUST apply to ticks, readouts and the data table and MUST NOT change stored values: a readout of stored 18240 with `scale: 0.01` shows `182.40`. (v0.5.0)
-- REQ-DATA-120: The element MUST accept, as the `data` property or attribute, the data object, the columns shorthand (`{"t": […], "close": […]}`) and the rows shorthand (`[{…}, …]`); the shell MUST parse JSON with `JSON.parse` and infer shorthand types as the schema says. [ADR-104](adr/104-typed-columns-cross-the-boundary.md) (v0.3.0)
 - REQ-DATA-140: The core MUST read an Arrow IPC stream (uncompressed; Float64, Float32, Int32, Int64, UInt32, Timestamp, Bool, Utf8 and Dictionary<Int32, Utf8> columns with validity bitmaps) with its own reader, adding at most 8 KB gzipped to a chart module; the element's `data` property and the CLI MUST accept it. [ADR-105](adr/105-hand-written-arrow-reader.md) (v0.6.0)
 - REQ-DATA-150: The element MUST take `src`, a URL of CSV, JSON, NDJSON or Arrow, fetched once per change and parsed in the shell (type from `Content-Type` or the extension), and given as `data`. (v0.6.0)
 - REQ-DATA-160: Graph data MUST be `nodes` and `edges` tables whose `source` and `target` are `u32` indices into `nodes` or strings equal to `nodes.id`, and matrices MUST be row-major `rows × cols`; an edge naming no node MUST be dropped with one warning. (v0.9.0)
@@ -130,14 +123,12 @@ REQ-VENDOR-010 and REQ-VENDOR-020 were withdrawn on 2026-10-18 by ADR-013, befor
 - REQ-STREAM-030: `retain.age` SHOULD drop rows older than the newest x minus that duration; the oldest kept row MUST be the first with x ≥ newest − age. (v0.6.0)
 - REQ-STREAM-040: An appended row whose x equals the last row's MUST replace it; a row whose x is less MUST be dropped and counted in the `late` field of the next `plot-data` event. (v0.6.0)
 - REQ-STREAM-050: In Node on the reference machine, appending one row MUST take at most 1 µs and a batch of 1,000 at most 50 µs (median). (v0.6.0)
-- REQ-STREAM-060: After `data` is replaced, a chart's frame MUST equal the frame of a new chart given the same data, options, view and `t`. (v0.3.0)
+- Shipped in v0.3.0 and moved to [SPEC.md](SPEC.md) §4.2: REQ-STREAM-060.
 - REQ-STREAM-070: After each commit of data the element MUST fire `plot-data` with `{rows, dropped, late, version}`. (v0.6.0)
 
 ### 3.3 Downsampling (SAMPLE)
 
-- REQ-SAMPLE-010: Line-like charts (line, step, area, band, sparkline) MUST draw from M4 aggregates (first, last, minimum, maximum per dot column) of the rows in view whenever those rows outnumber four times the plot's dot columns, and for x-sorted data the frame MUST equal, cell for cell, the frame drawn from every segment. [ADR-108](adr/108-m4-per-dot-column.md) (v0.3.0)
-- REQ-SAMPLE-020: A line-like chart MUST find the rows in view by binary search on x, and MUST cache its aggregates by data version, view x range and width; a frame with all three unchanged MUST NOT read the data (a scan counter in the test build stays 0). (v0.3.0)
-- REQ-SAMPLE-030: M4 over 1,000,000 rows in view at 640 dot columns MUST take at most 8 ms (median of 7) in wasm in Node on the reference machine. (v0.3.0)
+- Shipped in v0.3.0 and moved to [SPEC.md](SPEC.md) §4.3: REQ-SAMPLE-010, REQ-SAMPLE-020, REQ-SAMPLE-030.
 - REQ-SAMPLE-040: Candlestick charts MUST draw each candle at least one cell wide: when the candles in view do not fit, they MUST be resampled to the smallest interval of the ladder 1 s, 5 s, 15 s, 1 min, 5 min, 15 min, 1 h, 4 h, 1 d, 1 w, 1 mo at which they fit, open the first row, high the maximum, low the minimum, close the last and volume the sum, buckets aligned to the interval in the column's zone. [ADR-109](adr/109-candles-resample-to-calendar-intervals.md) (v0.5.0)
 - REQ-SAMPLE-050: Scatter charts MUST set a dot for every visible point; no point may be dropped by sampling. (v0.9.0)
 - REQ-SAMPLE-060: LTTB MAY be offered as `sample: "lttb"` and MUST NOT be any chart's default. (v0.5.0)
@@ -167,7 +158,7 @@ REQ-VENDOR-010 and REQ-VENDOR-020 were withdrawn on 2026-10-18 by ADR-013, befor
 - Shipped in v0.2.0 and moved to [SPEC.md](SPEC.md) §5.3: REQ-FMT-010, REQ-FMT-020, REQ-FMT-030.
 - REQ-FMT-040: The core MUST format SI units, IEC bytes (`KiB`, `MiB`), bits a second (`kb/s`, `Mb/s`), durations from nanoseconds to days, prices to a tick size (0.01, 0.25, 1/32) and signed percentages, each covered by a table test. (v0.5.0)
 - REQ-FMT-050: Date labels MUST accept the strftime subset `%Y %m %d %e %H %I %M %S %L %p %a %A %b %B %j %Z`, and MUST default to 24-hour multi-scale labels unless the locale's hour cycle is 12-hour. (v0.5.0)
-- REQ-FMT-060: The minus sign MUST be U+2212 in the browser and `-` in the CLI by default, switchable in the locale pack; a group separator given as U+2009, U+202F or U+00A0 MUST be drawn as one plain space cell. (v0.3.0)
+- Shipped in v0.3.0 and moved to [SPEC.md](SPEC.md) §5.3: REQ-FMT-060.
 - REQ-FMT-070: The core MUST format right ascension in hours (`18h 54m`) and declination in signed degrees (`−23° 45′`). (v0.12.0)
 
 ### 4.4 Time zones and locales (TZ, I18N)
@@ -177,20 +168,17 @@ REQ-VENDOR-010 and REQ-VENDOR-020 were withdrawn on 2026-10-18 by ADR-013, befor
 - REQ-TZ-030: Local-time ticks over the table MUST equal d3-scale's `scaleTime().ticks()` run under `TZ=<zone>` for every captured case, across daylight-saving changes. (v0.5.0)
 - REQ-TZ-040: The CLI MUST build the same table from the system's tzdata, and a frame drawn by the CLI and by the element from the same data, options, view and zone MUST be identical. (v0.8.0)
 - REQ-TZ-050: The element MUST default its time zone to the page's (`Intl.DateTimeFormat().resolvedOptions().timeZone`), resolved to an IANA name and passed to the core explicitly; the core, the CLI and the tests MUST default to UTC. [ADR-112](adr/112-zones-and-locales-from-the-shell.md) (v0.5.0)
-- REQ-I18N-010: The element's locale MUST be its `locale` attribute, else the `lang` of its nearest ancestor that has one, else `navigator.language`. (v0.3.0)
-- REQ-I18N-020: The shell MUST build a locale pack (decimal and group separators, grouping sizes, minus sign, percent pattern, the ten digits, month and weekday names, date and time patterns, direction) from `Intl` with the Gregorian calendar forced, once per locale, and pass it to wasm; no wasm module MUST link a locale database. (v0.3.0)
+- Shipped in v0.3.0 and moved to [SPEC.md](SPEC.md) §5.3: REQ-I18N-010, REQ-I18N-020, REQ-I18N-050.
 - Shipped in v0.2.0 and moved to [SPEC.md](SPEC.md) §5.3: REQ-I18N-030, REQ-I18N-040.
-- REQ-I18N-050: The shell MUST NFC-normalise label text before it crosses into wasm; zero-width code points MUST take no cell; a grapheme cluster of several scalars MUST be drawn as its first scalar; the accessible name, summary and table MUST keep the original text. (v0.3.0)
 - REQ-I18N-060: Labels with right-to-left runs MUST be reordered by UAX #9 before layout, and an RTL locale MUST put the y axis and the legend on the right. (v0.9.0)
 - REQ-I18N-070: The CLI MUST accept a locale pack as a JSON file (`--locale-file`). (v0.8.0)
 
 ### 4.5 Layout and text (LAYOUT, TEXT, AXIS, ANNOT)
 
 - Shipped in v0.2.0 and moved to [SPEC.md](SPEC.md) §5.4: REQ-LAYOUT-010, REQ-LAYOUT-020, REQ-LAYOUT-030.
-- REQ-LAYOUT-040: Every chart MUST draw a frame without panicking at every size from 1 × 1 to 320 × 120 with every fixture it accepts. (v0.3.0)
+- Shipped in v0.3.0 and moved to [SPEC.md](SPEC.md) §5.4: REQ-LAYOUT-040, REQ-LAYOUT-070.
 - REQ-LAYOUT-050: Panes MUST split rows by weight with at least three rows each, share the x scale, and align their plot areas to the same gutters. (v0.5.0)
 - REQ-LAYOUT-060: A legend at `position: "auto"` MUST go outside in one row when it fits and rows ≥ 12, else inside the first pane when it takes at most a third of its width and height, else be left out of the frame (it stays in the table and the events). (v0.5.0)
-- REQ-LAYOUT-070: Each chart's meta MUST declare its minimum useful size with axes; the contract and the site MUST use it. (v0.3.0)
 - Shipped in v0.2.0 and moved to [SPEC.md](SPEC.md) §5.4: REQ-TEXT-010, REQ-TEXT-020.
 - REQ-AXIS-010: A pane MUST support a left and a right y axis bound to different scales, with gridlines from one axis only. (v0.5.0)
 - REQ-ANNOT-010: The core MUST draw `hline`, `vline`, `band`, `label` and `marker` annotations in data coordinates, clipped to their pane; an annotation label on an axis MUST hide the tick labels it overlaps. (v0.5.0)
@@ -201,40 +189,28 @@ REQ-VENDOR-010 and REQ-VENDOR-020 were withdrawn on 2026-10-18 by ADR-013, befor
 
 ### 5.1 View state (VIEW)
 
-- REQ-VIEW-010: Every chart MUST hold its interactive state in one view state of the shape of [view.schema.json](schemas/view.schema.json), and its frame MUST be a function of data, options, view state and `t` only: two charts given the same four MUST draw identical grids. [ADR-009](adr/009-deterministic-frames.md), [ADR-113](adr/113-view-state-is-the-model.md) (v0.3.0)
-- REQ-VIEW-020: Every domain in the view state MUST be in data units, and `null` MUST mean the chart's fitted default. (v0.3.0)
-- REQ-VIEW-030: The element MUST expose `view` as a property (get: the current view; set: a whole or partial view, merged, a key set to `null` returning to its default) and as an attribute of JSON text; setting `JSON.parse(JSON.stringify(el.view))` back MUST draw the same frame. (v0.3.0)
-- REQ-VIEW-040: Setting `view`, `data`, `options` or `time` from script MUST NOT fire `plot-hover`, `plot-select`, `plot-brush`, `plot-view`, `plot-legend` or `plot-cursor`. (v0.3.0)
-- REQ-VIEW-050: A view animation (an eased zoom, a kinetic pan, a reset) MUST be a `motion` record in the view state stamped with play time, so the frame at any `t` is determined without replaying input; with reduced motion and no `motion` attribute there MUST be none. (v0.3.0)
+- Shipped in v0.3.0 and moved to [SPEC.md](SPEC.md) §8.1: REQ-VIEW-010, REQ-VIEW-020, REQ-VIEW-030, REQ-VIEW-040, REQ-VIEW-050.
 - REQ-VIEW-060: With `x.follow` true, an append MUST keep the x span and move the domain to end at the newest datum; a pan away from the end MUST set it false, and `End` MUST set it true. (v0.6.0)
 
 ### 5.2 Input (INPUT)
 
-- REQ-INPUT-010: The core MUST fold input into view state with one reducer, `Chart::input`, used by the wasm module and the CLI alike; it MUST read no clock and keep no state outside the view and the chart's caches. [ADR-113](adr/113-view-state-is-the-model.md) (v0.3.0)
-- REQ-INPUT-020: Input events MUST have the shape of [input.schema.json](schemas/input.schema.json), positions in cells with fractions inside a cell; the wasm boundary MUST take them as a numeric call returning a bitmask (overlay changed, base changed, events pending). [ADR-115](adr/115-numeric-input-calls.md) (v0.3.0)
-- REQ-INPUT-030: The shell MUST send at most one `move` per animation frame (the latest) and MUST send `down`, `up`, `leave`, `tap`, `key` and summed `wheel` deltas, in order, before it. (v0.3.0)
-- REQ-INPUT-040: By default a mouse drag MUST pan, Shift+drag MUST brush, Ctrl or ⌘ with the wheel and a trackpad pinch MUST zoom about the pointer, the plain wheel MUST scroll the page, and a double-click MUST reset the view; the options `drag` (`pan`, `brush`, `zoom`) and `wheel` (`scroll`, `zoom`) MUST change the first and the fourth. [ADR-116](adr/116-input-defaults.md) (v0.3.0)
+- Shipped in v0.3.0 and moved to [SPEC.md](SPEC.md) §8.2: REQ-INPUT-010, REQ-INPUT-020, REQ-INPUT-030, REQ-INPUT-040.
 
 ### 5.3 Hit testing and the overlay (HIT, OVERLAY)
 
-- REQ-HIT-010: For x-ordered charts the cursor MUST snap to the datum nearest the pointer's dot column by binary search on x, and for binned charts to the bin under the pointer; tests MUST check both against a brute-force answer over the fixtures. [ADR-117](adr/117-hit-testing-by-chart-kind.md) (v0.3.0)
-- REQ-HIT-020: When a dot column holds more than one datum, `plot-hover` MUST carry the column's `aggregate` (count, first, last, minimum, maximum). (v0.3.0)
+- Shipped in v0.3.0 and moved to [SPEC.md](SPEC.md) §8.3: REQ-HIT-010, REQ-HIT-020.
 - REQ-HIT-030: A scatter chart MUST answer a hover over 1,000,000 points in under 0.1 ms median natively once its spatial index is built, and MUST answer (by scan) before it is. (v0.9.0)
-- REQ-OVERLAY-010: A frame MUST be a cached base (data, axes, legend) and an overlay (crosshair, readout, brush, time cursor, focus) composed in wasm into the grid; a hover that does not change the view MUST NOT redraw the base, and MUST cost under 0.1 ms median natively at 320 × 120 with 1,000,000 points. [ADR-114](adr/114-base-and-overlay.md) (v0.3.0)
-- REQ-OVERLAY-020: The readout MUST stay at a fixed place in the chart, not under the pointer, until the pointer or focus leaves, and MUST hide on Escape. (v0.3.0)
+- Shipped in v0.3.0 and moved to [SPEC.md](SPEC.md) §8.3: REQ-OVERLAY-010, REQ-OVERLAY-020.
 
 ### 5.4 Events out and linking (EVENT, LINK)
 
-- REQ-EVENT-010: The element MUST dispatch `plot-ready`, `plot-error`, `plot-hover`, `plot-select`, `plot-view`, `plot-cursor` (v0.3.0), `plot-brush`, `plot-legend` (v0.5.0) and `plot-data` (v0.6.0) as bubbling, composed `CustomEvent`s whose `detail` has the shape of [events.schema.json](schemas/events.schema.json); each reader-action event MUST carry `source` (`pointer`, `touch`, `keyboard`, `wheel`). (v0.3.0)
-- REQ-EVENT-020: `plot-hover` MUST fire only when the hovered datum changes, at most once an animation frame, with `detail` `null` when the cursor leaves the plot. (v0.3.0)
-- REQ-EVENT-030: `plot-view` MUST fire at most once an animation frame during a gesture with `final: false`, and exactly once with `final: true` when the gesture ends (pointer up, wheel idle 150 ms, key up, motion done). (v0.3.0)
+- Shipped in v0.3.0 and moved to [SPEC.md](SPEC.md) §8.4: REQ-EVENT-010, REQ-EVENT-020, REQ-EVENT-030.
 - REQ-LINK-010: Charts sharing a `link` attribute value MUST share `x.domain` and `cursor.x` in data units without event loops; a browser test MUST show two linked charts of different widths agreeing after a pan. (v0.5.0)
 
 ### 5.5 Keyboard and touch (KEY, TOUCH)
 
-- REQ-KEY-010: Every interaction (cursor, pan, zoom, reset, brush, select, series toggle, pause) MUST be reachable by the keys of the plan's [keys](../docs/IMPLEMENTATION_PLAN.md#keys) table, acting only while the chart has focus. (v0.3.0)
-- REQ-TOUCH-010: On touch, a one-finger horizontal drag MUST move the cursor (scrub), two fingers MUST pan, a pinch MUST zoom about its centre, a double-tap MUST reset, a long press MUST start a brush, and a vertical one-finger drag MUST scroll the page (`touch-action: pan-y`). (v0.3.0)
-- REQ-TOUCH-020: The shell MUST take touch from Pointer Events only. (v0.3.0)
+- Shipped in v0.3.0 and moved to [SPEC.md](SPEC.md) §8.5: REQ-KEY-010.
+- Shipped in v0.3.0 and moved to [SPEC.md](SPEC.md) §8.5: REQ-TOUCH-010, REQ-TOUCH-020.
 
 ---
 
@@ -242,21 +218,14 @@ REQ-VENDOR-010 and REQ-VENDOR-020 were withdrawn on 2026-10-18 by ADR-013, befor
 
 ### 6.1 Charts, meta and options (CHART, OPT, REG)
 
-- REQ-CHART-010: A chart family MUST be one folder `crates/glyphplot/src/charts/<family>/` holding, for each chart type it plays, a `pub static META: Meta` and a `make`, and an implementation of the `Chart` trait; one `REGISTRY` line per type in the folder's `mod.rs`; one Cargo feature per family. [ADR-101](adr/101-chart-families-with-modes.md) (v0.3.0)
-- REQ-CHART-020: `Meta` MUST have the fields of [meta.schema.json](schemas/meta.schema.json) (slug, name, note, family, modes, shapes, options, min, drop, mono, budget) and satisfy its rules. (v0.3.0)
-- REQ-CHART-030: A variant within a family MUST be chosen by the `mode` option, which `META.modes` lists; a mode not listed MUST fail with an error naming the valid modes. (v0.3.0)
-- REQ-CHART-040: The `Chart` trait MUST have exactly the methods of the plan's [`Chart` trait](../docs/IMPLEMENTATION_PLAN.md#the-chart-contract) (`set_data`, `append`, `set_options`, `view`, `set_view`, `input`, `frame`, `hit`, `table`), and `frame` MUST take its size from the grid it is given. (v0.3.0)
-- REQ-CHART-050: `Env` MUST carry `paper`, `mono`, the locale pack and the zone table, and nothing else from the host. (v0.3.0)
-- REQ-CHART-060: When two series draw into one cell, the cell MUST take the colour of the series highest in z-order: the later in the series list, unless the view raises a hovered or selected series. (v0.3.0)
-- REQ-OPT-010: Options MUST be a JSON object layered on the defaults in `META.options`: a key present in the overrides wins and every other default fills in; an empty string or JSON that is not an object MUST count as no options, and only invalid JSON MUST fail; typed getters MUST fall back to the default on a missing key or a wrong type, a list with one wrong element falling back whole; every key a chart reads MUST have a default in `META.options`, and the options MUST record each key read so the contract can check it. (v0.3.0)
-- REQ-OPT-020: `set_options` MUST change a live chart's options and keep its data and view; only a change of chart type makes a new chart. [ADR-120](adr/120-options-change-keeps-the-chart.md) (v0.3.0)
-- REQ-REG-010: Each family's `mod.rs` MUST hold a hand-written `REGISTRY`, and `charts/mod.rs` a `FAMILIES` list behind each family's feature; `registry::make(type, options_json)` MUST return a fresh chart or fail with `there is no chart named "<type>"` or `options are not a JSON object: <message>`. [ADR-125](adr/125-hand-written-registry.md) (v0.3.0)
-- REQ-REG-020: No chart type MUST be named `render`, `demo` or `list` (the registry test checks). (v0.3.0)
+- Shipped in v0.3.0 and moved to [SPEC.md](SPEC.md) §6.1: REQ-CHART-010, REQ-CHART-020, REQ-CHART-030.
+- Shipped in v0.3.0 and moved to [SPEC.md](SPEC.md) §6.2: REQ-CHART-040, REQ-CHART-050, REQ-CHART-060.
+- Shipped in v0.3.0 and moved to [SPEC.md](SPEC.md) §6.1: REQ-OPT-010, REQ-OPT-020.
+- Shipped in v0.3.0 and moved to [SPEC.md](SPEC.md) §6.3: REQ-REG-010, REQ-REG-020.
 
 ### 6.2 The contract test (CONTRACT, FIX)
 
-- REQ-CONTRACT-010: `crates/glyphplot/tests/contract.rs` MUST check every registered chart against rules 1–9 and 29 of the plan's [contract rules](../docs/IMPLEMENTATION_PLAN.md#contract-rules) table (meta, options, shape, no panic, charset, colours, first frame, determinism, out-of-order calls, snapshots), over every fixture whose shape the chart accepts, at 1 × 1, `META.min`, 40 × 12, 80 × 24 and 320 × 120, with no test of the chart's own. (v0.3.0)
-- REQ-CONTRACT-020: The contract MUST report every failing chart in one run, spread charts over threads, print a per-chart table with `--nocapture`, and accept `CHART=<type>[,<type>…]`, failing on an unknown type. (v0.3.0)
+- Shipped in v0.3.0 and moved to [SPEC.md](SPEC.md) §6.4: REQ-CONTRACT-010, REQ-CONTRACT-020.
 - REQ-CONTRACT-030: The contract MUST also check rules 10–13, 15–28 of the table: one ink and series told apart in it, paper, resize, replace is whole, view round trip, scripted input, events against the schema, hits naming what was drawn, hit and readout agreeing, empty and edge fixtures, gaps, tick labels, log-invalid values, unsorted and duplicate x, exact downsampling and wrong shapes. (v0.4.0)
 - REQ-CONTRACT-040: Appending a fixture in the batches 1, 7, ⌊n/3⌋ and the rest, with frames drawn between, MUST end on the frame and view that replacing with the same rows gives; with a ring of capacity c < n, on replacing with the last c rows (rule 14). (v0.6.0)
 - REQ-CONTRACT-050: Time budgets (rule 30) MUST be checked in `tests/budgets.rs`, a test binary of its own, only without debug assertions; a chart over budget MUST be timed twice more, and the lowest average and the lowest worst count. [ADR-126](adr/126-correctness-and-timing-apart.md) (v0.4.0)
@@ -266,10 +235,7 @@ REQ-VENDOR-010 and REQ-VENDOR-020 were withdrawn on 2026-10-18 by ADR-013, befor
 
 ### 6.3 Snapshots, references and properties (SNAP, REF, PROP)
 
-- REQ-SNAP-010: Each chart MUST have one snapshot file a fixture it accepts, `crates/glyphplot/tests/snapshots/<type>/<fixture>.snap`, holding whole frames at 80 × 24, at `META.min` and after a seeded zoom, and the 320 × 120 frame as an FNV-1a hash; non-default modes on `sine-1k` get `<mode>-sine-1k.snap`. (v0.3.0)
-- REQ-SNAP-020: A snapshot's colour and back layers MUST write each palette index as two lowercase hex digits (`..` for `NO_BACK`), each run followed by its length when more than one. [ADR-129](adr/129-snapshot-colours-in-hex.md) (v0.3.0)
-- REQ-SNAP-030: `mise run snap [type …]` MUST rewrite snapshots; a chart without one MUST fail the contract; `web/test/snapshot.test.mjs` MUST compare every chart's wasm frame for every fixture at 80 × 24 with the native snapshot. (v0.3.0)
-- REQ-SNAP-040: A commit that changes a snapshot MUST say why in its message. (v0.3.0)
+- Shipped in v0.3.0 and moved to [SPEC.md](SPEC.md) §6.5: REQ-SNAP-010, REQ-SNAP-020, REQ-SNAP-030, REQ-SNAP-040.
 
 ---
 
@@ -289,10 +255,7 @@ element's `type` names.
 
 ### 7.1 Line (LINE, SPARK)
 
-- REQ-LINE-010: The `line` type MUST draw the modes `line`, `step` (`before`, `after`, `middle`) and `area` (to a baseline), each with snapshots. (v0.3.0)
-- REQ-LINE-020: A frame over 1,000 visible points of 1,000,000 held MUST take under a tenth of the time of a frame over all 1,000,000. (v0.3.0)
-- REQ-LINE-030: In `line`, `step` and `area`, a missing y MUST break the line with no segment drawn across it; the option `spanGaps: true` MAY join across it. (v0.3.0)
-- REQ-LINE-040: The readout of a line-like chart MUST name the datum whose x is nearest the cursor's x value, not the minimum or maximum of the dot column under it. (v0.3.0)
+- Shipped in v0.3.0 and moved to [SPEC.md](SPEC.md) §7.1: REQ-LINE-010, REQ-LINE-020, REQ-LINE-030, REQ-LINE-040.
 - REQ-LINE-050: The `line` type MUST draw the modes `band` (between two columns) and `baseline` (coloured above and below a value), and `area` MUST take `stack` (`none`, `stack`, `percent`). (v0.9.0)
 - REQ-SPARK-010: The `sparkline` type, played by the `line` module, MUST draw without axes, one series a row band, MUST take appended samples into a ring of set capacity, and MAY show each series' label, latest value, minimum and maximum. (v0.5.0)
 
@@ -325,20 +288,15 @@ element's `type` names.
 
 ### 8.1 The boundary object (WASM)
 
-- REQ-WASM-010: The wasm boundary MUST expose exactly the members of the plan's [boundary](../docs/IMPLEMENTATION_PLAN.md#the-boundary) table: a `Chart` object (made from a type and options, with data, options, view, input, resize, frame, the grid's pointers, text, table and free) and the module functions `charts_json`, `wide_tail` and `resolve_palette`. (v0.3.0)
-- REQ-WASM-020: Making a chart MUST throw `there is no chart named "<type>"` for a type the module does not play and `options are not a JSON object: …` for bad options, and the module MUST keep working after a throw. (v0.3.0)
-- REQ-WASM-030: The memory views at the grid's pointers MUST equal `text()` and the grid after each `frame`; the shell MUST re-create its views after any call that may allocate. (v0.3.0)
-- REQ-WASM-040: A panicking call MUST trap without taking down the instance: other charts keep drawing and new ones can be made; the panicked chart MUST then refuse every call. [ADR-124](adr/124-abort-on-panic.md) (v0.3.0)
-- REQ-WASM-050: `free()` MUST give a chart's memory back, so freeing a chart and making another of the same capacity grows no memory. (v0.3.0)
-- REQ-WASM-060: With the `debug` feature only, a panic MUST print its message and location with `console.error` before it traps, and making the chart `debug-panic` MUST be possible; a release build MUST have neither. (v0.3.0)
+- Shipped in v0.3.0 and moved to [SPEC.md](SPEC.md) §9.1: REQ-WASM-010, REQ-WASM-020, REQ-WASM-030.
+- Shipped in v0.3.0 and moved to [SPEC.md](SPEC.md) §9.2: REQ-WASM-040.
+- Shipped in v0.3.0 and moved to [SPEC.md](SPEC.md) §9.1: REQ-WASM-050.
+- Shipped in v0.3.0 and moved to [SPEC.md](SPEC.md) §9.2: REQ-WASM-060.
 
 ### 8.2 Manifest and loading (MANIFEST, LOAD)
 
-- REQ-MANIFEST-010: `web/pkg/modules.js` MUST export `charts` (every chart's meta, in registry order), `modules` (type → module), `imports` (module → a function importing `./<module>/glyphplot.js`), `fallback` and `budgets` (module → `{gzip, frameMs, worstMs, inputMs}`), of the shape of [manifest.schema.json](schemas/manifest.schema.json); the same budgets MUST be in `web/pkg/budgets.json` and the gzipped sizes in `web/pkg/sizes.json` ([sizes.schema.json](schemas/sizes.schema.json)). (v0.3.0)
-- REQ-MANIFEST-020: In the release build every type MUST map to the module of its family, which plays exactly the types the manifest gives it, and `fallback` MUST be `null`; the debug build MUST map every type to `all`. (v0.3.0)
-- REQ-LOAD-010: `chart(type, init)` MUST load the type's module at most once a page, share it with every later caller, reject with `there is no chart named "<type>"` for a type no module plays, and try a failed load again on the next call. (v0.3.0)
-- REQ-LOAD-020: The element MUST load nothing until it first comes within one screen height of the viewport (IntersectionObserver, `rootMargin: "100% 0px"`), unless `loading="eager"` or there is no IntersectionObserver. (v0.3.0)
-- REQ-LOAD-030: A `data`, `options` or `view` set and every `append` made before the chart exists MUST be applied in order once it is made; a `data` set MUST discard the appends queued before it. (v0.3.0)
+- Shipped in v0.3.0 and moved to [SPEC.md](SPEC.md) §9.3: REQ-MANIFEST-010, REQ-MANIFEST-020.
+- Shipped in v0.3.0 and moved to [SPEC.md](SPEC.md) §9.3: REQ-LOAD-010, REQ-LOAD-020, REQ-LOAD-030.
 
 ---
 
@@ -346,43 +304,27 @@ element's `type` names.
 
 ### 9.1 The element (EL)
 
-- REQ-EL-010: Importing `glyphplot/element` MUST define `<glyph-plot>` once, inject one `<style>` with the bundled `@font-face` and the element's rules (wrapped in `:where()`), and do nothing where there is no DOM or no `customElements`. [ADR-118](adr/118-one-tag-with-a-type.md) (v0.3.0)
-- REQ-EL-020: The element MUST observe exactly the attributes of the plan's [element attributes](../docs/IMPLEMENTATION_PLAN.md#element-attributes) table. (v0.3.0)
+- Shipped in v0.3.0 and moved to [SPEC.md](SPEC.md) §10.1: REQ-EL-010, REQ-EL-020, REQ-EL-040, REQ-EL-060, REQ-EL-070, REQ-EL-080, REQ-EL-085, REQ-EL-090, REQ-EL-100, REQ-EL-120, REQ-EL-130, REQ-EL-140, REQ-EL-150.
 - REQ-EL-030: `define(tag, { type })` MUST define `tag` as a subclass whose chart type is `type` whatever its `type` attribute says, and MUST do nothing for a tag already defined. (v0.5.0)
-- REQ-EL-040: A change of `options` or `theme` MUST NOT make a new chart: data and view after it MUST equal those before. (v0.3.0)
 - REQ-EL-050: A change of `type` MUST make a new chart and give it the old chart's data and view when its meta accepts the data's shape; otherwise it MUST warn once naming the shape and draw the new chart empty. (v0.5.0)
-- REQ-EL-060: The `data`, `options` and `view` properties MUST be defined on the element's class, so `"data" in document.createElement("glyph-plot")` is true before upgrade. (v0.3.0)
-- REQ-EL-070: Setting the `data` property MUST replace all data and MUST NOT write the `data` attribute; getting it MUST return the descriptor and lengths, not a copy of the data. (v0.3.0)
-- REQ-EL-080: Without `cols` and `rows`, the cell MUST be `round(0.6 × font-size × devicePixelRatio)` device pixels wide and exactly twice that tall, `cols × rows` the whole cells that fit the content box, and the remainder split evenly as padding. [ADR-103](adr/103-cell-from-font-grid-from-box.md) (v0.3.0)
-- REQ-EL-085: The element MUST NOT draw a chart in a font smaller than 11 CSS px at a device pixel ratio under 2, or 9 CSS px at 2 or more; a smaller computed `font-size` MUST be raised to the floor before the cell is computed. (v0.3.0)
-- REQ-EL-090: A change of the element's box MUST lay the chart out again within one animation frame, keeping its view in data units; a box of width 0 MUST be ignored. (v0.3.0)
-- REQ-EL-100: An element with no height of its own MUST take its height from `rows`, default 12. (v0.3.0)
 - REQ-EL-110: With `cols` and `rows`, the grid MUST be that size, and `fit` MUST scale its drawing: `width` to the element's content width W (a cell W / cols wide), `contain` to the largest box inside W × H that keeps the cell's 1:2 aspect, centred, acting as `width` when H is 0; any other value MUST act as no fit. (v0.5.0)
-- REQ-EL-120: The element MUST fire `plot-ready` once a chart, after its first frame, and resolve `ready` then; a failed load or first frame MUST fire `plot-error` with the message and keep the element's children. (v0.3.0)
-- REQ-EL-130: The element MUST use light DOM; whatever it holds before its chart's first frame (a server-rendered still) MUST stay until the drawn element replaces it. (v0.3.0)
-- REQ-EL-140: Disconnecting MUST stop drawing and free the chart; a load superseded by a later change or by removal MUST free what it made and draw nothing. (v0.3.0)
-- REQ-EL-150: The element MUST NOT be form-associated. (v0.3.0)
 
 ### 9.2 Mount and the JS API (MOUNT, JS, SSR)
 
-- REQ-MOUNT-010: `mount(el, chart, { input })` MUST draw into a `<pre>` (text) or a `<canvas>` according to the element given, and with `input` MUST turn pointer, wheel, touch and key events on `el` into `chart.input` calls and dispatch the events of REQ-EVENT-010 on `el`; `stop()` MUST remove every listener and observer and cancel the frame loop. (v0.3.0)
-- REQ-MOUNT-020: A chart MUST be drawn only while it intersects the viewport and the document is visible; `t` MUST advance only while a `motion` record is in flight. (v0.3.0)
-- REQ-JS-010: `chart(type, init)` and the returned `Chart`'s `data`, `append`, `options`, `view`, `input`, `frame`, `resize`, `text`, `table` and `free` MUST work with no DOM; a Node test MUST draw a frame and compare its text with the Rust crate's. (v0.3.0)
+- Shipped in v0.3.0 and moved to [SPEC.md](SPEC.md) §10.2: REQ-MOUNT-010, REQ-MOUNT-020.
+- Shipped in v0.3.0 and moved to [SPEC.md](SPEC.md) §10.2: REQ-JS-010.
 - REQ-SSR-010: `glyphplot/node` MUST export `renderText(type, init, cols, rows)` and `renderSVG(type, init, cols, rows)` that load the module from the package's files with no network, and its text MUST equal `glyphplot render <type> --format txt` for the same input. (v0.8.0)
 
 ### 9.3 Rendering (RENDER)
 
-- REQ-RENDER-010: On a canvas, a frame's draw cost MUST NOT depend on the number of distinct (glyph, colour) pairs: a braille scatter of 320 × 120 cells with every cell a different colour MUST draw within twice the time of the same frame in one colour in headless Chrome (`mise run bench:render`). [ADR-119](adr/119-no-glyph-and-colour-atlas.md) (v0.3.0)
-- REQ-RENDER-020: Block, quadrant, sextant, octant and wedge glyphs MUST be filled as exact shapes (`blocks.ts`), never drawn from the font. (v0.3.0)
-- REQ-RENDER-030: A frame MUST redraw only the cells whose glyph, ink or back changed since the last frame drawn; a crosshair move over an unchanged chart MUST redraw at most the cells of the old and new crosshair and readout. (v0.3.0)
+- Shipped in v0.3.0 and moved to [SPEC.md](SPEC.md) §10.3: REQ-RENDER-010, REQ-RENDER-020, REQ-RENDER-030, REQ-RENDER-050.
 - REQ-RENDER-040: A frame whose cells carry back colours SHOULD be drawn as one image of `cols × 2·rows` pixels scaled without smoothing, with other glyphs over it. (v0.5.0)
-- REQ-RENDER-050: The renderer (`fillText` per changed cell, or an atlas keyed by code point and tinted by compositing) MUST be the one the owner's Chrome and Safari measurements choose in v0.3.0, recorded in the plan with the numbers. (v0.3.0)
 
 ### 9.4 Font (FONT)
 
 - Shipped in v0.2.0 and moved to [SPEC.md](SPEC.md) §3.3: REQ-FONT-010.
 - REQ-FONT-020: The font SHOULD also cover U+00C0–00FF and U+0100–017F (tier B). (v0.5.0)
-- REQ-FONT-030: `@font-face` MUST load the font from `new URL("../fonts/glyphplot-mono.woff2", import.meta.url)` with `font-display: swap`, and every surface (the `<pre>`, the canvas, the SVG export) MUST put `"glyphplot mono"` first in its font stack. (v0.3.0)
+- Shipped in v0.3.0 and moved to [SPEC.md](SPEC.md) §10.4: REQ-FONT-030.
 
 ---
 
@@ -390,37 +332,25 @@ element's `type` names.
 
 ### 10.1 Theme (THEME)
 
-- REQ-THEME-010: The element MUST read the custom properties `--glyphplot-ground`, `--glyphplot-ink`, `--glyphplot-muted`, `--glyphplot-rule`, `--glyphplot-accent`, `--glyphplot-series-1` to `--glyphplot-series-8`, `--glyphplot-up`, `--glyphplot-down` and `--glyphplot-scale` from its computed style, each falling back to the default set; a `theme` property set to a theme object ([theme.schema.json](schemas/theme.schema.json): the same tokens, `series` as an array of up to eight) MUST win over them. [ADR-122](adr/122-theme-tokens-and-custom-properties.md) (v0.3.0)
-- REQ-THEME-020: Without a ground, a chart MUST draw no ground and MUST use the light default set when its computed `color` has luma `0.2126 r + 0.7152 g + 0.0722 b < 128`, the dark set otherwise. (v0.3.0)
-- REQ-THEME-030: The element MUST re-resolve its theme and repaint when `prefers-color-scheme` changes, when `<html>`'s `class`, `style` or `data-theme` changes, and when `theme` is set, without reloading its module or drawing a new frame. (v0.3.0)
-- REQ-THEME-040: Every default series, `up`, `down` and `accent` colour MUST have a WCAG 2.2 contrast ratio of at least 3:1 against its default ground, and `ink` and `muted` at least 4.5:1. [ADR-123](adr/123-colour-defaults-held-to-measured-bars.md) (v0.3.0)
-- REQ-THEME-050: Each default categorical palette MUST hold eight colours whose smallest pairwise CIEDE2000 difference is at least 15 under normal vision and under deuteranopia, protanopia and tritanopia simulated by Machado 2009 at severity 1.0 on linear sRGB. (v0.3.0)
+- Shipped in v0.3.0 and moved to [SPEC.md](SPEC.md) §11.1: REQ-THEME-010, REQ-THEME-020, REQ-THEME-030, REQ-THEME-040, REQ-THEME-050, REQ-THEME-070.
 - REQ-THEME-060: Up and down MUST be theme tokens, never fixed colours, and candles and bars MUST tell them apart by fill (hollow and solid) as well as by colour. (v0.5.0)
 - REQ-THEME-065: The default `up` and `down` tokens MUST be a blue and an orange at least 50 CIEDE2000 apart under normal vision and the three simulated deficiencies, overridable like every token. [ADR-123](adr/123-colour-defaults-held-to-measured-bars.md) (v0.5.0)
-- REQ-THEME-070: In a debug build, a page-set series colour under 3:1 against the resolved ground MUST log one warning naming the token and the ratio, and MUST still be used. (v0.3.0)
 - REQ-THEME-080: The default sequential scale (cividis) sampled at nine steps MUST be monotonic in L* with neighbours at least 5 ΔE00 apart under each of the four visions, its low end the end nearer the ground's lightness; the default diverging scale MUST run blue to orange with its middle on the ground's side. (v0.9.0)
 - REQ-THEME-090: The JS API, the CLI (`--theme <file.json>`), the Rust crate and the SVG and ANSI exports MUST accept a theme object with REQ-THEME-010's token names. (v0.8.0)
 - REQ-THEME-100: Under `forced-colors: active` the element MUST draw in one ink in `CanvasText` on `Canvas`, with the accent in `Highlight`; under `@media print` it SHOULD draw on paper. (v0.7.0)
 
 ### 10.2 One ink (MONO)
 
-- REQ-MONO-010: In one ink, line series 1–4 MUST draw with the dash patterns solid, 3 on 1 off, 1 on 1 off, and 3 on 1 off 1 on 1 off, counted in dot columns from the x scale's origin, so a pan by n whole dots shifts the pattern by n dots. [ADR-123](adr/123-colour-defaults-held-to-measured-bars.md) (v0.3.0)
+- Shipped in v0.3.0 and moved to [SPEC.md](SPEC.md) §11.2: REQ-MONO-010, REQ-MONO-040.
 - REQ-MONO-020: In one ink, series 5–8 MUST repeat patterns 1–4 and add a marker each from `● ○ ■ □ ▲ △ ◆ ◇`, at most one marker a cell. (v0.5.0)
 - REQ-MONO-030: In one ink, bar and area series MUST fill with `█ ▓ ▒ ░` by series. (v0.5.0)
-- REQ-MONO-040: The legend MUST draw each series' one-ink key (pattern, marker or fill) beside its name, in colour and in one ink. (v0.3.0)
 - REQ-MONO-050: With up to four series and room, a line chart SHOULD label each series at its last visible point. (v0.9.0)
 
 ---
 
 ## 11. Accessibility
 
-- REQ-A11Y-010: The element MUST have `role="figure"` and an accessible name from `label`, else `<chart type>: <series names>`; its drawing MUST have `role="img"` and an `aria-label` giving the chart type, the series names, each axis's title and visible domain in the resolved locale, rewritten at most once a second. [ADR-132](adr/132-figure-slider-and-hidden-table.md) (v0.3.0)
-- REQ-A11Y-020: The element MUST hold, in light DOM and visually hidden, a `<table>` with a caption, `th scope="col"` headers and a row header a row, of the data in the current view, at most 500 rows (downsampled, each bucket's minimum and maximum kept), its caption stating how many points the view holds when it holds more. (v0.3.0)
-- REQ-A11Y-030: An interactive chart MUST have exactly one tab stop, a `role="slider"` cursor whose `aria-valuetext` gives the cursor's x and each series' value there (up to four, then `and N more`), moved by the keys of the plan's [keys](../docs/IMPLEMENTATION_PLAN.md#keys) table, which `aria-keyshortcuts` MUST list. (v0.3.0)
-- REQ-A11Y-040: Every pan, zoom and brush done by dragging MUST also be possible with single clicks or taps: a control row (zoom out, zoom in, reset, step back, step on) shown on focus and hover, and click-click brushing. (v0.3.0)
-- REQ-A11Y-050: Under `prefers-reduced-motion: reduce` and without `motion`, view changes MUST jump with no animated transition. (v0.3.0)
-- REQ-A11Y-060: The focused chart MUST show a `:focus-visible` outline at least 2 px wide in `accent`, at least 3:1 against the ground. (v0.3.0)
-- REQ-A11Y-070: An axe-core scan of a page holding every chart, in light and dark, MUST find no violation of impact serious or critical. (v0.3.0)
+- Shipped in v0.3.0 and moved to [SPEC.md](SPEC.md) §11.3: REQ-A11Y-010, REQ-A11Y-020, REQ-A11Y-030, REQ-A11Y-040, REQ-A11Y-050, REQ-A11Y-060, REQ-A11Y-070.
 - REQ-A11Y-080: A chart receiving streamed data MUST support `paused` (property and attribute) and Space on the cursor: while paused it MUST keep appended data without drawing it, and on resume MUST show the live view. (v0.6.0)
 - REQ-A11Y-090: While data streams, the table MUST be rebuilt at most once a second and never while focus is inside it. (v0.6.0)
 - REQ-A11Y-100: With `announce="<seconds>"` (at least 5), a polite live region MUST announce the latest value at most once per interval, silent while paused or while the cursor has focus; without it there MUST be no live region. (v0.6.0)
@@ -444,8 +374,7 @@ default), and reaches `mise run size`, the contract and the benches through
 
 ### 12.2 Time (PERF)
 
-- REQ-PERF-010: Downsampling MUST be on by default for every chart that draws more points than its plot has dot columns. (v0.3.0)
-- REQ-PERF-020: A chart MUST redraw only when its data, options, view, size or theme changed since the last frame, and at most once a display frame. (v0.3.0)
+- Shipped in v0.3.0 and moved to [SPEC.md](SPEC.md) §16.4: REQ-PERF-010, REQ-PERF-020.
 - REQ-PERF-030: In a release build, every chart MUST average at most 4 ms a frame with no frame over 16 ms, over 300 frames of a view panning across a fixture of 1,000,000 points at 80 × 24 and 320 × 120 with default options, measured natively by `tests/budgets.rs`. (v0.4.0)
 - REQ-PERF-040: In a release build, every chart MUST average at most 1 ms a frame with no frame over 8 ms over the same play with a fixture of 100,000 points. (v0.4.0)
 - REQ-PERF-050: A pointer move (hit test, crosshair and readout) MUST average at most 0.5 ms with none over 2 ms over 300 moves across a chart holding 1,000,000 points, natively in release and in wasm in headless Chromium. (v0.4.0)
@@ -455,9 +384,7 @@ default), and reaches `mise run size`, the contract and the benches through
 
 ### 12.3 Memory (MEM)
 
-- REQ-MEM-010: A chart of capacity n points in two f64 columns MUST hold at most 16 × n bytes + 1 MiB of wasm memory, measured as the growth of `memory.buffer.byteLength` in Node from making the chart to its first frame. (v0.3.0)
-- REQ-MEM-020: The element MUST load a typed-array column into wasm memory with at most one copy. (v0.3.0)
-- REQ-MEM-030: Replacing a chart's data with data of the same or smaller size, or freeing a chart and making another of the same capacity, MUST NOT grow wasm memory. (v0.3.0)
+- Shipped in v0.3.0 and moved to [SPEC.md](SPEC.md) §16.4: REQ-MEM-010, REQ-MEM-020, REQ-MEM-030.
 
 ### 12.4 Benches (BENCH)
 
@@ -469,16 +396,10 @@ default), and reaches `mise run size`, the contract and the benches through
 ## 13. Testing
 
 - Shipped in v0.1.0 and moved to [SPEC.md](SPEC.md) §17: REQ-TEST-010.
-- REQ-TEST-020: The Node tests (`web/test/*.test.mjs`) MUST run against the release modules in `web/pkg` and against a debug build, find modules with the shell's own compiled `moduleOf`, and run the panic tests against the debug build only. (v0.3.0)
-- REQ-TEST-030: Browser behaviour on real devices (pixels, fonts, touch, screen readers, Safari) MUST be checked by the owner; agents check headless and hand the manual checks over as a list. (v0.3.0)
-- REQ-TEST-040: `site/test.html` MUST be a plain HTML checklist page (no Elm) with one `<glyph-plot>` per rendering and interaction case and a button that copies the pass as Markdown. (v0.3.0)
-- REQ-E2E-010: `mise run test:site` MUST run Playwright in headless Chromium against `vite preview` of the release build of `site/`. (v0.3.0)
-- REQ-E2E-020: `site/e2e/interaction.spec.ts` MUST cover pointer hover with its event, drag pan, wheel zoom, keyboard cursor, pan, zoom, reset and escape, a brush, and touch scrub, pan and pinch driven through CDP `Input.dispatchTouchEvent`. (v0.3.0)
-- REQ-E2E-030: `site/e2e/element.spec.ts` MUST cover attributes and properties, `view` set and read, a module fetched once for many tags, calls queued before load, and teardown and freeing on attribute changes and removal. (v0.3.0)
-- REQ-E2E-040: `site/e2e/resize.spec.ts` MUST show that a change of container width changes `cols`, keeps the view in data units and logs no console error. (v0.3.0)
+- Shipped in v0.3.0 and moved to [SPEC.md](SPEC.md) §17: REQ-TEST-020, REQ-TEST-030, REQ-TEST-040.
+- Shipped in v0.3.0 and moved to [SPEC.md](SPEC.md) §17: REQ-E2E-010, REQ-E2E-020, REQ-E2E-030, REQ-E2E-040, REQ-E2E-070.
 - REQ-E2E-050: `site/e2e/streaming.spec.ts` MUST append at 1 kHz for a second and then find the frame equal to a replace of the same rows. (v0.6.0)
 - REQ-E2E-060: Every chart type's page on the site MUST draw a first frame with nothing on the console. (v0.7.0)
-- REQ-E2E-070: `mise run check` MUST run `test:site --smoke` (a chart's first frame, a hover, a drag, a wheel, a key and the axe scans, under 60 s); `signoff` MUST run all of `test:site`. (v0.3.0)
 
 ---
 
@@ -581,7 +502,7 @@ command verifies; real-browser checks are the owner's (REQ-TEST-030).
 |---|---|---|---|
 | v0.1.0 (built 2026-10-18) | 0 · Toolchain green | ARCH-010, 040, 060, 070; INDEP-010–020; BUILD-010–030, 050, 060; LINT-010, 030; CI-010; SIZE-010–040; TEST-010; PKG-040 | `mise run check` exits 0 on an empty family; `mise run size` prints the empty module |
 | v0.2.0 (built 2026-10-18) | 1 · Core | GRID, CANVAS, COLOR-010–040, DATA-010–040, 080–090, 110, 130, SCALE-010–030, TICK-010–040, FMT-010–030, TZ-010, I18N-030–040, LAYOUT-010–030, TEXT, FIX-010, REF-010, PROP-010, FONT-010, BUILD-070, LINT-040, SIZE-060 | `mise run test:rust`: reference fixtures 0 differ; properties pass; `fixtures` regenerates bitwise |
-| v0.3.0 | 2 · Line end to end | the `line` type; VIEW-010–050; INPUT; HIT-010–020; OVERLAY; EVENT-010–030; KEY; TOUCH; CHART; OPT; REG; CONTRACT-010–020; SNAP; WASM; MANIFEST; LOAD; EL (most); MOUNT; JS; RENDER-010–030, 050; FONT-030; THEME-010–050, 070; MONO-010, 040; A11Y-010–070; PERF-010–020; MEM; DATA-050–070, 120; STREAM-060; SAMPLE-010–030; I18N-010–020, 050; FMT-060; CANVAS-040; EL-085; LAYOUT-040, 070; CHAR; TEST-020–040; E2E-010–040, 070; BUILD-040, 080; LINT-020; ARCH-020–050 | `mise run check`; `mise run test:site` (interaction, element, resize, axe) |
+| v0.3.0 (built 2026-10-19) | 2 · Line end to end | the `line` type; VIEW-010–050; INPUT; HIT-010–020; OVERLAY; EVENT-010–030; KEY; TOUCH; CHART; OPT; REG; CONTRACT-010–020; SNAP; WASM; MANIFEST; LOAD; EL (most); MOUNT; JS; RENDER-010–030, 050; FONT-030; THEME-010–050, 070; MONO-010, 040; A11Y-010–070; PERF-010–020; MEM; DATA-050–070, 120; STREAM-060; SAMPLE-010–030; I18N-010–020, 050; FMT-060; CANVAS-040; EL-085; LAYOUT-040, 070; CHAR; TEST-020–040; E2E-010–040, 070; BUILD-040, 080; LINT-020; ARCH-020–050 | `mise run check`; `mise run test:site` (interaction, element, resize, axe) |
 | v0.4.0 | 3 · Contract and budgets | CONTRACT-030, 050, 060; PERF-030–060, 080; SIZE-050; BENCH; CI-020; BUILD-090 | `cargo test --profile contract --test contract --test budgets`; `mise run bench`; `mise run signoff` on the branch |
 | v0.5.0 | 4 · Candles, bar, sparkline | CANDLE-010–050; BAR-010–020; SPARK-010; SCALE-040–060; TICK-050–070; FMT-040–050; TZ-020–030, 050; LAYOUT-050–060; AXIS; ANNOT; LINK; EL-030, 050, 110; EVENT-010 (`plot-brush`, `plot-legend`); SAMPLE-040, 060; DATA-100; THEME-060, 065; MONO-020–030; RENDER-040; FONT-020; FIX-020 | contract and snapshots for the three types; the owner's candlestick on the checklist page |
 | v0.6.0 | 5 · Streaming | STREAM-010–050, 070; VIEW-060; CANDLE-060; CONTRACT-040; DATA-140–150; A11Y-080–100; PERF-070; E2E-050; EVENT-010 (`plot-data`) | `streaming.spec.ts`; `bench:web` streaming row; the owner's one-line test on a phone |
