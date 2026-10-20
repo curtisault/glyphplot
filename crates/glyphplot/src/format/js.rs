@@ -107,6 +107,61 @@ pub fn log10(x: f64) -> f64 {
     super::fdlibm::log10(x)
 }
 
+/// JavaScript's `Math.log(x)` as V8 computes it (fdlibm's).
+pub fn log(x: f64) -> f64 {
+    super::fdlibm::log(x)
+}
+
+/// JavaScript's `Math.log2(x)`: the platform's `log2`, which is exact on
+/// powers of two as V8's is; elsewhere they may differ in the last bit
+/// **(unverified)**, which moves a log scale's ticks only where `floor` or
+/// `round` of the logarithm sits within that bit of an integer.
+pub fn log2(x: f64) -> f64 {
+    x.log2()
+}
+
+/// JavaScript's `Math.pow(base, x)` for the log scale's integer powers:
+/// exact by repeated squaring while the result is an integer below 2⁵³ (and
+/// so for every power of two), its reciprocal correctly rounded for a
+/// negative `x`; the platform's `powf` otherwise **(unverified against
+/// V8)**.
+pub fn pow(base: f64, x: f64) -> f64 {
+    if x.is_nan() || base.is_nan() {
+        return f64::NAN;
+    }
+    if x == x.trunc() && x.abs() <= 1100.0 && base == base.trunc() && base.abs() >= 2.0 {
+        if base == 2.0 {
+            return pow2(x as i32);
+        }
+        let (mut acc, mut b, mut n) = (1.0f64, base.abs(), x.abs() as u32);
+        while n > 0 && acc.abs() < 9_007_199_254_740_992.0 {
+            if n & 1 == 1 {
+                acc *= b;
+            }
+            b *= b;
+            n >>= 1;
+        }
+        if n == 0 && acc.abs() <= 9_007_199_254_740_992.0 {
+            let acc = if base < 0.0 && (x.abs() as u32) & 1 == 1 { -acc } else { acc };
+            return if x < 0.0 { 1.0 / acc } else { acc };
+        }
+    }
+    base.powf(x)
+}
+
+/// 2ⁿ exactly, subnormal or infinite as it falls.
+fn pow2(n: i32) -> f64 {
+    if n > 1023 {
+        f64::INFINITY
+    } else if n >= -1022 {
+        f64::from_bits(((n + 1023) as u64) << 52)
+    } else if n >= -1074 {
+        f64::from_bits(1u64 << (n + 1074))
+    } else {
+        0.0
+    }
+}
+
 /// JavaScript's `Math.floor(Math.log10(x))`.
 pub fn floor_log10(x: f64) -> f64 {
     log10(x).floor()

@@ -1,5 +1,7 @@
-//! UTC calendar arithmetic and a strftime subset; the core reads no clock,
-//! zone or tzdata (REQ-TZ-010).
+//! Calendar arithmetic in UTC and over zone tables, and a strftime subset;
+//! the core reads no clock, zone or tzdata (REQ-TZ-010): local time comes
+//! only from a [`Zone::Table`] the shell built (REQ-TZ-020, REQ-TZ-030;
+//! `local.rs` holds JavaScript's local `Date` and d3-time's local intervals).
 //!
 //! Times are milliseconds since 1970-01-01T00:00:00Z as `f64`, as in
 //! JavaScript's `Date`, which also bounds them to ±8.64 × 10¹⁵ ms and
@@ -14,15 +16,23 @@
 //!   `hour.js`, `day.js` (`unixDay`), `week.js` (`utcSunday`), `month.js`,
 //!   `year.js`, `millisecond.js`; ISC licence, © Mike Bostock) (REQ-TICK-020).
 //! - [`utc_tick_label`] is d3-scale 4.0.2's default multi-scale tick format
-//!   for `scaleUtc` (`src/time.js`, ISC), and [`strftime`] the d3-time-format
-//!   4.1.0 `utcFormat` directives it needs and REQ-FMT-050 lists
-//!   (`src/locale.js`, ISC).
+//!   for `scaleUtc` (`src/time.js`, ISC), on a 24-hour clock unless the
+//!   locale's is 12-hour (REQ-FMT-050), and [`strftime`] the d3-time-format
+//!   4.1.0 `utcFormat` directives REQ-FMT-050 lists (`src/locale.js`, ISC);
+//!   [`check_pattern`] refuses any other.
 
 // d3 tests `!(x < y)` so that NaN and invalid dates take the same branch; so does this port.
 #![allow(clippy::neg_cmp_op_on_partial_ord)]
 
-use crate::format::js;
+use std::sync::Arc;
+
+use crate::format::{js, FormatError};
+use crate::locale::ZoneTable;
 use crate::ticks::{tick_step, MAX_TICKS};
+
+mod local;
+
+pub use local::Tz;
 
 /// One second in milliseconds.
 pub const SECOND: f64 = 1000.0;
@@ -42,15 +52,88 @@ pub const YEAR: f64 = 365.0 * DAY;
 /// The largest |t| a JavaScript `Date` holds: 100,000,000 days.
 const MAX_TIME: f64 = 8.64e15;
 
-/// The zone a time scale draws its ticks and labels in. Only UTC exists
-/// until offset tables arrive from the shell (REQ-TZ-020, v0.5.0); the core
-/// never reads the machine's zone or tzdata, and UTC is the default
-/// (REQ-TZ-010).
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+/// The zone a time scale draws its ticks and labels in: UTC, the default
+/// (REQ-TZ-010), or a table of offset transitions the shell built
+/// (`spec/schemas/zone.schema.json`, REQ-TZ-020). The core never reads the
+/// machine's zone or tzdata; local time comes only from the table
+/// (REQ-TZ-030).
+#[derive(Clone, Debug, Default, PartialEq)]
 pub enum Zone {
-    /// Coordinated Universal Time.
+    /// Coordinated Universal Time: d3's `scaleUtc` ticks and labels.
     #[default]
     Utc,
+    /// Local time by a zone table: d3's `scaleTime` ticks and labels as
+    /// JavaScript gives them under `TZ=<zone>`.
+    Table(Arc<ZoneTable>),
+}
+
+impl Zone {
+    /// The zone a table gives: [`Zone::Table`].
+    pub fn table(table: ZoneTable) -> Zone {
+        Zone::Table(Arc::new(table))
+    }
+
+    /// Local time minus UTC at the instant `t`, in minutes.
+    pub fn offset_minutes(&self, t: f64) -> i32 {
+        match self {
+            Zone::Utc => 0,
+            Zone::Table(table) => table.offset_at(t),
+        }
+    }
+
+    /// The calendar fields of `t` in this zone; None for an invalid date.
+    pub fn civil(&self, t: f64) -> Option<Civil> {
+        match self {
+            Zone::Utc => Civil::utc(t),
+            Zone::Table(table) => Tz(table).fields(time_clip(t)?),
+        }
+    }
+
+    /// About `count` calendar-aligned ticks from `start` to `stop`
+    /// inclusive: d3-time's `utcTicks` in UTC (REQ-TICK-020), its `timeTicks`
+    /// as JavaScript runs it under `TZ=<zone>` over a table (REQ-TZ-030).
+    pub fn ticks(&self, start: f64, stop: f64, count: f64) -> Vec<f64> {
+        match self {
+            Zone::Utc => utc_ticks(start, stop, count),
+            Zone::Table(table) => local::ticks(table, start, stop, count),
+        }
+    }
+
+    /// The domain widened outwards to the tick interval for `count` ticks:
+    /// d3-scale's `scaleUtc().nice(count)`, or `scaleTime().nice(count)` over
+    /// a table.
+    pub fn nice(&self, start: f64, stop: f64, count: f64) -> [f64; 2] {
+        match self {
+            Zone::Utc => utc_nice(start, stop, count),
+            Zone::Table(table) => local::nice(table, start, stop, count),
+        }
+    }
+
+    /// The pattern d3-scale's multi-scale labels choose for `t` in this
+    /// zone, on the locale's hour cycle (REQ-FMT-010, REQ-FMT-050); None for
+    /// an invalid date.
+    pub fn tick_pattern(&self, t: f64, locale: &TimeLocale) -> Option<&'static str> {
+        match self {
+            Zone::Utc => utc_tick_pattern(t, locale),
+            Zone::Table(table) => local::tick_pattern(table, t, locale),
+        }
+    }
+
+    /// d3-scale's multi-scale tick label of `t` in this zone, on the
+    /// locale's hour cycle (REQ-FMT-010, REQ-FMT-050).
+    pub fn tick_label(&self, t: f64, locale: &TimeLocale, out: &mut String) {
+        if let Some(pattern) = self.tick_pattern(t, locale) {
+            self.strftime(pattern, t, locale, out);
+        }
+    }
+
+    /// `pattern`, the strftime subset (REQ-FMT-050), applied to `t` in this
+    /// zone; `%Z` writes the zone's offset at `t` (`-0400`, `+0530`). An
+    /// invalid date writes nothing.
+    pub fn strftime(&self, pattern: &str, t: f64, locale: &TimeLocale, out: &mut String) {
+        let Some(c) = self.civil(t) else { return };
+        write_pattern(pattern, &c, self.offset_minutes(t), locale, out);
+    }
 }
 
 /// JavaScript's `TimeClip`: the time truncated to a whole millisecond, or
@@ -121,11 +204,17 @@ impl Civil {
     /// The UTC fields of `t` ms since the epoch, as JavaScript's
     /// `getUTC*` give them for `new Date(t)`; None for an invalid date.
     pub fn utc(t: f64) -> Option<Civil> {
-        let t = time_clip(t)? as i64;
+        Some(Civil::of(time_clip(t)? as i64))
+    }
+
+    /// The fields of `t` ms counted from 1970-01-01T00:00:00 on some clock,
+    /// unclipped: UTC's for an instant, local time's for an instant plus its
+    /// offset.
+    pub fn of(t: i64) -> Civil {
         let days = t.div_euclid(86_400_000);
         let ms = t.rem_euclid(86_400_000);
         let (year, month, day) = civil_from_days(days);
-        Some(Civil {
+        Civil {
             year,
             month,
             day,
@@ -135,7 +224,7 @@ impl Civil {
             millisecond: (ms % 1000) as u32,
             weekday: weekday_from_days(days),
             yday: (days - days_from_civil(year, 1, 1) + 1) as u32,
-        })
+        }
     }
 }
 
@@ -349,9 +438,13 @@ pub fn utc_nice(start: f64, stop: f64, count: f64) -> [f64; 2] {
 }
 
 /// The names a date label uses: d3-time-format's locale definition, en-US by
-/// default. A locale pack replaces it from v0.5.0 (REQ-FMT-050).
+/// default. A locale pack replaces it (REQ-FMT-050).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TimeLocale {
+    /// Whether the multi-scale labels use a 12-hour clock (`01 PM`,
+    /// `01:30`) as d3's do, or a 24-hour one (`13:00`, `13:30`): the locale
+    /// pack's hour cycle (REQ-FMT-050). en-US's, the default, is 12-hour.
+    pub hour12: bool,
     /// `%p`: before and after noon.
     pub periods: [String; 2],
     /// `%A`: weekdays from Sunday.
@@ -367,6 +460,7 @@ pub struct TimeLocale {
 impl Default for TimeLocale {
     fn default() -> TimeLocale {
         TimeLocale {
+            hour12: true,
             periods: ["AM", "PM"].map(String::from),
             days: ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"].map(String::from),
             days_short: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(String::from),
@@ -401,13 +495,48 @@ fn pad(value: i64, fill: Option<char>, width: usize, out: &mut String) {
     out.extend(digits[i..].iter().map(|&b| char::from(b)));
 }
 
+/// The directives of the strftime subset (REQ-FMT-050), and `%` for a
+/// literal percent sign.
+pub const DIRECTIVES: &str = "YmdeHIMSLpaAbBjZ%";
+
+/// Whether `pattern` keeps to the strftime subset `%Y %m %d %e %H %I %M %S
+/// %L %p %a %A %b %B %j %Z` (and `%%`), each directive with an optional pad
+/// modifier `-`, `_` or `0`; anything else is an error naming the option it
+/// came from (REQ-FMT-050).
+pub fn check_pattern(option: &str, pattern: &str) -> Result<(), FormatError> {
+    let error = |reason| Err(FormatError { option: option.into(), specifier: pattern.into(), reason, date: true });
+    let mut chars = pattern.chars();
+    while let Some(ch) = chars.next() {
+        if ch != '%' {
+            continue;
+        }
+        let d = match chars.next() {
+            Some('-' | '_' | '0') => chars.next(),
+            d => d,
+        };
+        match d {
+            None => return error("it ends inside a directive"),
+            Some(d) if DIRECTIVES.contains(d) => {}
+            Some(_) => return error("a directive is not one of %Y %m %d %e %H %I %M %S %L %p %a %A %b %B %j %Z and %%"),
+        }
+    }
+    Ok(())
+}
+
 /// d3-time-format's `utcFormat(pattern)` applied to `t`, for the directives
 /// `%a %A %b %B %d %e %H %I %j %L %m %M %p %S %Y %Z %%`, each with an
 /// optional pad modifier `-` (none), `_` (spaces) or `0` (zeros). Another
-/// letter after `%` is written as itself, as d3 does. An invalid date writes
+/// letter after `%` is written as itself, as d3 does; [`check_pattern`]
+/// refuses such a pattern where an option gives it. An invalid date writes
 /// nothing.
 pub fn strftime(pattern: &str, t: f64, locale: &TimeLocale, out: &mut String) {
     let Some(c) = Civil::utc(t) else { return };
+    write_pattern(pattern, &c, 0, locale, out);
+}
+
+/// `pattern` written from calendar fields, with `offset` (minutes east of
+/// UTC) for `%Z` as d3-time-format's `formatZone` writes it.
+fn write_pattern(pattern: &str, c: &Civil, offset: i32, locale: &TimeLocale, out: &mut String) {
     let mut chars = pattern.chars();
     while let Some(ch) = chars.next() {
         if ch != '%' {
@@ -435,7 +564,7 @@ pub fn strftime(pattern: &str, t: f64, locale: &TimeLocale, out: &mut String) {
             'B' => out.push_str(&locale.months[c.month as usize - 1]),
             'd' | 'e' => pad(i64::from(c.day), fill, 2, out),
             'H' => pad(i64::from(c.hour), fill, 2, out),
-            'I' => pad(i64::from(if c.hour % 12 == 0 { 12 } else { c.hour % 12 }), fill, 2, out),
+            'I' => pad(i64::from(if c.hour.is_multiple_of(12) { 12 } else { c.hour % 12 }), fill, 2, out),
             'j' => pad(i64::from(c.yday), fill, 3, out),
             'L' => pad(i64::from(c.millisecond), fill, 3, out),
             'm' => pad(i64::from(c.month), fill, 2, out),
@@ -443,29 +572,40 @@ pub fn strftime(pattern: &str, t: f64, locale: &TimeLocale, out: &mut String) {
             'p' => out.push_str(&locale.periods[usize::from(c.hour >= 12)]),
             'S' => pad(i64::from(c.second), fill, 2, out),
             'Y' => pad(c.year % 10_000, fill, 4, out),
-            'Z' => out.push_str("+0000"),
+            'Z' => {
+                // d3: `z = getTimezoneOffset()`, "-" when z > 0, else "+" and |z|.
+                out.push(if offset < 0 { '-' } else { '+' });
+                let z = i64::from(offset.unsigned_abs());
+                pad(z / 60, Some('0'), 2, out);
+                pad(z % 60, Some('0'), 2, out);
+            }
             other => out.push(other),
         }
     }
 }
 
-/// d3-scale's default `scaleUtc().tickFormat()` for one tick: the finest
-/// field the time is not on a boundary of decides the pattern, `.%L`,
-/// `:%S`, `%I:%M`, `%I %p`, `%a %d` (not a Sunday), `%b %d`, `%B` or `%Y`
-/// (REQ-FMT-010). An invalid date writes nothing.
-pub fn utc_tick_label(t: f64, locale: &TimeLocale, out: &mut String) {
-    let Some(t) = time_clip(t) else { return };
-    // d3 asks `interval(date) < date`; near the ends of a Date's range the
-    // floor itself can be out of range, an invalid date that compares false.
-    let after = |unit| Interval { unit, step: 1.0 }.floor(t).is_some_and(|f| f < t);
-    let pattern = if after(Unit::Second) {
+/// d3-scale's multi-scale pattern for a time, given whether it lies after
+/// the start of its second, minute, hour, day, week and year: `.%L`, `:%S`,
+/// `%I:%M`, `%I %p`, `%a %d` (not a Sunday), `%b %d`, `%B` or `%Y`. On a
+/// 24-hour clock (the locale's hour cycle, REQ-FMT-050) minutes and hours
+/// are both `%H:%M`.
+fn multi_pattern(after: impl Fn(Unit) -> bool, hour12: bool) -> &'static str {
+    if after(Unit::Second) {
         ".%L"
     } else if after(Unit::Minute) {
         ":%S"
     } else if after(Unit::Hour) {
-        "%I:%M"
+        if hour12 {
+            "%I:%M"
+        } else {
+            "%H:%M"
+        }
     } else if after(Unit::Day) {
-        "%I %p"
+        if hour12 {
+            "%I %p"
+        } else {
+            "%H:%M"
+        }
     } else if after(Unit::Month) {
         if after(Unit::Week) {
             "%a %d"
@@ -476,8 +616,29 @@ pub fn utc_tick_label(t: f64, locale: &TimeLocale, out: &mut String) {
         "%B"
     } else {
         "%Y"
-    };
-    strftime(pattern, t, locale, out);
+    }
+}
+
+/// The pattern of d3-scale's default `scaleUtc().tickFormat()` for `t`
+/// (REQ-FMT-010) on the locale's hour cycle (REQ-FMT-050); None for an
+/// invalid date.
+pub fn utc_tick_pattern(t: f64, locale: &TimeLocale) -> Option<&'static str> {
+    let t = time_clip(t)?;
+    // d3 asks `interval(date) < date`; near the ends of a Date's range the
+    // floor itself can be out of range, an invalid date that compares false.
+    let after = |unit| Interval { unit, step: 1.0 }.floor(t).is_some_and(|f| f < t);
+    Some(multi_pattern(after, locale.hour12))
+}
+
+/// d3-scale's default `scaleUtc().tickFormat()` for one tick: the finest
+/// field the time is not on a boundary of decides the pattern, `.%L`,
+/// `:%S`, `%I:%M`, `%I %p`, `%a %d` (not a Sunday), `%b %d`, `%B` or `%Y`
+/// (REQ-FMT-010); on a 24-hour locale `%H:%M` for minutes and hours
+/// (REQ-FMT-050). An invalid date writes nothing.
+pub fn utc_tick_label(t: f64, locale: &TimeLocale, out: &mut String) {
+    if let Some(pattern) = utc_tick_pattern(t, locale) {
+        strftime(pattern, t, locale, out);
+    }
 }
 
 #[cfg(test)]

@@ -30,7 +30,7 @@ use serde::Deserialize;
 use crate::annotate::{self, Annotation, Mark};
 use crate::cells::Axis;
 use crate::format::Locale;
-use crate::scale::{resolve_domain, AxisFormat, Domain, DomainError, Extents, Kind, Scale, ScaleOptions, ScaleType};
+use crate::scale::{resolve_domain, AxisFormat, Domain, DomainError, Extents, Kind, Scale, ScaleOptions};
 use crate::text;
 use crate::ticks::mark;
 
@@ -171,9 +171,7 @@ pub fn fit_ticks(side: Side, kind: Kind, domain: [f64; 2], len: usize, format: &
     let (per_tick, gap) = if x { (X_CELLS_PER_TICK, X_GAP) } else { (Y_ROWS_PER_TICK, Y_GAP) };
     let axis = if x { Axis::x(lo, hi, len, X_DOTS) } else { Axis::y(lo, hi, len, Y_DOTS) };
     let range = [0.0, len as f64];
-    // The scale of `kind` over the axis: its ticks and labels are scale.rs's,
-    // whatever the kind.
-    let scale = Scale { kind, ..Scale::linear([lo, hi], range) };
+    let scale = Scale::new(kind, [lo, hi], range);
     let mut fallback = Vec::new();
     let mut tried: Vec<f64> = Vec::new();
     for count in (1..=(len / per_tick).max(1)).rev() {
@@ -280,10 +278,7 @@ impl AxisInput {
     /// A shown, unnamed axis of `kind` over the data's extent, unniced, with
     /// the automatic format and no gridlines.
     pub fn new(kind: Kind) -> AxisInput {
-        // The option type is not read by layout; a time scale's is written
-        // for the reader, any other kind's left linear.
-        let kind_type = if kind == Kind::Time { ScaleType::Time } else { ScaleType::Linear };
-        let format = if kind == Kind::Time { AxisFormat::Time(None) } else { AxisFormat::default() };
+        let (kind_type, format) = (kind.scale_type(), AxisFormat::default_for(kind));
         let scale =
             ScaleOptions { kind: kind_type, domain: Domain::Data, nice: None, zero: None, padding: None, base: None, constant: None, zone: None, scheme: None };
         AxisInput { name: String::new(), kind, scale, format, shown: true, grid: false, context: false }

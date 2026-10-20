@@ -393,13 +393,13 @@ pub(super) fn count(n: usize, locale: &Locale) -> String {
 /// to the millisecond when the view spans under ten seconds, else a number.
 pub(super) fn x_label(v: f64, kind: Kind, span: f64, locale: &Locale) -> String {
     match kind {
-        Kind::Linear => number(v, locale),
         Kind::Time => {
             let pattern = if span < 10_000.0 { "%Y-%m-%d %H:%M:%S.%L" } else { "%Y-%m-%d %H:%M:%S" };
             let mut out = String::new();
             crate::time::strftime(pattern, v, &locale.time, &mut out);
             out
         }
+        _ => number(v, locale),
     }
 }
 

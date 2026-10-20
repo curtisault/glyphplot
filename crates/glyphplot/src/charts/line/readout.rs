@@ -120,13 +120,13 @@ pub(super) fn text(data: &Prepared, view: &View, geom: &Geom, locale: &Locale, f
     out.push_str(&data.x_name);
     out.push(' ');
     match data.kind {
-        Kind::Linear => formats.number(x, geom.x_step, &near_x, locale, &mut out),
         Kind::Time => {
             let second = |v: f64| (v / 1000.0).floor();
             let close = near_x.iter().any(|&n| n.is_finite() && n != x && second(n) == second(x));
             let span = if close { 0.0 } else { geom.x.hi() - geom.x.lo() };
             out.push_str(&draw::x_label(x, Kind::Time, span, locale));
         }
+        _ => formats.number(x, geom.x_step, &near_x, locale, &mut out),
     }
     if let Some(series) = &c.series {
         out.push_str("  ");
