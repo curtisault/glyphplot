@@ -319,7 +319,10 @@ them.
 ### 5.2 Ticks
 
 `ticks::ticks` and `time::utc_ticks` are d3's; `layout::fit_ticks` fits
-them to an axis by lowering the count (ADR-111).
+them to an axis by lowering the count (ADR-111). `layout::fit_scale_ticks`
+does the same over a built `Scale`, so its zone, log base, row timestamps
+and category names reach the ticks, and places log and symlog marks by the
+scale's transform.
 
 - REQ-TICK-010: Linear ticks MUST equal d3-array 3.2.4's `ticks(a, b, count)` exactly for every case of the captured fixture file, natively and in wasm. Note: (v0.2.0)
 - REQ-TICK-020: UTC time ticks MUST equal d3-time 3.1.0's `utcTicks(a, b, count)` exactly for every case of the captured fixture file. Note: (v0.2.0)
@@ -440,6 +443,14 @@ fills under 0.75 of the niced one. The readout names x and the series in the
 axis's format with digits enough to tell neighbouring data apart. Natively a
 frame over 1k of 1M points takes 0.034 ms at 80 × 24 against 2.47 ms for all
 1M (contract profile, medians).
+
+From v0.5.0 the folder also plays `sparkline` (`spark.rs`, REQ-SPARK-010 in
+the roadmap): modes `line`, `area` and `column`, a band of rows a series and
+no axes, a text column of each series' label, latest value and extent, and
+a ring of `capacity` rows (1,000,000 by default). The line chart ticks and
+labels time in `Env.zone`'s table, draws the date context row under a time
+span of under two days, and writes ticks, readouts and table cells under a
+column's `scale`, `offset` and `unit`.
 
 - REQ-LINE-010: The `line` type MUST draw the modes `line`, `step` (`before`, `after`, `middle`) and `area` (to a baseline), each with snapshots. Note: (v0.3.0)
 - REQ-LINE-020: A frame over 1,000 visible points of 1,000,000 held MUST take under a tenth of the time of a frame over all 1,000,000. Note: (v0.3.0)

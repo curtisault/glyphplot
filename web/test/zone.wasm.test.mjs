@@ -1,7 +1,7 @@
 // The zone tables the shell builds (zone.ts) are what zone.schema.json
 // describes and what the module's `set_zone` takes (REQ-TZ-020); and the
-// core draws local-time ticks by them (REQ-TZ-030), checked as a todo until
-// it does.
+// line chart draws local-time ticks by them (REQ-TZ-030), with the date
+// context row under a span of under two days (REQ-TICK-070).
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { zoneTable } from "../src/zone.ts";
@@ -53,14 +53,13 @@ async function draw(table) {
   }
 }
 
-test(`${BUILD}: local-time ticks follow the zone table (REQ-TZ-030)`, async (t) => {
+test(`${BUILD}: local-time ticks follow the zone table (REQ-TZ-030)`, async () => {
   const span = [START - 2 * 86_400_000, START + 4 * 86_400_000];
   const utc = await draw(zoneTable("UTC", ...span));
   const india = await draw(zoneTable("+05:30", ...span));
-  if (utc === india) {
-    // The core keeps the table (crates/wasm `set_zone`) but its time scale draws UTC (time.rs `Zone::Utc` only).
-    t.todo("the core draws time ticks in UTC whatever the zone table; another agent adds the zone to the time scale (REQ-TZ-030)");
-    return;
-  }
   assert.notEqual(utc, india, "a +05:30 table moves the ticks to local midnights and hours");
+  // 48 hours span under two days: the context row dates each local day.
+  const last = (frame) => frame.split("\n").at(-1);
+  assert.match(last(utc), /Mar 7/);
+  assert.match(last(utc), /Mar 8/);
 });

@@ -8,7 +8,10 @@
 //
 // - `debug_reference(file, line) -> string`: the core's answer to one case
 //   line of tests/fixtures/<file>, written as the file writes its expected
-//   part (numbers as JavaScript's String(x), separated as in the file);
+//   part (numbers as JavaScript's String(x), separated as in the file); a
+//   `zone` line of zone-ticks.txt sets the zone the lines after it are
+//   answered in and answers with the zone's name, so a file's lines go to it
+//   in order;
 // - `debug_fixture_digest(name) -> string`: the digest of the fixture the
 //   module generates, as `{:#018x}` (fixtures::digest).
 import { test } from "node:test";
@@ -26,9 +29,10 @@ const cases = (file) => readFileSync(join(CAPTURES, file), "utf8").split("\n").f
 
 /** The expected part of a case line, and whether it is numbers. */
 function expected(file, line) {
-  if (file === "format.txt" || file === "time-format.txt") {
+  if (file === "zone-ticks.txt" && line.startsWith("zone ")) return { text: line.split(" ")[1], numbers: false };
+  if (file === "format.txt" || file === "time-format.txt" || line.includes("\t")) {
     const f = line.split("\t");
-    const at = { fixed: 3, exponential: 3, precision: 3, string: 2, format: 3, tick: 5, label: 2, strftime: 3 }[f[0]];
+    const at = file === "log.txt" ? { format: 6 }[f[0]] : { fixed: 3, exponential: 3, precision: 3, string: 2, format: 3, tick: 5, label: 2, strftime: 3 }[f[0]];
     assert.ok(at !== undefined, `unknown case ${f[0]}`);
     return { text: f.slice(at).join("\t"), numbers: false };
   }
@@ -49,6 +53,9 @@ for (const [file, reqs] of [
   ["time-ticks.txt", "REQ-TICK-020"],
   ["format.txt", "REQ-FMT-010"],
   ["time-format.txt", "REQ-FMT-030"],
+  ["log.txt", "REQ-SCALE-040, REQ-TICK-060"],
+  ["zone-ticks.txt", "REQ-TZ-030"],
+  ["lttb.txt", "REQ-SAMPLE-060"],
 ]) {
   test(`${BUILD}: ${file} in wasm equals the d3 capture bitwise (${reqs}, REQ-REF-010)`, { skip: debugOnly && "the reference exports are debug-only" }, () => {
     const bad = [];
@@ -77,5 +84,7 @@ test(`${BUILD}: the reference exports are the debug build's alone, and refuse wh
   }
   assert.throws(() => reference("nope.txt", "1 2 3 : 4"), /no capture file/);
   assert.throws(() => reference("ticks.txt", "spin 0 1 2 : 3"), /unknown case/);
+  assert.throws(() => reference("log.txt", "spin 10 1 10 : 1"), /unknown case/);
+  assert.throws(() => reference("lttb.txt", "spin 1 2 3 : 0"), /unknown case/);
   assert.throws(() => digest("no-such-fixture"), /no fixture named/);
 });

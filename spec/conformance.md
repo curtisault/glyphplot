@@ -144,7 +144,7 @@ Several checks may be listed for one requirement, separated by commas.
 | REQ-DATA-070 | v0.3.0 | `web/test/data.wasm.test.mjs` (replace at most 10 ms, median of 5), `web/test/memory.test.mjs` | yes |
 | REQ-DATA-080 | v0.2.0 | `crates/glyphplot/src/data.rs tests::channels_resolve_by_encode_role_then_name` | partial |
 | REQ-DATA-090 | v0.2.0 | `crates/glyphplot/tests/zones.rs::frames_equal_under_utc_and_tokyo` | partial |
-| REQ-DATA-100 | v0.5.0 | `crates/glyphplot/src/format.rs tests::unit_scale_and_offset_change_labels_only` | — |
+| REQ-DATA-100 | v0.5.0 | `crates/glyphplot/src/format.rs tests::unit_scale_and_offset_change_labels_only`, `crates/glyphplot/src/charts/line/tests.rs tests::display_transform_applies_to_ticks_readout_and_table`, `crates/glyphplot/src/charts/line/spark/tests.rs tests::text_and_readout_take_the_display_transform` (scale and offset on the line chart's ticks, readout and table and the sparkline's text and readout, the unit on readouts and table cells; no axis writes the unit yet) | partial |
 | REQ-DATA-110 | v0.2.0 | `contract::every_chart_keeps_the_contract` (rule 28) | yes |
 | REQ-DATA-120 | v0.3.0 | `web/test/data.test.mjs`, `site/e2e/element.spec.ts` | yes |
 | REQ-DATA-130 | v0.2.0 | `contract::replace_is_whole` (rule 15) | yes |
@@ -200,8 +200,8 @@ Several checks may be listed for one requirement, separated by commas.
 | REQ-TICK-030 | v0.2.0 | `crates/glyphplot/src/ticks.rs tests::ticks_are_ordered_inside_and_about_count`, `crates/glyphplot/src/layout.rs tests::labels_never_share_a_cell` | yes |
 | REQ-TICK-040 | v0.2.0 | `crates/glyphplot/src/ticks.rs tests::marks_take_the_nearest_cell_and_dot` | yes |
 | REQ-TICK-050 | v0.5.0 | `crates/glyphplot/src/ticks.rs tests::snap_rows_puts_every_tick_on_a_row` | — |
-| REQ-TICK-060 | v0.5.0 | `crates/glyphplot/src/ticks.rs tests::log_axes_label_only_powers` | — |
-| REQ-TICK-070 | v0.5.0 | `crates/glyphplot/src/ticks.rs tests::context_row_marks_day_boundaries` | — |
+| REQ-TICK-060 | v0.5.0 | `crates/glyphplot/src/ticks.rs tests::log_axes_label_only_powers`, `crates/glyphplot/src/layout.rs tests::log_marks_are_placed_by_the_transform` | yes |
+| REQ-TICK-070 | v0.5.0 | `crates/glyphplot/src/ticks.rs tests::context_row_marks_day_boundaries`, `crates/glyphplot/src/layout.rs tests::time_axes_under_two_days_have_a_context_row`, `crates/glyphplot/src/charts/line/tests.rs tests::time_ticks_and_labels_follow_the_zone` | yes |
 
 ### 4.3 Formatting (FMT)
 
@@ -221,7 +221,7 @@ Several checks may be listed for one requirement, separated by commas.
 |---|---|---|---|
 | REQ-TZ-010 | v0.2.0 | `crates/glyphplot/src/time.rs tests::default_zone_is_utc`, `mise run lint` (clippy `disallowed-methods`: no clock) | yes |
 | REQ-TZ-020 | v0.5.0 | `web/test/locale.test.mjs`, `site/e2e/element.spec.ts` | — |
-| REQ-TZ-030 | v0.5.0 | `reference::local_ticks_match_d3_scale_time` | — |
+| REQ-TZ-030 | v0.5.0 | `reference::local_ticks_match_d3_scale_time`, `crates/glyphplot/src/layout.rs tests::built_scales_tick_in_their_zone`, `crates/glyphplot/src/charts/line/tests.rs tests::time_ticks_and_labels_follow_the_zone`, `web/test/zone.wasm.test.mjs`, `web/test/reference.test.mjs` (`zone-ticks.txt` in wasm) | yes |
 | REQ-TZ-040 | v0.8.0 | `crates/cli/tests/cli.rs::frames_match_the_element_in_a_zone` | — |
 | REQ-TZ-050 | v0.5.0 | `site/e2e/element.spec.ts` (the page's zone passed in), `crates/glyphplot/src/time.rs tests::the_core_defaults_to_utc` | — |
 | REQ-I18N-010 | v0.3.0 | `web/test/locale.test.mjs` | yes |
@@ -284,7 +284,7 @@ Several checks may be listed for one requirement, separated by commas.
 
 | Requirement | Milestone | Planned check | Status |
 |---|---|---|---|
-| REQ-EVENT-010 | v0.3.0 | `web/test/events.test.mjs`, `site/e2e/interaction.spec.ts` | partial |
+| REQ-EVENT-010 | v0.3.0 | `web/test/events.test.mjs`, `site/e2e/interaction.spec.ts`, `crates/glyphplot/src/charts/line/tests.rs tests::legend_clicks_toggle` (`plot-legend` once a click or a tap) | partial |
 | REQ-EVENT-020 | v0.3.0 | `site/e2e/interaction.spec.ts`, `web/test/events.test.mjs` | yes |
 | REQ-EVENT-030 | v0.3.0 | `site/e2e/interaction.spec.ts` | yes |
 | REQ-LINK-010 | v0.5.0 | `site/e2e/element.spec.ts` | — |
@@ -335,7 +335,7 @@ Several checks may be listed for one requirement, separated by commas.
 | REQ-SNAP-020 | v0.3.0 | `contract::every_chart_matches_its_snapshots`, `crates/glyphplot/tests/common/snap.rs` (the writer), `crates/glyphplot/tests/common/snap.rs tests::runs_read_as_the_spec_writes_them` | yes |
 | REQ-SNAP-030 | v0.3.0 | `mise run snap`, `contract::every_chart_matches_its_snapshots`, `web/test/snapshot.test.mjs` | yes |
 | REQ-SNAP-040 | v0.3.0 | review (commit messages) | — |
-| REQ-REF-010 | v0.2.0 | `reference::ticks_match_d3_array`, `reference::nice_matches_d3_scale`, `reference::time_ticks_match_d3_time`, `reference::format_matches_d3_format`, `reference::lttb_matches_the_reference`, `web/test/reference.test.mjs`, `mise run fixtures` | partial |
+| REQ-REF-010 | v0.2.0 | `reference::ticks_match_d3_array`, `reference::nice_matches_d3_scale`, `reference::time_ticks_match_d3_time`, `reference::format_matches_d3_format`, `reference::log_ticks_match_d3_scale`, `reference::local_ticks_match_d3_scale_time`, `reference::lttb_matches_the_reference`, `web/test/reference.test.mjs` (every capture file in the debug build), `mise run fixtures` | yes |
 | REQ-PROP-010 | v0.2.0 | `crates/glyphplot/src/scale.rs tests::invert_undoes_map`, `crates/glyphplot/src/ticks.rs tests::ticks_are_ordered_inside_and_about_count`, `crates/glyphplot/src/downsample.rs tests::every_point_within_its_column`, `crates/glyphplot/src/downsample.rs tests::merged_equals_whole`, `crates/glyphplot/src/downsample.rs tests::lttb_keeps_ends_and_order`, `crates/glyphplot/src/cells.rs tests::column_and_x_agree`, `crates/glyphplot/src/layout.rs tests::labels_never_share_a_cell` | partial |
 
 ## 7. Charts
@@ -349,7 +349,7 @@ Several checks may be listed for one requirement, separated by commas.
 | REQ-LINE-030 | v0.3.0 | `contract::every_chart_keeps_the_contract` (rule 23) | yes |
 | REQ-LINE-040 | v0.3.0 | `contract::hits_name_what_was_drawn` (rule 20), `crates/glyphplot/src/charts/line/mod.rs tests::readout_names_the_nearest_x` | yes |
 | REQ-LINE-050 | v0.9.0 | `contract::every_chart_matches_its_snapshots` (`band`, `baseline`, stacked `area`), `crates/glyphplot/src/charts/line/mod.rs tests::percent_stack_sums_to_100` | — |
-| REQ-SPARK-010 | v0.5.0 | `contract::every_chart_matches_its_snapshots` (`sparkline`), `contract::streaming_equals_replace` | — |
+| REQ-SPARK-010 | v0.5.0 | `contract::every_chart_matches_its_snapshots` (`sparkline`), `crates/glyphplot/src/charts/line/spark/tests.rs tests::one_series_a_band_and_no_axes`, `crates/glyphplot/src/charts/line/spark/tests.rs tests::the_ring_keeps_the_last_capacity_rows`, `crates/glyphplot/src/charts/line/spark/tests.rs tests::text_parts_by_option_and_room`, `contract::streaming_equals_replace` (rule 14, v0.6.0) | partial |
 
 ### 7.2 Candles (CANDLE)
 
@@ -674,8 +674,8 @@ kind of the first check listed.
 
 | Kind | Any check | First check |
 |---|---|---|
-| Rust | 182 | 176 |
-| Node | 62 | 43 |
+| Rust | 183 | 176 |
+| Node | 63 | 43 |
 | browser | 75 | 60 |
 | task/lint | 64 | 52 |
 | manual/review | 33 | 9 |
@@ -685,6 +685,6 @@ kind of the first check listed.
 
 | Status | Requirements |
 |---|---|
-| yes | 138 |
-| partial | 54 |
-| — | 148 |
+| yes | 142 |
+| partial | 55 |
+| — | 143 |

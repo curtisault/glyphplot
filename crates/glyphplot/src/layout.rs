@@ -21,18 +21,21 @@
 //! y, and lowers the count until every label fits whole inside the axis with a
 //! gap of two cells on x and one row on y. Labels are `scale.rs`'s tick labels,
 //! measured in cells by `unicode-width` (REQ-I18N-040). Layout reads a scale
-//! only through [`Kind`], `scale::resolve_domain` and [`Scale`]'s ticks and
-//! labels, so a new kind of scale is laid out once `scale.rs` ticks and
-//! labels it.
+//! only through [`Kind`], `scale::resolve` and [`Scale`]'s ticks, labels and
+//! transform, so a new kind of scale is laid out once `scale.rs` ticks and
+//! labels it. An axis may carry a built [`Scale`] ([`AxisInput::built`]), so
+//! its zone, log base, row timestamps and category names reach its ticks
+//! ([`fit_scale_ticks`]).
 
 use serde::Deserialize;
 
 use crate::annotate::{self, Annotation, Mark};
 use crate::cells::Axis;
 use crate::format::Locale;
-use crate::scale::{resolve_domain, AxisFormat, Domain, DomainError, Extents, Kind, Scale, ScaleOptions};
+use crate::scale::{resolve, AxisFormat, Domain, DomainError, Extents, Kind, Scale, ScaleOptions};
 use crate::text;
-use crate::ticks::mark;
+use crate::ticks::{context_row, mark};
+use crate::time::{Zone, DAY};
 
 /// Below this many columns a chart draws no axis, title or legend
 /// (REQ-LAYOUT-020).
@@ -48,9 +51,13 @@ pub const X_LABEL_ROWS: usize = 6;
 /// (REQ-LAYOUT-060).
 pub const LEGEND_ROWS: usize = 12;
 /// The rows a chart needs for a time axis's context row under the x labels
-/// (REQ-TICK-070): a placeholder until the context row is built, chosen with
-/// the title's threshold, not measured.
-pub const CONTEXT_ROWS: usize = 10;
+/// (REQ-TICK-070): the context row is the axis's third row, and it is taken
+/// only while the plot keeps room for three y labels a gap apart under it,
+/// `2 × Y_ROWS_PER_TICK + 1` = 5 rows, so a chart of 8 rows (5 plot rows and
+/// 3 axis rows, with no title or legend) is the smallest that has one. The
+/// title (10 rows) and the legend's own row (12) come after it: the date is
+/// what tells hourly ticks of two days apart, a title is not.
+pub const CONTEXT_ROWS: usize = 3 + 2 * Y_ROWS_PER_TICK + 1;
 /// The rows a pane keeps when the rows allow it, and needs for y labels
 /// (REQ-LAYOUT-050).
 pub const PANE_ROWS: usize = 3;
@@ -163,15 +170,33 @@ pub struct Tick {
 /// given high to low is fitted as its low-to-high form. No ticks for an axis
 /// of no cells or a domain that is not finite.
 pub fn fit_ticks(side: Side, kind: Kind, domain: [f64; 2], len: usize, format: &AxisFormat, locale: &Locale) -> Vec<Tick> {
-    let (lo, hi) = (domain[0].min(domain[1]), domain[0].max(domain[1]));
+    fit_scale_ticks(side, &Scale::new(kind, domain, [0.0, len as f64]), len, format, locale)
+}
+
+/// [`fit_ticks`] over a built scale: its kind, domain, zone, log base,
+/// symlog constant, row timestamps and category names all reach the ticks
+/// and their labels (REQ-TICK-030, REQ-TICK-060, REQ-TZ-030); its range is
+/// the axis's `len` cells. Marks are placed at `scale.transform(v)` on a
+/// [`cells::Axis`](Axis) over [`Scale::transformed_domain`], so a log or
+/// symlog axis spaces them as its data is spaced; a log axis labels the
+/// powers of its base and marks the other integer multiples between them
+/// without labels ([`Scale::minor_ticks`], REQ-TICK-060). No ticks for an
+/// axis of no cells or a domain whose ends, or their transforms, are not
+/// finite.
+pub fn fit_scale_ticks(side: Side, scale: &Scale, len: usize, format: &AxisFormat, locale: &Locale) -> Vec<Tick> {
+    let [a, b] = scale.domain;
+    let (lo, hi) = (a.min(b), a.max(b));
     if len == 0 || !(lo.is_finite() && hi.is_finite()) {
+        return Vec::new();
+    }
+    let scale = Scale { domain: [lo, hi], range: [0.0, len as f64], ..scale.clone() };
+    let [tlo, thi] = scale.transformed_domain();
+    if !(tlo.is_finite() && thi.is_finite()) {
         return Vec::new();
     }
     let x = side == Side::Bottom;
     let (per_tick, gap) = if x { (X_CELLS_PER_TICK, X_GAP) } else { (Y_ROWS_PER_TICK, Y_GAP) };
-    let axis = if x { Axis::x(lo, hi, len, X_DOTS) } else { Axis::y(lo, hi, len, Y_DOTS) };
-    let range = [0.0, len as f64];
-    let scale = Scale::new(kind, [lo, hi], range);
+    let axis = if x { Axis::x(tlo, thi, len, X_DOTS) } else { Axis::y(tlo, thi, len, Y_DOTS) };
     let mut fallback = Vec::new();
     let mut tried: Vec<f64> = Vec::new();
     for count in (1..=(len / per_tick).max(1)).rev() {
@@ -196,18 +221,34 @@ pub fn fit_ticks(side: Side, kind: Kind, domain: [f64; 2], len: usize, format: &
     fallback
 }
 
-/// The scale's ticks at `count`, each with its mark and its label placed.
+/// The scale's ticks at `count`, each with its mark and its label placed,
+/// and its unlabelled minor ticks (a log scale's) marked among them, in
+/// increasing value.
 fn place(scale: &Scale, axis: &Axis, count: f64, format: &AxisFormat, locale: &Locale, x: bool) -> Vec<Tick> {
     let len = axis.cells();
-    let mut out: Vec<Tick> = Vec::new();
-    for (value, text) in scale.tick_labels(count, format, locale) {
+    let labelled = scale.tick_labels(count, format, locale);
+    let minor = scale.minor_ticks(count);
+    let mut out: Vec<Tick> = Vec::with_capacity(labelled.len() + minor.len());
+    let (mut i, mut j) = (0, 0);
+    while i < labelled.len() || j < minor.len() {
+        let take_minor = j < minor.len() && (i >= labelled.len() || minor[j] < labelled[i].0);
+        let (value, text) = if take_minor {
+            j += 1;
+            (minor[j - 1], None)
+        } else {
+            i += 1;
+            (labelled[i - 1].0, Some(&labelled[i - 1].1))
+        };
         if out.last().is_some_and(|t| value <= t.value) {
             continue;
         }
-        let Some((cell, dot)) = mark(axis, value) else { continue };
-        let width = text::width(&text);
-        let start = if x { cell.saturating_sub(width.saturating_sub(1) / 2).min(len.saturating_sub(width)) } else { cell };
-        out.push(Tick { value, cell, dot, label: Some(TickLabel { text, start, width }) });
+        let Some((cell, dot)) = mark(axis, scale.transform(value)) else { continue };
+        let label = text.map(|text| {
+            let width = text::width(text);
+            let start = if x { cell.saturating_sub(width.saturating_sub(1) / 2).min(len.saturating_sub(width)) } else { cell };
+            TickLabel { text: text.clone(), start, width }
+        });
+        out.push(Tick { value, cell, dot, label });
     }
     out
 }
@@ -237,18 +278,34 @@ fn strip(ticks: &mut [Tick]) {
     }
 }
 
-/// The labels of a time axis's context row (REQ-TICK-070): the date at each
-/// day boundary of `domain` when it spans under two days, placed along an
-/// axis of `len` cells.
-///
-/// SEAM (REQ-TICK-070): the context row is built with the date formats in
-/// `ticks.rs`, `format.rs` and `time.rs`; until then it has no labels.
-/// Layout already gives the row (step 3) when the x axis asks for it
-/// ([`AxisInput::context`]) and the rows allow ([`CONTEXT_ROWS`]), and
-/// `text::Frame::axis_labels` draws whatever this returns in the axis's third
-/// row, so filling this function in is the whole change.
-fn context_labels(_kind: Kind, _domain: [f64; 2], _len: usize, _locale: &Locale) -> Vec<TickLabel> {
-    Vec::new()
+/// The labels of a time axis's context row (REQ-TICK-070): when `scale`
+/// is a time scale whose domain spans under two days, the date (`%b %-d` in
+/// the scale's zone) under the first labelled tick and under each labelled
+/// tick on a later local day than the one before it (`ticks::context_row`),
+/// so every day boundary the axis crosses is dated. Each is centred on its
+/// tick's cell as tick labels are, pushed inside the axis's `len` cells, and
+/// one that would come within [`X_GAP`] cells of the one before it is left
+/// out. None for other scales.
+fn context_labels(scale: &Scale, ticks: &[Tick], len: usize, locale: &Locale) -> Vec<TickLabel> {
+    if scale.kind != Kind::Time {
+        return Vec::new();
+    }
+    let labelled: Vec<&Tick> = ticks.iter().filter(|t| t.label.is_some()).collect();
+    let values: Vec<f64> = labelled.iter().map(|t| t.value).collect();
+    let mut out: Vec<TickLabel> = Vec::new();
+    for c in context_row(&values, scale.domain, &scale.zone, &locale.time) {
+        let Some(t) = labelled.iter().find(|t| t.value == c.value) else { continue };
+        let width = text::width(&c.text);
+        if width > len {
+            continue;
+        }
+        let start = t.cell.saturating_sub(width.saturating_sub(1) / 2).min(len - width);
+        if out.last().is_some_and(|p| start < p.start + p.width + X_GAP) {
+            continue;
+        }
+        out.push(TickLabel { text: c.text, start, width });
+    }
+    out
 }
 
 /// One axis's scale and format, as the options give them.
@@ -260,7 +317,7 @@ pub struct AxisInput {
     /// How the axis is ticked and labelled.
     pub kind: Kind,
     /// The scale's domain options (`domain`, `nice`, `zero`, `padding`),
-    /// resolved by `scale::resolve_domain`; its `type` is not read.
+    /// resolved by `scale::resolve`; its `type` is not read.
     pub scale: ScaleOptions,
     /// The labels' format.
     pub format: AxisFormat,
@@ -272,6 +329,12 @@ pub struct AxisInput {
     /// For the x axis of a time scale: a context row under the labels
     /// (REQ-TICK-070, see [`CONTEXT_ROWS`]).
     pub context: bool,
+    /// A built scale whose kind, zone, log base, symlog constant, row
+    /// timestamps and category names the axis is ticked and labelled with
+    /// (its domain and range are the layout's); `None` for a plain scale of
+    /// `kind` with the base and constant of `scale`, in UTC. Its zone also
+    /// nices a time domain (REQ-TZ-030).
+    pub built: Option<Scale>,
 }
 
 impl AxisInput {
@@ -281,12 +344,35 @@ impl AxisInput {
         let (kind_type, format) = (kind.scale_type(), AxisFormat::default_for(kind));
         let scale =
             ScaleOptions { kind: kind_type, domain: Domain::Data, nice: None, zero: None, padding: None, base: None, constant: None, zone: None, scheme: None };
-        AxisInput { name: String::new(), kind, scale, format, shown: true, grid: false, context: false }
+        AxisInput { name: String::new(), kind, scale, format, shown: true, grid: false, context: false, built: None }
     }
 
     /// [`AxisInput::new`] with the scale's name.
     pub fn named(kind: Kind, name: &str) -> AxisInput {
         AxisInput { name: name.to_string(), ..AxisInput::new(kind) }
+    }
+
+    /// The axis's scale over `domain` and a range of `len` cells: the built
+    /// scale's with that domain and range, else a scale of `kind` with the
+    /// options' log base and symlog constant (10 and 1 when they are not
+    /// valid), in UTC.
+    pub fn scale_over(&self, domain: [f64; 2], len: usize) -> Scale {
+        let range = [0.0, len as f64];
+        match &self.built {
+            Some(b) => Scale { domain, range, ..b.clone() },
+            None => {
+                let base = if self.kind == Kind::Log { self.scale.log_base().unwrap_or(10.0) } else { 10.0 };
+                let constant = if self.kind == Kind::Symlog { self.scale.symlog_constant().unwrap_or(1.0) } else { 1.0 };
+                Scale { base, constant, ..Scale::new(self.kind, domain, range) }
+            }
+        }
+    }
+
+    /// The zone the axis's time domain is niced in: the built scale's, else
+    /// UTC.
+    fn zone(&self) -> &Zone {
+        static UTC: Zone = Zone::Utc;
+        self.built.as_ref().map_or(&UTC, |b| &b.zone)
     }
 }
 
@@ -661,7 +747,8 @@ fn gutter<'a>(axes: impl Iterator<Item = &'a PlacedAxis>) -> usize {
 ///    the pane, `none` draws none.
 /// 3. The x axis, when shown: two rows at the bottom (its line and its
 ///    labels), one row with no labels below 6 rows; a third row for its
-///    context row when it asks for one and `rows ≥` [`CONTEXT_ROWS`].
+///    context row when it asks for one, it is a time axis over under two
+///    days and `rows ≥` [`CONTEXT_ROWS`] (REQ-TICK-070).
 /// 4. The panes: the rows left, by weight, at least three rows each, with a
 ///    blank row between panes when every pane keeps three (REQ-LAYOUT-050).
 /// 5. The y gutters: each y scale resolved and its ticks fitted to its
@@ -679,9 +766,9 @@ fn gutter<'a>(axes: impl Iterator<Item = &'a PlacedAxis>) -> usize {
 ///
 /// Below 16 columns or 5 rows there is no axis, title, legend or annotation,
 /// and the panes take every cell (REQ-LAYOUT-020). Each scale's domain is
-/// resolved by `scale::resolve_domain` from its options and extents, niced
-/// (when asked) for the fitting's starting count. An error names the scale
-/// whose domain does not resolve.
+/// resolved by `scale::resolve` from its options and extents, in its built
+/// scale's zone, niced (when asked) for the fitting's starting count. An
+/// error names the scale whose domain does not resolve.
 pub fn layout(cols: usize, rows: usize, input: &LayoutInput, extents: &LayoutExtents) -> Result<Layout, LayoutError> {
     let decorated = cols >= MIN_COLS && rows >= MIN_ROWS;
     let locale = &input.locale;
@@ -708,9 +795,16 @@ pub fn layout(cols: usize, rows: usize, input: &LayoutInput, extents: &LayoutExt
         (true, true) => 2,
         (true, false) => 1,
     };
-    // SEAM (REQ-TICK-070): the context row, see `context_labels`.
-    if x_rows == 2 && input.x.context && rows >= CONTEXT_ROWS {
-        x_rows = 3;
+    // The context row: a time axis that asks for one, at CONTEXT_ROWS or
+    // more, over a domain spanning under two days as resolved for a tick a
+    // few cells across the whole width (the domain at step 6 is resolved for
+    // the plot's columns, which nice can widen only a little).
+    if x_rows == 2 && input.x.context && input.x.kind == Kind::Time && rows >= CONTEXT_ROWS {
+        let count = (cols / X_CELLS_PER_TICK).max(1) as f64;
+        let short = resolve(&input.x.scale, input.x.kind, &extents.x, count, input.x.zone()).is_ok_and(|[a, b]| (b - a).abs() < 2.0 * DAY);
+        if short {
+            x_rows = 3;
+        }
     }
     let bottom = rows.saturating_sub(x_rows).max(top);
 
@@ -723,12 +817,12 @@ pub fn layout(cols: usize, rows: usize, input: &LayoutInput, extents: &LayoutExt
     for (i, (pane, &(y, h))) in input.panes.iter().zip(&spans).enumerate() {
         let ext = extents.panes.get(i).copied().unwrap_or_default();
         let count = (h / Y_ROWS_PER_TICK).max(1) as f64;
-        let resolve = |a: &AxisInput, e: &Extents, axis: AxisId| resolve_domain(&a.scale, a.kind, e, count).map_err(|error| LayoutError { axis, error });
+        let resolve = |a: &AxisInput, e: &Extents, axis: AxisId| resolve(&a.scale, a.kind, e, count, a.zone()).map_err(|error| LayoutError { axis, error });
         let left_domain = pane.left.as_ref().map(|a| resolve(a, &ext.left, AxisId::Left(i))).transpose()?;
         let right_domain = pane.right.as_ref().map(|a| resolve(a, &ext.right, AxisId::Right(i))).transpose()?;
         let fit = |a: &AxisInput, domain: [f64; 2], side: Side| {
             (decorated && a.shown && h > 0).then(|| {
-                let mut ticks = fit_ticks(side, a.kind, domain, h, &a.format, locale);
+                let mut ticks = fit_scale_ticks(side, &a.scale_over(domain, h), h, &a.format, locale);
                 if h < PANE_ROWS {
                     strip(&mut ticks);
                 }
@@ -789,13 +883,14 @@ pub fn layout(cols: usize, rows: usize, input: &LayoutInput, extents: &LayoutExt
     // 6. The x ticks.
     let x = &input.x;
     let count = (plot_w / X_CELLS_PER_TICK).max(1) as f64;
-    let x_domain = resolve_domain(&x.scale, x.kind, &extents.x, count).map_err(|error| LayoutError { axis: AxisId::X, error })?;
+    let x_domain = resolve(&x.scale, x.kind, &extents.x, count, x.zone()).map_err(|error| LayoutError { axis: AxisId::X, error })?;
     let x_axis = (x_rows > 0 && plot_w > 0).then(|| {
-        let mut ticks = fit_ticks(Side::Bottom, x.kind, x_domain, plot_w, &x.format, locale);
+        let scale = x.scale_over(x_domain, plot_w);
+        let mut ticks = fit_scale_ticks(Side::Bottom, &scale, plot_w, &x.format, locale);
         if x_rows < 2 {
             strip(&mut ticks);
         }
-        let context = if x_rows >= 3 { context_labels(x.kind, x_domain, plot_w, locale) } else { Vec::new() };
+        let context = if x_rows >= 3 { context_labels(&scale, &ticks, plot_w, locale) } else { Vec::new() };
         PlacedAxis { side: Side::Bottom, rect: Rect::new(left_w, bottom, plot_w, x_rows), kind: x.kind, domain: x_domain, ticks, context }
     });
 
@@ -1485,5 +1580,94 @@ mod tests {
         assert!(err(r#"[{"id":"a","weight":0}]"#, "[]").contains("above 0"));
         assert!(err(r#"[{"id":"a"},{"id":"a"}]"#, "[]").contains("twice"));
         assert!(err("[]", r#"[{"scale":"x"},{"scale":"t","orient":"bottom"}]"#).contains("one x axis"));
+    }
+
+    /// REQ-TICK-060, REQ-SCALE-040: an axis ticked by a built log scale
+    /// places each mark where the scale's transform puts its value, labels
+    /// the powers of the base and marks the multiples between them without
+    /// labels, in increasing value; `fit_ticks` of `Kind::Log` is the same.
+    #[test]
+    fn log_marks_are_placed_by_the_transform() {
+        let l = Locale::default();
+        let s = Scale::log([1.0, 1e4], [0.0, 1.0], 10.0);
+        let ticks = fit_scale_ticks(Side::Bottom, &s, 81, &AxisFormat::default(), &l);
+        let labelled: Vec<(f64, usize, &str)> = ticks.iter().filter_map(|t| t.label.as_ref().map(|lb| (t.value, t.cell, lb.text.as_str()))).collect();
+        assert_eq!(labelled, [(1.0, 0, "1"), (10.0, 20, "10"), (100.0, 40, "100"), (1000.0, 60, "1k"), (1e4, 80, "10k")]);
+        let two = ticks.iter().find(|t| t.value == 2.0).expect("2 is marked");
+        assert_eq!((two.cell, two.label.is_none()), (6, true), "log10(2) × 20.25 cells is 6.1");
+        assert!(ticks.iter().filter(|t| t.label.is_none()).count() >= 30, "the multiples are marked");
+        assert!(ticks.windows(2).all(|w| w[0].value < w[1].value && w[0].dot <= w[1].dot));
+        assert_eq!(fit_ticks(Side::Bottom, Kind::Log, [1.0, 1e4], 81, &AxisFormat::default(), &l), ticks);
+        // A y axis counts its rows down; a log base from the options reaches it.
+        let mut y = AxisInput::new(Kind::Log);
+        y.scale.base = Some(2.0);
+        let s = y.scale_over([1.0, 1024.0], 11);
+        assert_eq!(s.base, 2.0);
+        let ticks = fit_scale_ticks(Side::Left, &s, 11, &AxisFormat::default(), &l);
+        let top = ticks.iter().rev().find(|t| t.label.is_some()).unwrap();
+        assert_eq!((top.value, top.cell), (1024.0, 0));
+        // A domain a log transform cannot take has no ticks, and no panic.
+        assert!(fit_scale_ticks(Side::Bottom, &Scale::log([-1.0, 10.0], [0.0, 1.0], 10.0), 40, &AxisFormat::default(), &l).is_empty());
+    }
+
+    /// REQ-TZ-030: a time axis ticked by a scale built in a zone puts its
+    /// ticks on that zone's hours and labels them in it.
+    #[test]
+    fn built_scales_tick_in_their_zone() {
+        use crate::locale::{Transition, ZoneTable};
+        let l = Locale::default();
+        let t0 = crate::time::days_from_civil(2026, 10, 18) as f64 * DAY;
+        let domain = [t0, t0 + 1.5 * DAY];
+        let format = AxisFormat::default_for(Kind::Time);
+        let utc = fit_ticks(Side::Bottom, Kind::Time, domain, 80, &format, &l);
+        let india = Zone::table(ZoneTable { name: "+05:30".into(), transitions: vec![Transition { at: 0, offset: 330 }], covering: [0, 2_000_000_000_000] });
+        let mut x = AxisInput::new(Kind::Time);
+        x.built = Some(Scale::time(domain, [0.0, 1.0]).with_zone(india));
+        let local = fit_scale_ticks(Side::Bottom, &x.scale_over(domain, 80), 80, &format, &l);
+        assert!(!utc.is_empty() && !local.is_empty());
+        let hour = crate::time::HOUR;
+        assert!(utc.iter().all(|t| t.value % hour == 0.0));
+        assert!(local.iter().all(|t| (t.value + 330.0 * 60_000.0) % hour == 0.0), "local ticks are on +05:30's hours");
+        assert_ne!(utc.iter().map(|t| t.value).collect::<Vec<_>>(), local.iter().map(|t| t.value).collect::<Vec<_>>());
+    }
+
+    /// REQ-TICK-070: a time x axis that asks for a context row gets a third
+    /// row from CONTEXT_ROWS rows when its domain spans under two days,
+    /// dated under its first labelled tick and at each day boundary; none
+    /// below CONTEXT_ROWS or over two days or more.
+    #[test]
+    fn time_axes_under_two_days_have_a_context_row() {
+        let hour = crate::time::HOUR;
+        let t0 = crate::time::days_from_civil(2026, 10, 18) as f64 * DAY;
+        let run = |rows: usize, span: f64| {
+            let mut x = AxisInput::new(Kind::Time);
+            x.context = true;
+            let input = LayoutInput::new(x, AxisInput::new(Kind::Linear));
+            let start = t0 + 12.0 * hour;
+            let ext = LayoutExtents {
+                x: Extents { data: Some([start, start + span]), ..Extents::default() },
+                panes: vec![PaneExtents { left: Extents { data: Some([0.0, 1.0]), ..Extents::default() }, ..PaneExtents::default() }],
+            };
+            layout(80, rows, &input, &ext).unwrap()
+        };
+        let l = run(CONTEXT_ROWS, 30.0 * hour);
+        let a = l.x_axis.as_ref().unwrap();
+        assert_eq!((a.rect.y, a.rect.h), (CONTEXT_ROWS - 3, 3));
+        assert_eq!(l.panes[0].plot.h, 5, "the plot keeps three y labels' rows");
+        let texts: Vec<&str> = a.context.iter().map(|c| c.text.as_str()).collect();
+        assert_eq!(texts, ["Oct 18", "Oct 19"]);
+        let midnight = a.ticks.iter().find(|t| t.value == t0 + DAY && t.label.is_some()).expect("midnight is a labelled tick");
+        let c = &a.context[1];
+        assert!(c.start <= midnight.cell && midnight.cell < c.start + c.width, "the date is under its day's first tick");
+        assert!(c.start >= a.context[0].start + a.context[0].width + X_GAP);
+        // Drawn in the axis's third row.
+        let mut grid = Grid::new(80, CONTEXT_ROWS);
+        let mut frame = Frame::new(&mut grid, NO_BACK).then::<stage::Labels>();
+        frame.axis_labels(a);
+        assert!(frame.grid().text().lines().nth(CONTEXT_ROWS - 1).unwrap().contains("Oct 19"));
+        let short = run(CONTEXT_ROWS - 1, 30.0 * hour);
+        assert_eq!(short.x_axis.unwrap().rect.h, 2, "below CONTEXT_ROWS, no context row");
+        let long = run(24, 2.0 * DAY).x_axis.unwrap();
+        assert_eq!((long.rect.h, long.context.len()), (2, 0), "two days or more, no context row");
     }
 }

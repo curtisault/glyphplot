@@ -25,7 +25,7 @@ use crate::annotate;
 use crate::canvas::ColorCanvas;
 use crate::cells::Axis;
 use crate::downsample::{Cache, CacheKey, Edges, M4};
-use crate::format::{Locale, NumberFormat, Specifier};
+use crate::format::{Display, Locale, NumberFormat, Specifier};
 use crate::grid::{line_points, Grid};
 use crate::layout::{Layout, Rect};
 use crate::mono;
@@ -33,6 +33,7 @@ use crate::overlay;
 use crate::palette::{self, INK, MUTED};
 use crate::scale::Kind;
 use crate::text::{stage, Frame, LegendEntry};
+use crate::time::Zone;
 use crate::view::View;
 
 /// The plot and its axes, as a frame lays them out.
@@ -60,15 +61,18 @@ pub(super) struct Geom {
 /// A point of a path: its dot column and row, and whether a gap comes
 /// before it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct Pt {
-    x: i64,
-    y: i64,
-    gap: bool,
+pub(super) struct Pt {
+    /// The dot column.
+    pub x: i64,
+    /// The dot row.
+    pub y: i64,
+    /// Whether a gap comes before it.
+    pub gap: bool,
 }
 
 /// The dot column of an x on the axis: inside the domain by the edges (the
 /// high end in the last column), outside it unclamped.
-fn x_dot(axis: &Axis, edges: &Edges, x: f64) -> Option<i64> {
+pub(super) fn x_dot(axis: &Axis, edges: &Edges, x: f64) -> Option<i64> {
     edges.column(x).map(|c| c as i64).or_else(|| axis.dot(x))
 }
 
@@ -82,10 +86,10 @@ fn neighbours(xs: &[f64], ys: &[f64], rows: &Range<usize>, span: bool) -> (Optio
 }
 
 /// The path of series `s` over `rows` (the rows in view), from its M4 or
-/// from every row, into `out`, whose memory is reused.
+/// from every row, into `out`, whose memory is reused: dot columns by the x
+/// axis `x` (and its `edges`), dot rows by the y axis `y`.
 #[allow(clippy::too_many_arguments)]
-fn path(data: &Prepared, s: usize, rows: &Range<usize>, m4: Option<&M4>, geom: &Geom, edges: &Edges, span: bool, out: &mut Vec<Pt>) {
-    let (x, y) = (&geom.x, &geom.y);
+pub(super) fn path(data: &Prepared, s: usize, rows: &Range<usize>, m4: Option<&M4>, (x, y): (&Axis, &Axis), edges: &Edges, span: bool, out: &mut Vec<Pt>) {
     let (xs, ys) = (data.xs(s), data.ys(s));
     let (before, after) = neighbours(xs, ys, rows, span);
     // At most four points a bucket, or a point a row, and the two neighbours.
@@ -146,7 +150,7 @@ pub(super) struct Scratch {
 }
 
 /// Calls `plot` for every dot of the path in `mode`, clipped to `w × h`.
-fn walk(points: &[Pt], mode: Mode, step: StepAt, w: i64, h: i64, mut plot: impl FnMut(i64, i64)) {
+pub(super) fn walk(points: &[Pt], mode: Mode, step: StepAt, w: i64, h: i64, mut plot: impl FnMut(i64, i64)) {
     let inside = |x: i64, y: i64| x >= 0 && y >= 0 && x < w && y < h;
     for (i, p) in points.iter().enumerate() {
         let next = points.get(i + 1).filter(|q| !q.gap);
@@ -232,7 +236,7 @@ pub(super) fn base(grid: &mut Grid, canvas: &mut ColorCanvas, cache: &mut Cache,
         scratch.marks.clear();
         scratch.shades.clear();
         for s in order {
-            path(data, s, &rows[s], m4s.map(|m| &m[s]), geom, &edges, span, &mut scratch.pts);
+            path(data, s, &rows[s], m4s.map(|m| &m[s]), (&geom.x, &geom.y), &edges, span, &mut scratch.pts);
             let pts = &scratch.pts;
             let ink = series_ink(s);
             if cfg.mode == Mode::Area {
@@ -389,17 +393,28 @@ pub(super) fn count(n: usize, locale: &Locale) -> String {
     }
 }
 
-/// An x as readouts and tables write it: a date and time for a time scale,
-/// to the millisecond when the view spans under ten seconds, else a number.
-pub(super) fn x_label(v: f64, kind: Kind, span: f64, locale: &Locale) -> String {
+/// A stored value as readouts and tables write it under its column's
+/// display transform (REQ-DATA-100): d3-format's default when the transform
+/// is the identity, else the displayed value at the decimals the scale
+/// implies (`182.40` for stored 18240 at `scale: 0.01`); the unit after it,
+/// a space apart, when the column has one.
+pub(super) fn shown(v: f64, display: &Display, locale: &Locale) -> String {
+    let text = if display.is_identity() { number(v, locale) } else { display.readout(v, &Specifier::default(), locale) };
+    display.with_unit(&text)
+}
+
+/// An x as readouts and tables write it: a date and time in `zone` for a
+/// time scale, to the millisecond when the view spans under ten seconds,
+/// else a number under the x column's display transform (REQ-DATA-100).
+pub(super) fn x_label(v: f64, kind: Kind, span: f64, locale: &Locale, zone: &Zone, display: &Display) -> String {
     match kind {
         Kind::Time => {
             let pattern = if span < 10_000.0 { "%Y-%m-%d %H:%M:%S.%L" } else { "%Y-%m-%d %H:%M:%S" };
             let mut out = String::new();
-            crate::time::strftime(pattern, v, &locale.time, &mut out);
+            zone.strftime(pattern, v, &locale.time, &mut out);
             out
         }
-        _ => number(v, locale),
+        _ => shown(v, display, locale),
     }
 }
 

@@ -94,7 +94,10 @@ test(`${BUILD}: make, frame, and the memory views equal text() after every frame
     c.resize(80, 24);
     c.frame(0, false);
     const before = gd.grid();
-    const big = series(400_000);
+    // Two columns of 8 bytes a row, more than the whole memory holds: it
+    // grows even when an earlier type of the same module grew it and freed
+    // what it took (line, then sparkline, in the line module).
+    const big = series(Math.max(400_000, Math.ceil(memory.buffer.byteLength / 8)));
     const pages = memory.buffer.byteLength;
     commitColumns(c, memory, big.descriptor, [big.xs, big.ys]);
     assert.ok(memory.buffer.byteLength > pages, "the commit grew memory");

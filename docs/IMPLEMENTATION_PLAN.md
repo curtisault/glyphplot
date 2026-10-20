@@ -1363,6 +1363,38 @@ Acceptance:
 <a id="phase-4"></a>
 ### Phase 4 · Candles, bar, sparkline (v0.5.0)
 
+Task 3 (the sparkline) and the line chart's part of task 4 done 2026-10-20;
+candles and bar are other sessions':
+- **Sparkline** (`charts/line/spark.rs`, REQ-SPARK-010): modes `line`,
+  `area`, `column`; a band of rows a series, no axes; a text column of
+  label, latest value and `↓least ↑greatest` (options `label`, `latest`,
+  `extent`), dropped part by part until the plot keeps half the columns; a
+  ring of `capacity` rows (default 1,000,000, the streaming ring's). Its
+  contract passes every rule but 14 (`CHART=sparkline`, 21 snapshots). Its
+  meta is `meta.sparkline.json`'s but for `options`, which holds the
+  defaults the chart reads. Budgets, natively (`test:budgets`, load average
+  21): 1.96 ms a frame over 1M points at 320 × 120, 0.009 ms a move.
+- **Layout takes built scales:** `fit_scale_ticks` and `AxisInput::built`;
+  log and symlog marks placed by the transform, a log axis's multiples
+  marked without labels (REQ-TICK-060). `fit_ticks` keeps its signature.
+- **Date context row** (REQ-TICK-070): `CONTEXT_ROWS` is 8, the fewest rows
+  at which the plot keeps three labelled y ticks under three axis rows. The
+  line chart asks for it; `line/random-walk-100k.snap` changed for it.
+- **Zones** (REQ-TZ-030): the line chart ticks, labels, reads out and
+  tabulates time in `Env.zone`'s table; UTC frames are unchanged.
+- **Display transform** (REQ-DATA-100): ticks in displayed units, readouts
+  and table cells at the scale's decimals with the unit;
+  `line/timestamps-dst.snap` changed for its readout's `°C`.
+- **Legend click:** a mouse or pen click toggles on release and its tap
+  toggles nothing more; a finger toggles on its tap.
+- **References in wasm** (REQ-REF-010): `debug_reference` answers
+  `log.txt`, `zone-ticks.txt` and `lttb.txt`. It found 26 of 3,900 log
+  cases an ulp off in wasm, where the platform's `pow` (musl's) differs
+  from Node's (macOS's); integer powers past 2⁵³ are now exact
+  (`format::js::pow`).
+- The `line` module grew from 193,938 B to 211,435 B gzipped
+  (`mise run size` on this tree and on the tree before it).
+
 Tasks:
 1. `charts/candles/`: `candle`, `hollow`, `ohlc`; glyphs by spacing;
    calendar resampling below a cell; volume pane; magnet crosshair and the

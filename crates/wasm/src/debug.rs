@@ -12,17 +12,21 @@
 //! `crates/glyphplot/tests/reference.rs` reads it, and
 //! [`debug_fixture_digest`] gives a fixture's digest.
 
+use std::cell::RefCell;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use glyphplot::chart::{Accepted, Appended, CellPos, Changes, Charset, Chart as Plot, Env, Hit, MakeError, Meta, Mono, Size, Table};
 use glyphplot::data::{Data, DataError, Shape};
+use glyphplot::downsample::lttb;
+use glyphplot::fixtures::SplitMix64;
 use glyphplot::format::{js, tick_format, Locale, NumberFormat, Specifier};
 use glyphplot::grid::Grid;
 use glyphplot::input::Input;
+use glyphplot::locale::ZoneTable;
 use glyphplot::options::Options;
-use glyphplot::scale::nice;
-use glyphplot::ticks::{tick_increment, tick_step, ticks};
-use glyphplot::time::{strftime, utc_nice, utc_tick_label, utc_ticks};
+use glyphplot::scale::{log_nice, nice};
+use glyphplot::ticks::{log_ticks, tick_increment, tick_step, ticks, LogTickFormat};
+use glyphplot::time::{strftime, utc_nice, utc_tick_label, utc_ticks, Zone};
 use glyphplot::view::{View, ViewPatch};
 use glyphplot::Budget;
 use wasm_bindgen::prelude::*;
@@ -171,13 +175,103 @@ fn field<'a>(f: &[&'a str], i: usize, line: &str) -> Result<&'a str, String> {
     f.get(i).copied().ok_or_else(|| format!("{line:?} has no field {i}"))
 }
 
+thread_local! {
+    /// The zone of the `zone-ticks.txt` block being answered: its `zone`
+    /// line sets it, and the `ticks`, `nice` and `label` lines after it read
+    /// it, as `tests/reference.rs` reads the file top to bottom.
+    static ZONE: RefCell<Option<Zone>> = const { RefCell::new(None) };
+}
+
+/// The series `scripts/fixtures.mjs` gives LTTB, as `tests/reference.rs`
+/// makes it: from SplitMix64, x steps of 0.5 to 1.5, y a walk or spikes over
+/// noise.
+fn lttb_series(kind: &str, seed: u64, n: usize) -> (Vec<f64>, Vec<f64>) {
+    let mut r = SplitMix64::new(seed);
+    let (mut xs, mut ys) = (Vec::with_capacity(n), Vec::with_capacity(n));
+    let (mut x, mut y) = (0.0, 0.0);
+    for _ in 0..n {
+        x += 0.5 + r.next_f64();
+        if kind == "walk" {
+            y += r.next_f64() - 0.5;
+        } else {
+            y = if r.next_f64() < 0.02 { 50.0 * r.next_f64() } else { r.next_f64() };
+        }
+        xs.push(x);
+        ys.push(y);
+    }
+    (xs, ys)
+}
+
+/// A whole number of a case line.
+fn whole(s: &str) -> Result<usize, String> {
+    s.parse().map_err(|_| format!("not a whole number: {s:?}"))
+}
+
 /// The core's answer to one case line of `file`, written as the file
 /// writes its expected part: the numbers after ` : ` for `ticks.txt`,
-/// `nice.txt` and `time-ticks.txt`, the tab-separated labels after the
-/// arguments for `format.txt` and `time-format.txt`.
+/// `nice.txt`, `time-ticks.txt`, the `ticks` and `nice` lines of `log.txt`
+/// and `zone-ticks.txt`, and `lttb.txt` (the indices kept); the
+/// tab-separated labels after the arguments for `format.txt`,
+/// `time-format.txt`, the `format` lines of `log.txt` and the `label` lines
+/// of `zone-ticks.txt`. A `zone` line of `zone-ticks.txt` sets the zone the
+/// lines after it are answered in and answers with the zone's name.
 fn answer(file: &str, line: &str) -> Result<String, String> {
     let locale = Locale::default();
     match file {
+        "log.txt" => {
+            if let Some(rest) = line.strip_prefix("format\t") {
+                let f: Vec<&str> = rest.split('\t').collect();
+                let arg = |i: usize| field(&f, i, line);
+                let (base, a, b, n) = (num(arg(0)?)?, num(arg(1)?)?, num(arg(2)?)?, num(arg(3)?)?);
+                let spec = match arg(4)? {
+                    "auto" => None,
+                    s => Some(Specifier::parse("format", s).map_err(|e| e.to_string())?),
+                };
+                let format = LogTickFormat::new([a, b], base, n, spec.as_ref(), &locale);
+                return Ok(log_ticks(a, b, n, base).into_iter().map(|t| format.format(t)).collect::<Vec<_>>().join("\t"));
+            }
+            let h = head(line);
+            let (base, a, b) = (num(field(&h, 1, line)?)?, num(field(&h, 2, line)?)?, num(field(&h, 3, line)?)?);
+            match h[0] {
+                "ticks" => Ok(numbers(&log_ticks(a, b, num(field(&h, 4, line)?)?, base))),
+                "nice" => Ok(numbers(&log_nice(a, b, base))),
+                other => Err(format!("unknown case {other:?} in {file}")),
+            }
+        }
+        "zone-ticks.txt" => {
+            if let Some(rest) = line.strip_prefix("zone ") {
+                let (_, json) = rest.split_once(' ').ok_or_else(|| format!("{line:?} is not `zone name table`"))?;
+                let table = ZoneTable::from_json(json).map_err(|e| e.0)?;
+                let name = table.name.clone();
+                ZONE.with(|z| *z.borrow_mut() = Some(Zone::table(table)));
+                return Ok(name);
+            }
+            let zone = ZONE.with(|z| z.borrow().clone()).ok_or_else(|| "a `zone` line comes first in zone-ticks.txt".to_string())?;
+            if let Some(rest) = line.strip_prefix("label\t") {
+                let t = rest.split('\t').next().unwrap_or_default();
+                let mut out = String::new();
+                zone.tick_label(num(t)?, &locale.time, &mut out);
+                return Ok(out);
+            }
+            let h = head(line);
+            let (a, b, n) = (num(field(&h, 1, line)?)?, num(field(&h, 2, line)?)?, num(field(&h, 3, line)?)?);
+            match h[0] {
+                "ticks" => Ok(numbers(&zone.ticks(a, b, n))),
+                "nice" => Ok(numbers(&zone.nice(a, b, n))),
+                other => Err(format!("unknown case {other:?} in {file}")),
+            }
+        }
+        "lttb.txt" => {
+            let h = head(line);
+            let kind = field(&h, 0, line)?;
+            if kind != "walk" && kind != "spike" {
+                return Err(format!("unknown case {kind:?} in {file}"));
+            }
+            let seed = whole(field(&h, 1, line)?)? as u64;
+            let (n, threshold) = (whole(field(&h, 2, line)?)?, whole(field(&h, 3, line)?)?);
+            let (xs, ys) = lttb_series(kind, seed, n);
+            Ok(lttb(&xs, &ys, threshold).into_iter().map(|i| i.to_string()).collect::<Vec<_>>().join(" "))
+        }
         "ticks.txt" | "nice.txt" => {
             let h = head(line);
             let (a, b, n) = (num(field(&h, 1, line)?)?, num(field(&h, 2, line)?)?, num(field(&h, 3, line)?)?);
@@ -250,16 +344,19 @@ mod tests {
     #[test]
     fn answers_every_capture_line() {
         let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/../glyphplot/tests/fixtures/");
-        for file in ["ticks.txt", "nice.txt", "time-ticks.txt", "format.txt", "time-format.txt"] {
+        for file in ["ticks.txt", "nice.txt", "time-ticks.txt", "format.txt", "time-format.txt", "log.txt", "zone-ticks.txt", "lttb.txt"] {
             let text = std::fs::read_to_string(format!("{dir}{file}")).unwrap();
             let mut n = 0;
             for line in text.lines().filter(|l| !l.is_empty() && !l.starts_with('#')) {
                 let got = answer(file, line).unwrap();
-                let want = if file.ends_with("format.txt") {
+                let want = if let Some(rest) = line.strip_prefix("zone ") {
+                    rest.split(' ').next().unwrap_or_default().to_string()
+                } else if file.ends_with("format.txt") || line.contains('\t') {
                     let f: Vec<&str> = line.split('\t').collect();
-                    let at = match f[0] {
-                        "string" | "label" => 2,
-                        "tick" => 5,
+                    let at = match (file, f[0]) {
+                        (_, "string" | "label") => 2,
+                        (_, "tick") => 5,
+                        ("log.txt", "format") => 6,
                         _ => 3,
                     };
                     f[at..].join("\t")

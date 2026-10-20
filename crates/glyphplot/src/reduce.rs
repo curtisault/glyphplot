@@ -15,10 +15,15 @@
 //!   a pinch zoom about the pointer, the plain wheel scrolls the page (no
 //!   change), a click selects the datum and locks the cursor, a double click
 //!   (a `tap` of count 2) resets. The options `drag` (`pan`, `brush`, `zoom`)
-//!   and `wheel` (`scroll`, `zoom`) change the first and the fourth.
+//!   and `wheel` (`scroll`, `zoom`) change the first and the fourth. A click
+//!   on a legend entry toggles its series on release (`up`); the `tap` the
+//!   shell sends after every still mouse or pen click toggles nothing more,
+//!   so a click toggles once (REQ-EVENT-010, `plot-legend`).
 //! - Touch (REQ-TOUCH-010): one finger scrubs the cursor, two pan (`pan`), a
 //!   pinch zooms about its centre, a tap selects, a double tap resets, a long
-//!   press (`press`) starts a brush the finger then drags.
+//!   press (`press`) starts a brush the finger then drags. A tap on a legend
+//!   entry toggles its series; a finger's `down` and `up` there do not, so a
+//!   tap toggles once.
 //! - Keys (REQ-KEY-010): ← → (↓ ↑, and h j k l) step the cursor datum by
 //!   datum, panning past the edge; Home and End go to the first and last
 //!   datum in view, End also setting `follow`; PageUp and PageDown move the
@@ -493,7 +498,8 @@ impl Step<'_> {
         let source = d.source;
         match d.kind {
             DragKind::Legend(i) => {
-                // A finger's legend tap arrives as `tap`; a mouse's as this.
+                // A mouse's or pen's click toggles here, and its `tap` after
+                // does not; a finger's toggles on its `tap` alone.
                 if source == Source::Pointer && self.scene.legend_at(at) == Some(i) {
                     self.toggle(i, source);
                 }
@@ -688,7 +694,11 @@ pub fn reduce(view: &mut View, g: &mut Gesture, input: &Input, scene: &dyn Scene
                     s.reset(source);
                 }
             } else if let Some(i) = s.scene.legend_at(at) {
-                s.toggle(i, source);
+                // A mouse's or pen's click toggled on its `up`; this tap
+                // follows it, so only a finger's tap toggles here.
+                if pointer == PointerType::Touch {
+                    s.toggle(i, source);
+                }
             } else if s.scene.plot().is_some_and(|p| p.contains(at)) {
                 if let Some(h) = s.scene.snap(s.view, at) {
                     s.select(h, source);

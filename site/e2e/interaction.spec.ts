@@ -231,12 +231,11 @@ test("plot-legend: a key toggles the nth series, a click on its legend entry tog
   expect(errors).toEqual([]);
 });
 
-// Fails until the core's fix: a mouse click on a legend entry toggles its
-// series twice, once on release (reduce.rs `end_drag`, DragKind::Legend) and
-// again on the tap the shell sends after a still click (reduce.rs
-// `Input::Tap`, which toggles for every pointer), so the series ends shown.
+// A mouse click on a legend entry toggles its series once: on release
+// (reduce.rs `end_drag`, DragKind::Legend); the tap the shell sends after a
+// still click toggles nothing more (reduce.rs `Input::Tap` toggles for a
+// finger only).
 test("plot-legend: a click on a legend entry toggles its series once", async ({ page }) => {
-  test.fail(true, "the core toggles a mouse click's series on release and again on its tap");
   const errors = consoleErrors(page);
   const el = await addChart(page, { data: sine(100, true) });
   // The legend's first row: "─ a  ─ b"; a click on the cell holding "a".
@@ -252,8 +251,9 @@ test("plot-legend: a click on a legend entry toggles its series once", async ({ 
   expectLegend(legends[0]?.detail ?? null);
   expect(legends[0]?.detail).toEqual({ source: "pointer", series: "a", visible: false, hidden: ["a"] });
   expect(errors).toEqual([]);
-  // The expected failure: a second plot-legend, {series: "a", visible: true, hidden: []}, from the tap.
+  // One plot-legend: the tap after the click toggles nothing more.
   expect(legends).toHaveLength(1);
+  expect(await el.evaluate((e) => (e as unknown as { view: { hidden: string[] } }).view.hidden)).toEqual(["a"]);
 });
 
 test("the control row zooms, steps and resets with single clicks", async ({ page }) => {

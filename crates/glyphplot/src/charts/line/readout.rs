@@ -10,10 +10,12 @@
 //! when its neighbours fall in the same second or the view spans under ten
 //! seconds. Every digit comes from the core's formatters (REQ-FMT-030).
 
-use super::draw::{self, Geom};
+use super::draw;
 use super::series::Prepared;
-use crate::format::{js, Kind as FormatKind, Locale, NumberFormat, Specifier};
+use crate::cells::Axis;
+use crate::format::{js, Display, Kind as FormatKind, Locale, NumberFormat, Specifier};
 use crate::scale::Kind;
+use crate::time::Zone;
 use crate::view::View;
 
 /// The most digits after the point a readout writes, as `toFixed` allows.
@@ -102,14 +104,50 @@ fn neighbours(values: &[f64], i: usize) -> [f64; 2] {
     [at(i.checked_sub(1)), at(i.checked_add(1))]
 }
 
+/// Where a readout's numbers come from: the x axis drawn and the steps
+/// between the x and y axes' ticks, which a number's digits start from.
+#[derive(Clone, Copy, Debug)]
+pub(super) struct Place<'a> {
+    /// The x axis over the plot's columns.
+    pub x: &'a Axis,
+    /// The step between the x axis's ticks.
+    pub x_step: f64,
+    /// The step between the y axis's ticks.
+    pub y_step: f64,
+    /// The zone a time x is written in (REQ-TZ-030).
+    pub zone: &'a Zone,
+    /// The number of the first row the data holds: a cursor's `index` less
+    /// this is the row's position in the data.
+    pub row0: usize,
+}
+
+/// `v` as the readout writes it: in the axis's tick format with the digits
+/// that tell it from `near` when the column's display transform is the
+/// identity; else displayed at the decimals its scale implies
+/// (REQ-DATA-100); the unit after it either way.
+fn value(formats: &mut Formats, v: f64, display: &Display, step: f64, near: &[f64], locale: &Locale, out: &mut String) {
+    if display.is_identity() {
+        formats.number(v, step, near, locale, out);
+        if let Some(u) = display.unit.as_deref().filter(|u| !u.is_empty()) {
+            out.push(' ');
+            out.push_str(u);
+        }
+    } else {
+        out.push_str(&draw::shown(v, display, locale));
+    }
+}
+
 /// The readout of the view's cursor, `None` without one: `<x name> <x>`,
 /// then `  <series> <y>` when it snapped to a datum (REQ-LINE-040). A cursor
 /// naming a datum (series and row) writes that datum's x and y from the
 /// data, not the view's copies, so a view read back from JSON whose numbers
 /// came back an ulp off still writes the same readout (contract rule 16).
-pub(super) fn text(data: &Prepared, view: &View, geom: &Geom, locale: &Locale, formats: &mut Formats) -> Option<String> {
+/// Each number is written under its column's display transform
+/// (REQ-DATA-100), a time in the zone (REQ-TZ-030).
+pub(super) fn text(data: &Prepared, view: &View, place: Place<'_>, locale: &Locale, formats: &mut Formats) -> Option<String> {
     let c = view.cursor.as_ref()?;
-    let at = c.series.as_deref().and_then(|name| data.find(name)).and_then(|s| Some((s, data.pos(s, usize::try_from(c.index?).ok()?)?)));
+    let at =
+        c.series.as_deref().and_then(|name| data.find(name)).and_then(|s| Some((s, data.pos(s, usize::try_from(c.index?).ok()?.checked_sub(place.row0)?)?)));
     let x = at.map(|(s, i)| data.xs(s)[i]).filter(|x| x.is_finite()).or(c.x)?;
     let y = match at {
         Some((s, i)) => Some(data.ys(s)[i]).filter(|y| y.is_finite()).or(c.y),
@@ -123,18 +161,19 @@ pub(super) fn text(data: &Prepared, view: &View, geom: &Geom, locale: &Locale, f
         Kind::Time => {
             let second = |v: f64| (v / 1000.0).floor();
             let close = near_x.iter().any(|&n| n.is_finite() && n != x && second(n) == second(x));
-            let span = if close { 0.0 } else { geom.x.hi() - geom.x.lo() };
-            out.push_str(&draw::x_label(x, Kind::Time, span, locale));
+            let span = if close { 0.0 } else { place.x.hi() - place.x.lo() };
+            out.push_str(&draw::x_label(x, Kind::Time, span, locale, place.zone, &Display::default()));
         }
-        _ => formats.number(x, geom.x_step, &near_x, locale, &mut out),
+        _ => value(formats, x, &data.x_display(), place.x_step, &near_x, locale, &mut out),
     }
     if let Some(series) = &c.series {
         out.push_str("  ");
         out.push_str(series);
         if let Some(y) = y {
             let near_y = at.map_or([f64::NAN; 2], |(s, i)| neighbours(data.ys(s), i));
+            let display = data.find(series).map_or_else(Display::default, |s| data.display(s));
             out.push(' ');
-            formats.number(y, geom.y_step, &near_y, locale, &mut out);
+            value(formats, y, &display, place.y_step, &near_y, locale, &mut out);
         }
     }
     Some(out)

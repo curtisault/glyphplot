@@ -883,8 +883,10 @@ fn write_schema_samples() {
     println!("{} events", events.len());
 }
 
-/// REQ-INPUT-040, REQ-TOUCH-010: a click or a tap on a legend entry toggles
-/// its series; a finger's down and up alone do not, so a tap toggles once.
+/// REQ-INPUT-040, REQ-TOUCH-010, REQ-EVENT-010 (`plot-legend`): a click or a
+/// tap on a legend entry toggles its series once: a mouse's on its `up`, the
+/// `tap` the shell sends after a still click toggling nothing more; a
+/// finger's on its `tap`, its down and up toggling nothing.
 #[test]
 fn legend_clicks_toggle() {
     let mut c = chart("multi-4", "");
@@ -894,6 +896,11 @@ fn legend_clicks_toggle() {
     c.input(&Input::Down { t: 0.0, x, y, pointer: PointerType::Mouse, buttons: 1, mods: Mods::NONE });
     let ch = c.input(&Input::Up { t: 0.0, x, y, pointer: PointerType::Mouse, buttons: 0, mods: Mods::NONE });
     assert!(matches!(ch.events.as_slice(), [Event::Legend(l)] if l.series == "beta" && !l.visible));
+    for pointer in [PointerType::Mouse, PointerType::Pen] {
+        let ch = c.input(&Input::Tap { t: 0.0, x, y, count: 1, pointer });
+        assert!(ch.events.is_empty() && !ch.base, "the click's tap toggles nothing more ({pointer:?})");
+    }
+    assert_eq!(c.view().hidden, ["beta"]);
     let g = draw(&mut c, 100, 30, 0.0);
     assert_eq!(g.ink(span.x + 2, span.y), palette::MUTED, "a hidden series' name is muted");
     c.input(&Input::Down { t: 0.0, x, y, pointer: PointerType::Touch, buttons: 1, mods: Mods::NONE });
@@ -1051,4 +1058,82 @@ fn legend_position_option() {
     let mut c = chart("multi-4", "");
     draw(&mut c, 60, 11, 0.0);
     assert_eq!(c.table(10).columns.len(), 5, "a legend left out stays in the table");
+}
+
+/// Prices held in cents, 10,000 to 20,000, with 18,240 at row 50, shown by
+/// `scale: 0.01` in USD.
+fn cents() -> Data {
+    let y: Vec<f64> = (0..101).map(|i| if i == 50 { 18_240.0 } else { 10_000.0 + 100.0 * f64::from(i) }).collect();
+    let mut price = Column::f64("price", y).unit("USD");
+    price.scale = Some(0.01);
+    Data::from_table(DataTable::from_columns(vec![Column::f64("x", (0..101).map(f64::from).collect()), price]).unwrap())
+}
+
+/// REQ-DATA-100: a column's `scale` and `unit` apply to the y ticks, the
+/// readout and the table, and the stored values do not change: a readout
+/// of stored 18240 at `scale: 0.01` shows `182.40`.
+#[test]
+fn display_transform_applies_to_ticks_readout_and_table() {
+    let mut c = LineChart::new(&Options::new()).unwrap();
+    c.set_data(cents()).unwrap();
+    let g = draw(&mut c, 80, 24, 0.0);
+    let y_labels: Vec<String> =
+        c.geom.as_ref().unwrap().1.layout.panes[0].left.as_ref().unwrap().ticks.iter().filter_map(|t| t.label.as_ref()).map(|l| l.text.clone()).collect();
+    assert!(y_labels.iter().any(|l| l == "200") && y_labels.iter().all(|l| !l.contains(",0")), "ticks in dollars: {y_labels:?}");
+    assert!(g.text().contains("200┤"), "{}", g.text());
+    let p = plot(&c);
+    let y = c.geom.as_ref().unwrap().1.y;
+    assert!(y.lo() <= 10_000.0 && y.hi() >= 20_000.0, "the plot draws stored values: {:?}", (y.lo(), y.hi()));
+    c.set_view(&ViewPatch::from_json(r#"{"cursor":{"x":50,"y":18240,"series":"price","index":50}}"#).unwrap());
+    let g = draw(&mut c, 80, 24, 0.0);
+    assert!(g.text().contains("price 182.40 USD"), "{}", g.text().lines().nth(p.y).unwrap());
+    assert_eq!(c.table(500).rows[50], ["50", "182.40 USD"]);
+    assert_eq!(c.table(500).value.as_deref(), Some("50, price 182.40 USD"));
+    assert_eq!(c.data.ys(0)[50], 18_240.0, "the stored value is unchanged");
+}
+
+/// A zone table of one offset from the epoch on.
+fn fixed_zone(name: &str, offset: i32) -> crate::locale::ZoneTable {
+    crate::locale::ZoneTable { name: name.into(), transitions: vec![crate::locale::Transition { at: 0, offset }], covering: [0, 2_000_000_000_000] }
+}
+
+/// REQ-TZ-030, REQ-TICK-070: the time axis ticks and labels in the env's
+/// zone, as do the readout and the table, and a span under two days dates
+/// each local day in the axis's context row; UTC stays the default.
+#[test]
+fn time_ticks_and_labels_follow_the_zone() {
+    let start = crate::time::days_from_civil(2026, 3, 7) as f64 * crate::time::DAY;
+    let n = 48;
+    let t: Vec<f64> = (0..n).map(|i| start + f64::from(i) * crate::time::HOUR).collect();
+    let y: Vec<f64> = (0..n).map(|i| (f64::from(i) / 5.0).sin()).collect();
+    let data = || Data::from_table(DataTable::from_columns(vec![Column::timestamps_ms("t", t.clone()), Column::f64("y", y.clone())]).unwrap());
+    let frame = |zone: &crate::locale::ZoneTable| {
+        let mut c = LineChart::new(&Options::new()).unwrap();
+        c.set_data(data()).unwrap();
+        let mut g = Grid::new(80, 24);
+        c.frame(0.0, &Env { zone, ..Env::plain() }, &mut g);
+        let ticks: Vec<f64> = c.geom.as_ref().unwrap().1.layout.x_axis.as_ref().unwrap().ticks.iter().map(|t| t.value).collect();
+        (g, ticks, c)
+    };
+    let (utc, utc_ticks, mut u) = frame(&crate::locale::ZoneTable::default());
+    let mut plain = LineChart::new(&Options::new()).unwrap();
+    plain.set_data(data()).unwrap();
+    assert_eq!(draw(&mut plain, 80, 24, 0.0), utc, "UTC is the default");
+    let (india, india_ticks, mut i) = frame(&fixed_zone("+05:30", 330));
+    assert_ne!(utc, india, "a +05:30 table draws other ticks");
+    let hour = crate::time::HOUR;
+    assert!(utc_ticks.iter().all(|v| v % hour == 0.0));
+    assert!(india_ticks.iter().all(|v| (v + 330.0 * 60_000.0) % hour == 0.0), "ticks on local hours: {india_ticks:?}");
+    let last = utc.text().lines().last().unwrap().to_string();
+    assert!(last.contains("Mar 07") || last.contains("Mar 7"), "the context row dates the first day: {last:?}");
+    assert!(last.contains("Mar 8"), "and the next: {last:?}");
+    // The readout and the table write times in the zone.
+    let patch = ViewPatch::from_json(&format!(r#"{{"cursor":{{"x":{},"series":"y","index":0}}}}"#, start)).unwrap();
+    u.set_view(&patch);
+    i.set_view(&patch);
+    assert!(u.table(10).rows[0][0].starts_with("2026-03-07 00:00"));
+    assert!(i.table(10).rows[0][0].starts_with("2026-03-07 05:30"), "{:?}", i.table(10).rows[0]);
+    let mut g = Grid::new(80, 24);
+    i.frame(0.0, &Env { zone: &fixed_zone("+05:30", 330), ..Env::plain() }, &mut g);
+    assert!(g.text().contains("t 2026-03-07 05:30:00"), "{}", g.text());
 }
