@@ -10,6 +10,7 @@
 //! and the chart families ([`charts`]).
 #![warn(missing_docs)]
 
+pub mod annotate;
 pub mod budget;
 pub mod canvas;
 pub mod cells;

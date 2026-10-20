@@ -9,15 +9,19 @@
 //! mapping's edges; its dot row the y axis's dot. A gap (a missing y) breaks
 //! the path (REQ-LINE-030). Series are drawn in z-order on one colour
 //! canvas, a cell taking the ink of the last series lighting it
-//! (REQ-CANVAS-040, REQ-CHART-060); in one ink, line series take the dash
-//! patterns of REQ-MONO-010 counted from the x origin, and an area series
-//! fills to its baseline only in its pattern's dot columns, its line drawn
-//! in every column (contract rule 11).
+//! (REQ-CANVAS-040, REQ-CHART-060). In one ink (or with `patterns: "on"`),
+//! line series take the dash patterns of REQ-MONO-010 counted from the x
+//! origin, series 5 to 8 add their markers every few cells (REQ-MONO-020),
+//! and an area series draws its line in every column and fills to its
+//! baseline with its shade, `█ ▓ ▒ ░` by series, in the cells the fill
+//! covers whole, braille dots in the cells it covers in part
+//! (REQ-MONO-030). Annotations are drawn over the labels (REQ-ANNOT-010).
 
 use std::ops::Range;
 
 use super::series::Prepared;
 use super::{Config, Mode, StepAt};
+use crate::annotate;
 use crate::canvas::ColorCanvas;
 use crate::cells::Axis;
 use crate::downsample::{Cache, CacheKey, Edges, M4};
@@ -28,7 +32,7 @@ use crate::mono;
 use crate::overlay;
 use crate::palette::{self, INK, MUTED};
 use crate::scale::Kind;
-use crate::text::{stage, Frame};
+use crate::text::{stage, Frame, LegendEntry};
 use crate::view::View;
 
 /// The plot and its axes, as a frame lays them out.
@@ -129,6 +133,16 @@ fn path(data: &Prepared, s: usize, rows: &Range<usize>, m4: Option<&M4>, geom: &
 pub(super) struct Scratch {
     /// A series' path.
     pts: Vec<Pt>,
+    /// A series' first lit dot row a dot column, for its markers.
+    tops: Vec<i64>,
+    /// Markers to place once every series is drawn: plot column and row,
+    /// glyph, ink.
+    marks: Vec<(usize, usize, char, u8)>,
+    /// Area cells to shade once every series is drawn: plot column and row,
+    /// glyph, ink.
+    shades: Vec<(usize, usize, char, u8)>,
+    /// The cells holding a marker.
+    markers: mono::Markers,
 }
 
 /// Calls `plot` for every dot of the path in `mode`, clipped to `w × h`.
@@ -196,11 +210,7 @@ pub(super) fn base(grid: &mut Grid, canvas: &mut ColorCanvas, cache: &mut Cache,
     let mut f = Frame::new(grid, ground);
     let shown: Vec<usize> = (0..data.series.len()).filter(|&s| !view.is_hidden(&data.series[s].name)).collect();
     let any = data.rows() > 0 && !data.series.is_empty();
-    let patterned = match cfg.patterns {
-        super::Patterns::On => true,
-        super::Patterns::Off => false,
-        super::Patterns::Auto => mono,
-    };
+    let patterned = cfg.patterns.active(mono);
     if plot.w > 0 && plot.h > 0 && !shown.is_empty() {
         let edges = Edges::new(&geom.x);
         let span = cfg.span_gaps;
@@ -219,6 +229,8 @@ pub(super) fn base(grid: &mut Grid, canvas: &mut ColorCanvas, cache: &mut Cache,
         let mut order: Vec<usize> = shown.iter().copied().filter(|&s| !raised.contains(&data.series[s].name.as_str())).collect();
         order.extend(shown.iter().copied().filter(|&s| raised.contains(&data.series[s].name.as_str())));
         let base_dot = geom.y.dot(cfg.baseline).unwrap_or(h);
+        scratch.marks.clear();
+        scratch.shades.clear();
         for s in order {
             path(data, s, &rows[s], m4s.map(|m| &m[s]), geom, &edges, span, &mut scratch.pts);
             let pts = &scratch.pts;
@@ -230,29 +242,83 @@ pub(super) fn base(grid: &mut Grid, canvas: &mut ColorCanvas, cache: &mut Cache,
                     bot[x as usize] = bot[x as usize].max(y);
                 });
                 let base_dot = base_dot.max(-1).min(h);
-                for x in 0..w as usize {
-                    if top[x] <= bot[x] {
-                        // Patterned (one ink, or `patterns: "on"`), the fill
-                        // to the baseline takes the series' dash pattern by
-                        // dot column, as a line does, and the line itself
-                        // every column, so series of one ink differ in their
-                        // fills (contract rule 11).
-                        let filled = !patterned || mono::lit(s, x as i64, origin);
-                        let (a, b) = if filled { (top[x].min(base_dot).max(0), bot[x].max(base_dot).min(h - 1)) } else { (top[x].max(0), bot[x].min(h - 1)) };
-                        for y in a..=b {
-                            canvas.set(x as i64, y, ink);
+                let fill_of = |x: usize| (top[x] <= bot[x]).then(|| (top[x].min(base_dot).max(0), bot[x].max(base_dot).min(h - 1)));
+                if patterned {
+                    // One ink: the line in every column, the cells the fill
+                    // covers whole (both dot columns, all four dot rows, no
+                    // dot of the line) shaded with the series' fill, the
+                    // cells it covers in part in dots (REQ-MONO-030).
+                    let whole = |cx: usize, cy: i64| {
+                        let (a, b) = (4 * cy, 4 * cy + 3);
+                        [2 * cx, 2 * cx + 1]
+                            .iter()
+                            .all(|&x| x < w as usize && fill_of(x).is_some_and(|(fa, fb)| fa <= a && b <= fb) && (bot[x] < a || top[x] > b))
+                    };
+                    let glyph = mono::fill(s);
+                    for x in 0..w as usize {
+                        let Some((fa, fb)) = fill_of(x) else { continue };
+                        for y in fa..=fb {
+                            let on_line = y >= top[x] && y <= bot[x];
+                            if on_line || !whole(x / 2, y / 4) {
+                                canvas.set(x as i64, y, ink);
+                            }
+                        }
+                    }
+                    for cx in 0..plot.w {
+                        for cy in 0..plot.h as i64 {
+                            if whole(cx, cy) {
+                                scratch.shades.push((cx, cy as usize, glyph, ink));
+                            }
+                        }
+                    }
+                } else {
+                    for x in 0..w as usize {
+                        if let Some((a, b)) = fill_of(x) {
+                            for y in a..=b {
+                                canvas.set(x as i64, y, ink);
+                            }
                         }
                     }
                 }
             } else {
+                let marker = mono::marker(s).filter(|_| patterned);
+                if marker.is_some() {
+                    scratch.tops.clear();
+                    scratch.tops.resize(w as usize, i64::MAX);
+                }
+                let tops = &mut scratch.tops;
                 walk(pts, cfg.mode, cfg.step, w, h, |x, y| {
+                    if marker.is_some() {
+                        tops[x as usize] = tops[x as usize].min(y);
+                    }
                     if !patterned || mono::lit(s, x, origin) {
                         canvas.set(x, y, ink);
                     }
                 });
+                // Series 5 to 8: a marker every few cells where the line
+                // passes, placed once every series is drawn (REQ-MONO-020).
+                if let Some(glyph) = marker {
+                    for cx in (0..plot.w).filter(|&c| mono::marker_column(s, c, origin)) {
+                        let row = [2 * cx, 2 * cx + 1].iter().filter_map(|&x| tops.get(x).copied()).find(|&y| y != i64::MAX);
+                        if let Some(y) = row {
+                            scratch.marks.push((cx, (y / 4) as usize, glyph, ink));
+                        }
+                    }
+                }
             }
         }
         canvas.draw(f.data(), plot.x as i32, plot.y as i32);
+        // Shades go where no series' dots are; markers over everything, one
+        // a cell.
+        for &(cx, cy, glyph, ink) in &scratch.shades {
+            if canvas.dots().mask(cx, cy) == 0 {
+                f.data().set((plot.x + cx) as i32, (plot.y + cy) as i32, glyph as u32, ink);
+            }
+        }
+        scratch.markers.reset(plot);
+        for &(cx, cy, glyph, ink) in &scratch.marks {
+            scratch.markers.place(f.data(), plot.x + cx, plot.y + cy, glyph, ink);
+        }
     }
     let mut f = f.then::<stage::Axes>();
     let layout = &geom.layout;
@@ -269,16 +335,29 @@ pub(super) fn base(grid: &mut Grid, canvas: &mut ColorCanvas, cache: &mut Cache,
     if let (Some(rect), Some(title)) = (layout.title, &geom.title) {
         f.label_in(rect, title, INK);
     }
-    // Each key is the line its series is drawn with: its dash pattern when
-    // patterned (one ink, or `patterns: "on"`), else solid (REQ-MONO-040).
-    for (s, span) in &geom.legend {
-        let hidden = view.is_hidden(&data.series[*s].name);
-        let ink = if hidden { MUTED } else { series_ink(*s) };
-        let mut key = [0u8; 4];
-        let glyph = if patterned { mono::key(*s) } else { mono::KEYS[0] };
-        f.label(span.x, span.y, glyph.encode_utf8(&mut key), ink);
-        f.label(span.x + 2, span.y, &data.series[*s].name, if hidden { MUTED } else { INK });
-    }
+    // Each key is how its series is drawn: when patterned (one ink, or
+    // `patterns: "on"`) its dash pattern or marker, or an area's fill; else
+    // solid (REQ-MONO-040).
+    let entries: Vec<LegendEntry> = geom
+        .legend
+        .iter()
+        .map(|&(s, rect)| {
+            let hidden = view.is_hidden(&data.series[s].name);
+            let key = match (patterned, cfg.mode) {
+                (false, _) => mono::KEYS[0],
+                (true, Mode::Area) => mono::fill_key(s),
+                (true, _) => mono::key(s),
+            };
+            LegendEntry {
+                rect,
+                key,
+                key_ink: if hidden { MUTED } else { series_ink(s) },
+                name: &data.series[s].name,
+                name_ink: if hidden { MUTED } else { INK },
+            }
+        })
+        .collect();
+    f.legend(&entries);
     if let Some(a) = &layout.x_axis {
         f.axis_labels(a);
     }
@@ -291,6 +370,8 @@ pub(super) fn base(grid: &mut Grid, canvas: &mut ColorCanvas, cache: &mut Cache,
         let text = "no data";
         f.label(plot.x + (plot.w - text.len()) / 2, plot.y + plot.h / 2, text, MUTED);
     }
+    let mut f = f.then::<stage::Annotations>();
+    annotate::draw(&mut f, &layout.marks, mono);
 }
 
 /// A number as readouts and tables write it: d3-format's default, twelve

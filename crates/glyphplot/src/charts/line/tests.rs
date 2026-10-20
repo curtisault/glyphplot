@@ -902,3 +902,153 @@ fn legend_clicks_toggle() {
     assert!(matches!(ch.events.as_slice(), [Event::Legend(l)] if l.visible && l.source == Source::Touch));
     assert!(c.view().hidden.is_empty());
 }
+
+/// Draws `c` at `cols × rows` in one ink.
+fn draw_mono(c: &mut LineChart, cols: usize, rows: usize) -> Grid {
+    let mut g = Grid::new(cols, rows);
+    c.frame(0.0, &Env { mono: true, ..Env::plain() }, &mut g);
+    g
+}
+
+/// Eight series of one shape, offset so their lines stay apart.
+fn eight() -> Data {
+    let xs: Vec<f64> = (0..200).map(f64::from).collect();
+    let mut columns = vec![Column::f64("x", xs.clone())];
+    for s in 0..8 {
+        let ys = xs.iter().map(|&x| f64::from(s) * 10.0 + crate::fixtures::sin_turns(x / 50.0)).collect();
+        columns.push(Column::f64(&format!("s{}", s + 1), ys));
+    }
+    Data::from_table(DataTable::from_columns(columns).unwrap())
+}
+
+/// The plot's cells of `c`'s last frame.
+fn plot_cells(c: &LineChart) -> Vec<(usize, usize)> {
+    let p = plot(c);
+    (p.y..p.y + p.h).flat_map(|r| (p.x..p.x + p.w).map(move |x| (x, r))).collect()
+}
+
+/// REQ-MONO-020, REQ-MONO-040: in one ink, series 5 to 8 repeat the dash
+/// patterns and add their markers `● ○ ■ □` in their inks, along their
+/// lines, at most one a cell; series 1 to 4 have none; each legend key is the
+/// series' dash or marker. In colour there are no markers.
+#[test]
+fn series_five_to_eight_add_markers() {
+    let mut c = LineChart::new(&Options::parse(r#"{"legend":{"position":"outside"}}"#).unwrap()).unwrap();
+    c.set_data(eight()).unwrap();
+    let g = draw_mono(&mut c, 160, 40);
+    let cells = plot_cells(&c);
+    let with = |glyph: char| cells.iter().copied().filter(|&(x, r)| g.glyph(x, r) == glyph as u32).collect::<Vec<_>>();
+    for s in 0..8 {
+        match crate::mono::marker(s) {
+            None => assert!(s < 4),
+            Some(m) => {
+                let at = with(m);
+                assert!(at.len() >= 3, "series {} draws its marker {m} along its line: {at:?}", s + 1);
+                assert!(at.iter().all(|&(x, r)| g.ink(x, r) == palette::series(s)), "in its ink");
+            }
+        }
+    }
+    for m in &crate::mono::MARKERS[4..] {
+        assert!(with(*m).is_empty(), "series 9 to 12's markers are not drawn");
+    }
+    let legend = g.text().lines().next().unwrap().to_string();
+    for s in 0..8 {
+        assert!(legend.contains(&format!("{} s{}", crate::mono::key(s), s + 1)), "{legend}");
+    }
+    let colour = draw(&mut c, 160, 40, 0.0);
+    assert!(crate::mono::MARKERS.iter().all(|&m| !colour.glyphs().contains(&(m as u32))), "no markers in colour");
+}
+
+/// REQ-MONO-030: in one ink, area series fill with `█ ▓ ▒ ░` by series where
+/// the fill covers a cell whole, the line drawn over it in dots; the legend
+/// keys are the fills.
+#[test]
+fn area_fills_by_series_in_one_ink() {
+    let names = ["alpha", "beta", "gamma", "delta"];
+    for (s, name) in names.iter().enumerate() {
+        let hidden: Vec<&str> = names.iter().copied().filter(|n| n != name).collect();
+        let mut c = chart("multi-4", r#"{"mode":"area"}"#);
+        c.set_view(&ViewPatch::from_json(&serde_json::json!({ "hidden": hidden }).to_string()).unwrap());
+        let g = draw_mono(&mut c, 100, 30);
+        let cells = plot_cells(&c);
+        let fill = crate::mono::fill(s) as u32;
+        let filled = cells.iter().filter(|&&(x, r)| g.glyph(x, r) == fill).count();
+        assert!(filled > 20, "{name} fills {filled} cells with U+{fill:04X}");
+        let others = cells.iter().filter(|&&(x, r)| crate::mono::FILLS.iter().any(|&f| f as u32 == g.glyph(x, r) && f as u32 != fill)).count();
+        assert_eq!(others, 0, "{name} draws no other fill");
+        assert!(cells.iter().any(|&(x, r)| is_dots(g.glyph(x, r))), "{name}'s line stays in dots");
+        let legend = g.text().lines().next().unwrap().to_string();
+        assert!(legend.contains(&format!("{} {name}", crate::mono::fill_key(s))), "{legend}");
+    }
+    // In colour the area fills in dots, as before.
+    let mut c = chart("sine-1k", r#"{"mode":"area"}"#);
+    let g = draw(&mut c, 80, 24, 0.0);
+    assert!(crate::mono::FILLS.iter().all(|&f| !g.glyphs().contains(&(f as u32))));
+}
+
+/// REQ-ANNOT-010 through the line chart's options: an `hline` with a label
+/// on the y axis hides the tick label it overlaps; a `vline`, a `band` and
+/// a `marker` draw over the data inside the plot; annotations that do not
+/// parse are an error naming the option.
+#[test]
+fn annotations_draw_from_the_options() {
+    let mut plain = chart("sine-1k", "");
+    let before = draw(&mut plain, 80, 24, 0.0);
+    let geom = &plain.geom.as_ref().unwrap().1;
+    let y_axis = geom.layout.panes[0].left.as_ref().unwrap();
+    let tick = y_axis.ticks.iter().filter(|t| t.label.is_some()).nth(1).unwrap().clone();
+    let (lo, hi) = (geom.layout.x_domain[0], geom.layout.x_domain[1]);
+    let mid = lo + (hi - lo) / 2.0;
+    let opts = serde_json::json!({ "annotations": [
+        { "type": "hline", "scale": "y", "value": tick.value, "label": "limit" },
+        { "type": "vline", "value": mid },
+        { "type": "band", "scale": "x", "from": lo, "to": lo + (hi - lo) / 10.0 },
+        { "type": "marker", "x": mid, "y": 0.0, "glyph": "\u{25C6}" }
+    ]});
+    let mut c = chart("sine-1k", &opts.to_string());
+    let g = draw(&mut c, 80, 24, 0.0);
+    assert_ne!(g, before);
+    let lay = &c.geom.as_ref().unwrap().1.layout;
+    let p = lay.panes[0].plot;
+    let left = lay.panes[0].left.as_ref().unwrap();
+    assert!(left.ticks.iter().find(|t| t.value == tick.value).unwrap().label.is_none(), "the tick label under `limit` is hidden");
+    let row = p.y + tick.cell;
+    let line = g.text().lines().nth(row).unwrap().to_string();
+    assert!(line.starts_with(&format!("{:>w$}", "limit", w = left.rect.w - 1)), "{line}");
+    assert_eq!(g.ink(left.rect.x + left.rect.w - 2, row), palette::ACCENT);
+    assert!(g.glyphs().contains(&0x25C6), "the marker");
+    let band = lay.marks.iter().find_map(|m| if let crate::annotate::Mark::Shade(r) = m { Some(*r) } else { None }).unwrap();
+    assert_eq!((band.x, band.y, band.h), (p.x, p.y, p.h));
+    assert_eq!(g.back(band.x, band.y + 1), palette::RULE, "the band shades the back");
+    let mono = draw_mono(&mut c, 80, 24);
+    assert!(mono.glyphs().contains(&0x2591), "in one ink the band is ░");
+    for bad in [r#"{"annotations":[{"type":"hline","value":1}]}"#, r#"{"annotations":{"type":"vline","value":1}}"#] {
+        let e = LineChart::new(&Options::parse(bad).unwrap()).err().unwrap();
+        assert!(e.to_string().starts_with("option `annotations`"), "{e}");
+    }
+}
+
+/// REQ-LAYOUT-060 through the options: `legend.position` forces the legend
+/// inside, outside or off; `auto` leaves it out when it fits neither, and
+/// the series stay in the table.
+#[test]
+fn legend_position_option() {
+    let at = |opts: &str, cols, rows| {
+        let mut c = chart("multi-4", opts);
+        draw(&mut c, cols, rows, 0.0);
+        let g = &c.geom.as_ref().unwrap().1;
+        (g.layout.legend, g.layout.panes[0].plot, g.legend.len())
+    };
+    let (legend, plot, n) = at("", 100, 30);
+    assert_eq!((legend.map(|r| r.y), n), (Some(0), 4), "outside at 30 rows");
+    assert!(plot.y > 0);
+    let (legend, plot, _) = at(r#"{"legend":{"position":"inside"}}"#, 100, 30);
+    assert_eq!(legend.map(|r| (r.x, r.y)), Some((plot.x, plot.y)));
+    let (legend, _, n) = at(r#"{"legend":{"position":"none"}}"#, 100, 30);
+    assert_eq!((legend, n), (None, 0));
+    let (legend, _, n) = at("", 60, 11);
+    assert_eq!((legend, n), (None, 0), "at 60 × 11 it fits neither: left out");
+    let mut c = chart("multi-4", "");
+    draw(&mut c, 60, 11, 0.0);
+    assert_eq!(c.table(10).columns.len(), 5, "a legend left out stays in the table");
+}

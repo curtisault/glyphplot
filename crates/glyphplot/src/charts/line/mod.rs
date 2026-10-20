@@ -21,6 +21,7 @@ use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::ops::Range;
 
+use crate::annotate::{self, Annotation};
 use crate::cells::Axis;
 use crate::chart::{Accepted, Appended, CellPos, Changes, Charset, Chart, Env, Hit, MakeError, Meta, Mono, Part, Size, Table};
 use crate::data::{Column, Data, DataError, Encode, Shape, Values};
@@ -30,8 +31,9 @@ use crate::format::Locale;
 use crate::grid::{Grid, NO_BACK};
 use crate::hit::{column_aggregate, nearest};
 use crate::input::Input;
-use crate::layout::{layout, AxisInput, Layout, LayoutExtents, LayoutInput, PaneExtents, PlacedAxis, Rect};
+use crate::layout::{layout, AxisInput, Layout, LayoutExtents, LayoutInput, LegendPosition, PaneExtents, PlacedAxis, Rect};
 use crate::locale::LocalePack;
+use crate::mono::Patterns;
 use crate::options::Options;
 use crate::palette::GROUND;
 use crate::reduce::{reduce, DragMode, Gesture, Interaction, Plot, Scene, WheelMode};
@@ -53,7 +55,7 @@ pub static META: Meta = Meta {
     modes: &["line", "step", "area"],
     shapes: &[Shape::Series],
     options: Some(
-        r#"{"mode":"line","step":"after","spanGaps":false,"title":"","encode":{},"legend":{"position":"auto"},"sample":"m4","baseline":0,"drag":"pan","wheel":"scroll","patterns":"auto","motion":false}"#,
+        r#"{"mode":"line","step":"after","spanGaps":false,"title":"","encode":{},"legend":{"position":"auto"},"sample":"m4","baseline":0,"drag":"pan","wheel":"scroll","patterns":"auto","motion":false,"annotations":[]}"#,
     ),
     min: Size { cols: 23, rows: 6 },
     drop: &[Part::Title, Part::Legend, Part::Axes],
@@ -103,17 +105,6 @@ enum StepAt {
     Middle,
 }
 
-/// The `patterns` option.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Patterns {
-    /// Dash patterns in one ink, none in colour.
-    Auto,
-    /// Always.
-    On,
-    /// Never.
-    Off,
-}
-
 /// The options as the chart reads them.
 #[derive(Clone, Debug, PartialEq)]
 struct Config {
@@ -122,11 +113,13 @@ struct Config {
     span_gaps: bool,
     title: String,
     encode: Encode,
-    legend: bool,
+    legend: LegendPosition,
     sample_none: bool,
     baseline: f64,
     interaction: Interaction,
     patterns: Patterns,
+    /// The `annotations` option (REQ-ANNOT-010).
+    annotations: Vec<Annotation>,
 }
 
 /// The options read: every key has a default in [`META`]'s (REQ-OPT-010).
@@ -142,7 +135,7 @@ fn config(o: &Options) -> Result<Config, MakeError> {
         _ => StepAt::After,
     };
     let encode = o.object("encode").and_then(|m| serde_json::from_value::<Encode>(serde_json::Value::Object(m.clone())).ok()).unwrap_or_default();
-    let legend = o.object("legend").and_then(|m| m.get("position")).and_then(|p| p.as_str()) != Some("none");
+    let legend = LegendPosition::from_option(o.object("legend").and_then(|m| m.get("position")).and_then(|p| p.as_str()).unwrap_or("auto"));
     let baseline = o.f64("baseline");
     Ok(Config {
         mode,
@@ -162,11 +155,8 @@ fn config(o: &Options) -> Result<Config, MakeError> {
             wheel: if o.choice("wheel", &["scroll", "zoom"]) == "zoom" { WheelMode::Zoom } else { WheelMode::Scroll },
             motion: o.bool("motion"),
         },
-        patterns: match o.choice("patterns", &["auto", "on", "off"]) {
-            "on" => Patterns::On,
-            "off" => Patterns::Off,
-            _ => Patterns::Auto,
-        },
+        patterns: Patterns::from_option(o.choice("patterns", &["auto", "on", "off"])),
+        annotations: annotate::parse(o.get("annotations"))?,
     })
 }
 
@@ -361,54 +351,52 @@ impl LineChart {
         let rows: Vec<Range<usize>> = (0..self.data.series.len()).map(|s| view_rows(self.data.xs(s), xd[0], xd[1])).collect();
         let shed = key.cols < usize::from(META.min.cols) || key.rows < usize::from(META.min.rows);
         let title = (!shed && !self.cfg.title.is_empty()).then(|| self.cfg.title.clone());
-        let legend: Vec<String> =
-            if !shed && self.cfg.legend && self.data.series.len() >= 2 { self.data.series.iter().map(|s| s.name.clone()).collect() } else { Vec::new() };
+        let legend: Vec<String> = if !shed && self.cfg.legend != LegendPosition::None && self.data.series.len() >= 2 {
+            self.data.series.iter().map(|s| s.name.clone()).collect()
+        } else {
+            Vec::new()
+        };
         let fit = view.y.fit;
         let visible = if fit == Fit::Visible { self.y_extent(view, Some(xd)) } else { None };
         let all = if fit != Fit::Visible || visible.is_none() { self.y_extent(view, None) } else { None };
         let y_domain = if fit == Fit::Visible { Domain::View } else { Domain::Data };
-        let mut x_axis = AxisInput::new(self.data.kind);
+        let mut x_axis = AxisInput::named(self.data.kind, "x");
         x_axis.scale = scale_options(self.data.kind, Domain::Data, None);
-        let mut y_axis = AxisInput::new(Kind::Linear);
+        let mut y_axis = AxisInput::named(Kind::Linear, "y");
         y_axis.scale = scale_options(Kind::Linear, y_domain.clone(), Some(true));
         let mut input = LayoutInput::new(x_axis, y_axis);
         input.title = title.clone();
         input.legend = legend.clone();
+        input.legend_position = self.cfg.legend;
+        input.annotations = self.cfg.annotations.clone();
         input.locale = self.locale.clone();
         let x_ext = Extents { data: Some(xd), visible: None, view: Some(xd) };
         let y_ext = Extents { data: all, visible, view: view.y.domain };
         let run = |input: &LayoutInput| {
             layout(key.cols, key.rows, input, &LayoutExtents { x: x_ext, panes: vec![PaneExtents { left: y_ext, ..PaneExtents::default() }] })
                 .or_else(|_| layout(key.cols, key.rows, input, &LayoutExtents { x: x_ext, panes: vec![PaneExtents::default()] }))
-                .unwrap_or_else(|_| empty_layout(key.cols, key.rows))
+                .unwrap_or_else(|_| Layout::empty(key.cols, key.rows))
         };
         let mut lay = run(&input);
         // A nice domain the data fills too little of gives way to the data's
         // (NICE_FILL); a y domain in the view is drawn as it is.
         if view.y.domain.is_none() {
             let plain = resolve_domain(&scale_options(Kind::Linear, y_domain, None), Kind::Linear, &y_ext, 1.0);
-            if let (Some(p), Ok([a, b])) = (lay.panes.first(), plain) {
-                let [c, d] = p.left_domain;
+            if let (Some([c, d]), Ok([a, b])) = (lay.panes.first().and_then(|p| p.left_domain), plain) {
                 if (b - a).abs() < NICE_FILL * (d - c).abs() {
-                    input.panes[0].left.scale.nice = None;
+                    if let Some(left) = &mut input.panes[0].left {
+                        left.scale.nice = None;
+                    }
                     lay = run(&input);
                 }
             }
         }
         let pane = lay.panes.first();
         let plot = pane.map_or(Rect::default(), |p| p.plot);
-        let y = pane.map_or([0.0, 1.0], |p| p.left_domain);
+        let y = pane.and_then(|p| p.left_domain).unwrap_or([0.0, 1.0]);
         let x_step = tick_step_of(lay.x_axis.as_ref(), lay.x_domain, plot.w / crate::layout::X_CELLS_PER_TICK);
         let y_step = tick_step_of(pane.and_then(|p| p.left.as_ref()), y, plot.h / crate::layout::Y_ROWS_PER_TICK);
-        let mut spans = Vec::new();
-        if let Some(r) = lay.legend {
-            let mut x = r.x;
-            for (s, name) in legend.iter().enumerate() {
-                let w = 2 + crate::text::width(name);
-                spans.push((s, Rect::new(x, r.y, w, 1)));
-                x += w + 2;
-            }
-        }
+        let spans: Vec<(usize, Rect)> = lay.legend.map(|r| crate::layout::legend_spans(r, &legend).into_iter().enumerate().collect()).unwrap_or_default();
         let geom = Geom {
             plot,
             x: Axis::x(lay.x_domain[0], lay.x_domain[1], plot.w, 2),
@@ -594,20 +582,6 @@ fn tick_step_of(axis: Option<&PlacedAxis>, domain: [f64; 2], count: usize) -> f6
     match axis.map(|a| a.ticks.as_slice()) {
         Some([a, b, ..]) => b.value - a.value,
         _ => crate::ticks::tick_step(domain[0], domain[1], count.max(1) as f64).abs(),
-    }
-}
-
-/// A layout of no parts: the whole grid a plot over [0, 1] both ways.
-fn empty_layout(cols: usize, rows: usize) -> Layout {
-    Layout {
-        cols,
-        rows,
-        decorated: false,
-        title: None,
-        legend: None,
-        x_domain: [0.0, 1.0],
-        x_axis: None,
-        panes: vec![crate::layout::PaneLayout { plot: Rect::new(0, 0, cols, rows), left_domain: [0.0, 1.0], right_domain: None, left: None, right: None }],
     }
 }
 
