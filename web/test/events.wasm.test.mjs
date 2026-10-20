@@ -43,7 +43,10 @@ test(`${BUILD}: the session is in input.schema.json's form`, async () => {
 });
 
 for (const meta of manifest.charts) {
-  const fixtures = index.fixtures.filter((f) => meta.shapes.includes(f.shape) && ["sine-1k", "multi-4", "labels-wide", "random-walk-100k", "nan-gaps", "one", "empty"].includes(f.name));
+  // The series fixtures for a series chart; for a chart of another shape
+  // (candles, bar), every fixture of its shapes up to 10,000 rows.
+  const named = index.fixtures.filter((f) => meta.shapes.includes(f.shape) && ["sine-1k", "multi-4", "labels-wide", "random-walk-100k", "nan-gaps", "one", "empty"].includes(f.name));
+  const fixtures = named.length > 0 ? named : index.fixtures.filter((f) => meta.shapes.includes(f.shape) && f.rows <= 10_000);
   test(`${BUILD}: ${meta.slug}: every event the session gives validates against events.schema.json (REQ-EVENT-010, REQ-INPUT-020)`, async () => {
     const validate = await schema("events");
     const { glue, memory } = await moduleOfType(meta.slug);
@@ -72,7 +75,9 @@ for (const meta of manifest.charts) {
       c.free();
     }
     console.log(`# ${BUILD} ${meta.slug}: events seen ${JSON.stringify(Object.fromEntries(seen))} over ${fixtures.map((f) => f.name).join(", ")}`);
-    for (const type of ["plot-hover", "plot-view", "plot-select", "plot-brush", "plot-cursor", "plot-legend"]) assert.ok(seen.has(type), `the session gives ${type}`);
+    // An OHLCV chart draws one instrument: no series to toggle, so no plot-legend.
+    const types = ["plot-hover", "plot-view", "plot-select", "plot-brush", "plot-cursor", ...(meta.shapes.includes("ohlcv") ? [] : ["plot-legend"])];
+    for (const type of types) assert.ok(seen.has(type), `the session gives ${type}`);
   });
 }
 

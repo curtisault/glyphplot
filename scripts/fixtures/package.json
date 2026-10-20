@@ -2,7 +2,7 @@
   "name": "glyphplot-fixtures",
   "private": true,
   "type": "module",
-  "description": "The pinned references scripts/fixtures.mjs captures crates/glyphplot/tests/fixtures from (REQ-REF-010). d3-format and d3-time-format are the versions d3-scale 4.0.2 resolves to.",
+  "description": "The pinned references scripts/fixtures.mjs captures crates/glyphplot/tests/fixtures from (REQ-REF-010). d3-format and d3-time-format are the versions d3-scale 4.0.2 resolves to. The LTTB reference is not a package: lttb-reference.js beside this file is flot-downsample af872e0 (MIT) as published, copied from discovery/bench/testing/ref.",
   "dependencies": {
     "d3-array": "3.2.4",
     "d3-format": "3.1.2",

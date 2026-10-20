@@ -17,12 +17,11 @@ glyphplot candles --from feed.csv
 tail -f metrics.csv | glyphplot line
 ```
 
-**Status: v0.4.0.** The `line` chart works end to end, in Rust, in wasm and
-in `<glyph-plot>`, with pointer, keyboard and touch input, a hidden table and
-a slider cursor. It is held to the full chart contract and to time budgets:
-1.8 ms a frame over 1M points natively, 4.1 ms in Chromium, and a first
-frame in 0.8 s on a 4G profile. The CLI does not draw yet, and nothing is
-published. The next phase adds candles, bar and the sparkline.
+**Status: v0.5.0.** `line`, `sparkline`, `candles` and `bar` work end to end,
+in Rust, in wasm and in `<glyph-plot>`, with pointer, keyboard and touch
+input, linked charts, time zones, a hidden table and a slider cursor. Each is
+held to the full chart contract and to time budgets. The CLI does not draw
+yet, and nothing is published. The next phase adds streaming.
 
 glyphplot is the sibling of [unicel](../animate-unicode) (animated Unicode
 art) and follows its architecture, but it is a separate, independent

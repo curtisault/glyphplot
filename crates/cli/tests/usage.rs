@@ -17,7 +17,9 @@ fn version_prints_the_crate_version() {
 fn help_names_every_family() {
     let out = glyphplot(&["--help"]);
     assert!(out.status.success());
-    assert!(String::from_utf8_lossy(&out.stdout).contains("Families: line\n"));
+    let families: Vec<&str> = glyphplot::FAMILIES.iter().map(|f| f.name).collect();
+    assert_eq!(families, ["line", "candles", "bar"], "the default build registers the three families");
+    assert!(String::from_utf8_lossy(&out.stdout).contains(&format!("Families: {}\n", families.join(", "))));
 }
 
 #[test]

@@ -1,6 +1,6 @@
 //! The `line` family: series over a continuous x, as lines, steps or areas
-//! (REQ-LINE-010 to 040). Its one type so far is `line`; the sparkline joins
-//! it in v0.5.0.
+//! (REQ-LINE-010 to 040), and the `sparkline` type, the same series drawn
+//! small with no axes, a band of rows each (REQ-SPARK-010, `spark.rs`).
 //!
 //! The chart draws from M4 aggregates of the rows in view, found by binary
 //! search on x and kept by data version, x range and width (REQ-SAMPLE-010,
@@ -16,28 +16,34 @@
 mod draw;
 mod readout;
 mod series;
+pub mod spark;
+
+pub use spark::SparkChart;
 
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::ops::Range;
 
+use crate::annotate::{self, Annotation};
 use crate::cells::Axis;
 use crate::chart::{Accepted, Appended, CellPos, Changes, Charset, Chart, Env, Hit, MakeError, Meta, Mono, Part, Size, Table};
 use crate::data::{Column, Data, DataError, Encode, Shape, Values};
 use crate::downsample::{view_rows, Cache, Edges};
 use crate::events::Value;
-use crate::format::Locale;
+use crate::format::{Display, Locale};
 use crate::grid::{Grid, NO_BACK};
 use crate::hit::{column_aggregate, nearest};
 use crate::input::Input;
-use crate::layout::{layout, AxisInput, Layout, LayoutExtents, LayoutInput, PaneExtents, PlacedAxis, Rect};
-use crate::locale::LocalePack;
+use crate::layout::{layout, AxisInput, Layout, LayoutExtents, LayoutInput, LegendPosition, PaneExtents, PlacedAxis, Rect};
+use crate::locale::{LocalePack, ZoneTable};
+use crate::mono::Patterns;
 use crate::options::Options;
 use crate::palette::GROUND;
 use crate::reduce::{reduce, DragMode, Gesture, Interaction, Plot, Scene, WheelMode};
 use crate::registry::{Entry, Family};
-use crate::scale::{resolve_domain, Domain, Extents, Kind, ScaleOptions, ScaleType};
+use crate::scale::{resolve_domain, Domain, Extents, Kind, Scale, ScaleOptions, ScaleType};
 use crate::table::pick_rows;
+use crate::time::Zone;
 use crate::view::{Cursor, Fit, View, ViewPatch};
 use crate::Budget;
 
@@ -53,7 +59,7 @@ pub static META: Meta = Meta {
     modes: &["line", "step", "area"],
     shapes: &[Shape::Series],
     options: Some(
-        r#"{"mode":"line","step":"after","spanGaps":false,"title":"","encode":{},"legend":{"position":"auto"},"sample":"m4","baseline":0,"drag":"pan","wheel":"scroll","patterns":"auto","motion":false}"#,
+        r#"{"mode":"line","step":"after","spanGaps":false,"title":"","encode":{},"legend":{"position":"auto"},"sample":"m4","baseline":0,"drag":"pan","wheel":"scroll","patterns":"auto","motion":false,"annotations":[]}"#,
     ),
     min: Size { cols: 23, rows: 6 },
     drop: &[Part::Title, Part::Legend, Part::Axes],
@@ -63,7 +69,7 @@ pub static META: Meta = Meta {
 };
 
 /// The family's types, by hand (REQ-REG-010, ADR-125).
-pub const REGISTRY: &[Entry] = &[Entry { meta: &META, make }];
+pub const REGISTRY: &[Entry] = &[Entry { meta: &META, make }, Entry { meta: &spark::META, make: spark::make }];
 
 /// The family's registry entry.
 pub const FAMILY: Family = Family { name: "line", budget: Budget::DEFAULT, charts: REGISTRY };
@@ -103,17 +109,6 @@ enum StepAt {
     Middle,
 }
 
-/// The `patterns` option.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Patterns {
-    /// Dash patterns in one ink, none in colour.
-    Auto,
-    /// Always.
-    On,
-    /// Never.
-    Off,
-}
-
 /// The options as the chart reads them.
 #[derive(Clone, Debug, PartialEq)]
 struct Config {
@@ -122,11 +117,13 @@ struct Config {
     span_gaps: bool,
     title: String,
     encode: Encode,
-    legend: bool,
+    legend: LegendPosition,
     sample_none: bool,
     baseline: f64,
     interaction: Interaction,
     patterns: Patterns,
+    /// The `annotations` option (REQ-ANNOT-010).
+    annotations: Vec<Annotation>,
 }
 
 /// The options read: every key has a default in [`META`]'s (REQ-OPT-010).
@@ -142,7 +139,7 @@ fn config(o: &Options) -> Result<Config, MakeError> {
         _ => StepAt::After,
     };
     let encode = o.object("encode").and_then(|m| serde_json::from_value::<Encode>(serde_json::Value::Object(m.clone())).ok()).unwrap_or_default();
-    let legend = o.object("legend").and_then(|m| m.get("position")).and_then(|p| p.as_str()) != Some("none");
+    let legend = LegendPosition::from_option(o.object("legend").and_then(|m| m.get("position")).and_then(|p| p.as_str()).unwrap_or("auto"));
     let baseline = o.f64("baseline");
     Ok(Config {
         mode,
@@ -162,11 +159,8 @@ fn config(o: &Options) -> Result<Config, MakeError> {
             wheel: if o.choice("wheel", &["scroll", "zoom"]) == "zoom" { WheelMode::Zoom } else { WheelMode::Scroll },
             motion: o.bool("motion"),
         },
-        patterns: match o.choice("patterns", &["auto", "on", "off"]) {
-            "on" => Patterns::On,
-            "off" => Patterns::Off,
-            _ => Patterns::Auto,
-        },
+        patterns: Patterns::from_option(o.choice("patterns", &["auto", "on", "off"])),
+        annotations: annotate::parse(o.get("annotations"))?,
     })
 }
 
@@ -183,6 +177,7 @@ struct GeomKey {
     fit: Fit,
     hidden: Vec<String>,
     locale: u64,
+    zone: u64,
 }
 
 /// What the base depends on besides the geometry.
@@ -235,6 +230,11 @@ pub struct LineChart {
     pack: LocalePack,
     locale: Locale,
     locale_version: u64,
+    /// The env's zone table, and the zone time ticks and labels are drawn
+    /// in by it (REQ-TZ-030).
+    zone_table: ZoneTable,
+    zone: Zone,
+    zone_version: u64,
     base: Grid,
     base_key: Option<BaseKey>,
     base_draws: u64,
@@ -264,6 +264,9 @@ impl LineChart {
             pack: LocalePack::default(),
             locale: Locale::from_pack(&LocalePack::default()),
             locale_version: 0,
+            zone_table: ZoneTable::default(),
+            zone: Zone::Utc,
+            zone_version: 0,
             base: Grid::new(1, 1),
             base_key: None,
             base_draws: 0,
@@ -317,6 +320,7 @@ impl LineChart {
             fit: view.y.fit,
             hidden: view.hidden.clone(),
             locale: self.locale_version,
+            zone: self.zone_version,
         }
     }
 
@@ -361,57 +365,79 @@ impl LineChart {
         let rows: Vec<Range<usize>> = (0..self.data.series.len()).map(|s| view_rows(self.data.xs(s), xd[0], xd[1])).collect();
         let shed = key.cols < usize::from(META.min.cols) || key.rows < usize::from(META.min.rows);
         let title = (!shed && !self.cfg.title.is_empty()).then(|| self.cfg.title.clone());
-        let legend: Vec<String> =
-            if !shed && self.cfg.legend && self.data.series.len() >= 2 { self.data.series.iter().map(|s| s.name.clone()).collect() } else { Vec::new() };
+        let legend: Vec<String> = if !shed && self.cfg.legend != LegendPosition::None && self.data.series.len() >= 2 {
+            self.data.series.iter().map(|s| s.name.clone()).collect()
+        } else {
+            Vec::new()
+        };
         let fit = view.y.fit;
         let visible = if fit == Fit::Visible { self.y_extent(view, Some(xd)) } else { None };
         let all = if fit != Fit::Visible || visible.is_none() { self.y_extent(view, None) } else { None };
         let y_domain = if fit == Fit::Visible { Domain::View } else { Domain::Data };
-        let mut x_axis = AxisInput::new(self.data.kind);
+        // Ticks are chosen and labelled in displayed units (REQ-DATA-100):
+        // the layout is given the displayed extents, and its domains are
+        // taken back to stored values to draw by, which an affine transform
+        // keeps in place.
+        let x_disp = self.data.x_display();
+        let y_disp = self.data.shared_display(|s| self.shown(view, s));
+        let shown = |d: &Display, r: [f64; 2]| {
+            if d.is_identity() {
+                r
+            } else {
+                let [a, b] = d.domain(r);
+                [a.min(b), a.max(b)]
+            }
+        };
+        let mut x_axis = AxisInput::named(self.data.kind, "x");
         x_axis.scale = scale_options(self.data.kind, Domain::Data, None);
-        let mut y_axis = AxisInput::new(Kind::Linear);
+        if self.data.kind == Kind::Time {
+            // Ticks and labels in the env's zone (REQ-TZ-030), and the date
+            // row under a span of under two days (REQ-TICK-070).
+            x_axis.built = Some(Scale::time(xd, [0.0, 1.0]).with_zone(self.zone.clone()));
+            x_axis.context = true;
+        }
+        let mut y_axis = AxisInput::named(Kind::Linear, "y");
         y_axis.scale = scale_options(Kind::Linear, y_domain.clone(), Some(true));
         let mut input = LayoutInput::new(x_axis, y_axis);
         input.title = title.clone();
         input.legend = legend.clone();
+        input.legend_position = self.cfg.legend;
+        input.annotations = self.cfg.annotations.clone();
         input.locale = self.locale.clone();
-        let x_ext = Extents { data: Some(xd), visible: None, view: Some(xd) };
-        let y_ext = Extents { data: all, visible, view: view.y.domain };
+        let xs = shown(&x_disp, xd);
+        let x_ext = Extents { data: Some(xs), visible: None, view: Some(xs) };
+        let y_ext =
+            Extents { data: all.map(|r| shown(&y_disp, r)), visible: visible.map(|r| shown(&y_disp, r)), view: view.y.domain.map(|r| shown(&y_disp, r)) };
         let run = |input: &LayoutInput| {
             layout(key.cols, key.rows, input, &LayoutExtents { x: x_ext, panes: vec![PaneExtents { left: y_ext, ..PaneExtents::default() }] })
                 .or_else(|_| layout(key.cols, key.rows, input, &LayoutExtents { x: x_ext, panes: vec![PaneExtents::default()] }))
-                .unwrap_or_else(|_| empty_layout(key.cols, key.rows))
+                .unwrap_or_else(|_| Layout::empty(key.cols, key.rows))
         };
         let mut lay = run(&input);
         // A nice domain the data fills too little of gives way to the data's
         // (NICE_FILL); a y domain in the view is drawn as it is.
         if view.y.domain.is_none() {
             let plain = resolve_domain(&scale_options(Kind::Linear, y_domain, None), Kind::Linear, &y_ext, 1.0);
-            if let (Some(p), Ok([a, b])) = (lay.panes.first(), plain) {
-                let [c, d] = p.left_domain;
+            if let (Some([c, d]), Ok([a, b])) = (lay.panes.first().and_then(|p| p.left_domain), plain) {
                 if (b - a).abs() < NICE_FILL * (d - c).abs() {
-                    input.panes[0].left.scale.nice = None;
+                    if let Some(left) = &mut input.panes[0].left {
+                        left.scale.nice = None;
+                    }
                     lay = run(&input);
                 }
             }
         }
         let pane = lay.panes.first();
         let plot = pane.map_or(Rect::default(), |p| p.plot);
-        let y = pane.map_or([0.0, 1.0], |p| p.left_domain);
+        let y_shown = pane.and_then(|p| p.left_domain).unwrap_or([0.0, 1.0]);
         let x_step = tick_step_of(lay.x_axis.as_ref(), lay.x_domain, plot.w / crate::layout::X_CELLS_PER_TICK);
-        let y_step = tick_step_of(pane.and_then(|p| p.left.as_ref()), y, plot.h / crate::layout::Y_ROWS_PER_TICK);
-        let mut spans = Vec::new();
-        if let Some(r) = lay.legend {
-            let mut x = r.x;
-            for (s, name) in legend.iter().enumerate() {
-                let w = 2 + crate::text::width(name);
-                spans.push((s, Rect::new(x, r.y, w, 1)));
-                x += w + 2;
-            }
-        }
+        let y_step = tick_step_of(pane.and_then(|p| p.left.as_ref()), y_shown, plot.h / crate::layout::Y_ROWS_PER_TICK);
+        let y = if y_disp.is_identity() { y_shown } else { [y_disp.stored(y_shown[0]), y_disp.stored(y_shown[1])] };
+        let x = if x_disp.is_identity() { lay.x_domain } else { xd };
+        let spans: Vec<(usize, Rect)> = lay.legend.map(|r| crate::layout::legend_spans(r, &legend).into_iter().enumerate().collect()).unwrap_or_default();
         let geom = Geom {
             plot,
-            x: Axis::x(lay.x_domain[0], lay.x_domain[1], plot.w, 2),
+            x: Axis::x(x[0], x[1], plot.w, 2),
             y: Axis::y(y[0].min(y[1]), y[0].max(y[1]), plot.h, 4),
             x_step,
             y_step,
@@ -500,12 +526,12 @@ impl LineChart {
             let d = self.domain_now();
             d[1] - d[0]
         };
-        let mut parts = vec![draw::x_label(x, self.data.kind, span, &self.locale)];
+        let mut parts = vec![draw::x_label(x, self.data.kind, span, &self.locale, &self.zone, &self.data.x_display())];
         let shown: Vec<usize> = (0..self.data.series.len()).filter(|&s| self.shown(&self.view, s)).collect();
         for &s in shown.iter().take(4) {
             let xs = self.data.xs(s);
             let v = nearest(xs, 0, xs.len(), x).map(|i| self.data.ys(s)[i]).filter(|v| v.is_finite());
-            let v = v.map_or_else(|| "no value".to_string(), |v| draw::number(v, &self.locale));
+            let v = v.map_or_else(|| "no value".to_string(), |v| draw::shown(v, &self.data.display(s), &self.locale));
             parts.push(format!("{} {}", self.data.series[s].name, v));
         }
         let mut text = parts.join(", ");
@@ -535,11 +561,13 @@ impl LineChart {
             names.len(),
             names.join(", "),
             self.data.x_name,
-            draw::x_label(d[0], self.data.kind, span, &self.locale),
-            draw::x_label(d[1], self.data.kind, span, &self.locale)
+            draw::x_label(d[0], self.data.kind, span, &self.locale, &self.zone, &self.data.x_display()),
+            draw::x_label(d[1], self.data.kind, span, &self.locale, &self.zone, &self.data.x_display())
         );
         if let Some([a, b]) = self.y_extent(&self.view, Some(d)) {
-            text.push_str(&format!("; values from {} to {}", draw::number(a, &self.locale), draw::number(b, &self.locale)));
+            let disp = self.data.shared_display(|s| self.shown(&self.view, s));
+            let (a, b) = if disp.scale < 0.0 { (b, a) } else { (a, b) };
+            text.push_str(&format!("; values from {} to {}", draw::shown(a, &disp, &self.locale), draw::shown(b, &disp, &self.locale)));
         }
         let count: usize = (0..names.len()).filter(|&s| self.shown(&self.view, s)).map(|s| view_rows(self.data.xs(s), d[0], d[1]).len()).sum();
         text.push_str(&format!("; {} points in view", draw::count(count, &self.locale)));
@@ -594,20 +622,6 @@ fn tick_step_of(axis: Option<&PlacedAxis>, domain: [f64; 2], count: usize) -> f6
     match axis.map(|a| a.ticks.as_slice()) {
         Some([a, b, ..]) => b.value - a.value,
         _ => crate::ticks::tick_step(domain[0], domain[1], count.max(1) as f64).abs(),
-    }
-}
-
-/// A layout of no parts: the whole grid a plot over [0, 1] both ways.
-fn empty_layout(cols: usize, rows: usize) -> Layout {
-    Layout {
-        cols,
-        rows,
-        decorated: false,
-        title: None,
-        legend: None,
-        x_domain: [0.0, 1.0],
-        x_axis: None,
-        panes: vec![crate::layout::PaneLayout { plot: Rect::new(0, 0, cols, rows), left_domain: [0.0, 1.0], right_domain: None, left: None, right: None }],
     }
 }
 
@@ -750,6 +764,11 @@ impl Chart for LineChart {
             self.locale_version += 1;
             self.formats.clear();
         }
+        if *env.zone != self.zone_table {
+            self.zone_table = env.zone.clone();
+            self.zone = env.zone.zone();
+            self.zone_version += 1;
+        }
         let (cols, rows) = (grid.cols(), grid.rows());
         self.ctx = Some(FrameCtx { cols, rows, t, paper: env.paper, mono: env.mono });
         self.ensure_geom(t);
@@ -767,7 +786,8 @@ impl Chart for LineChart {
             self.base_draws += 1;
         }
         grid.copy_from(&self.base);
-        let text = readout::text(&self.data, &self.view, geom, &self.locale, &mut self.formats);
+        let place = readout::Place { x: &geom.x, x_step: geom.x_step, y_step: geom.y_step, zone: &self.zone, row0: 0 };
+        let text = readout::text(&self.data, &self.view, place, &self.locale, &mut self.formats);
         draw::overlay(grid, geom, &self.view, text.as_deref(), ground);
     }
 
@@ -796,12 +816,14 @@ impl Chart for LineChart {
         let value = |s: usize, row: usize| -> f64 { self.data.pos(s, row).map_or(f64::NAN, |i| self.data.ys(s)[i]) };
         let picked = pick_rows(total, max_rows, |i| first.map_or(f64::NAN, |s| value(s, rows.start + i)));
         let mut out = Vec::with_capacity(picked.len());
+        let x_disp = self.data.x_display();
+        let displays: Vec<Display> = (0..self.data.series.len()).map(|s| self.data.display(s)).collect();
         for i in picked {
             let row = rows.start + i;
-            let mut cells = vec![draw::x_label(xs[row], self.data.kind, span, &self.locale)];
-            for s in 0..self.data.series.len() {
+            let mut cells = vec![draw::x_label(xs[row], self.data.kind, span, &self.locale, &self.zone, &x_disp)];
+            for (s, disp) in displays.iter().enumerate() {
                 let v = value(s, row);
-                cells.push(if v.is_finite() { draw::number(v, &self.locale) } else { String::new() });
+                cells.push(if v.is_finite() { draw::shown(v, disp, &self.locale) } else { String::new() });
             }
             out.push(cells);
         }

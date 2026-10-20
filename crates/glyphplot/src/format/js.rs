@@ -107,6 +107,120 @@ pub fn log10(x: f64) -> f64 {
     super::fdlibm::log10(x)
 }
 
+/// JavaScript's `Math.log(x)` as V8 computes it (fdlibm's).
+pub fn log(x: f64) -> f64 {
+    super::fdlibm::log(x)
+}
+
+/// JavaScript's `Math.log2(x)`: the platform's `log2`, which is exact on
+/// powers of two as V8's is; elsewhere they may differ in the last bit
+/// **(unverified)**, which moves a log scale's ticks only where `floor` or
+/// `round` of the logarithm sits within that bit of an integer.
+pub fn log2(x: f64) -> f64 {
+    x.log2()
+}
+
+/// JavaScript's `Math.pow(base, x)` for the log scale's integer powers:
+/// exact by repeated squaring while the result is an integer below 2⁵³ (and
+/// so for every power of two), its reciprocal correctly rounded for a
+/// negative `x`; for an integer base up to 2³² and an integer `x` up to 1100
+/// either way, beyond 2⁵³, the power (or its reciprocal) computed exactly
+/// in big integers and rounded once to the nearest `f64` (`exact_pow`),
+/// the same on every target; the platform's `powf` otherwise
+/// **(unverified against V8)**.
+///
+/// V8 takes `Math.pow` from the platform's `pow`, which differs by target:
+/// wasm32's (Rust's port of musl's) gave 3^500 as 3.636029179586994e+238
+/// where Node 26.5.1 on macOS arm64 gives 3.6360291795869935e+238, one of
+/// 26 cases of the 3,900 in `tests/fixtures/log.txt` that the wasm build
+/// got wrong (web/test/reference.test.mjs, debug build). The exact power,
+/// a half-way power rounded away from zero as macOS's `pow` rounds 3^34,
+/// matches all 3,900 natively and in wasm. Against 44,020 integer powers
+/// of integer bases captured from that Node (`Math.pow(b, n)`, b from 3 to
+/// 100 and seeded, n from −1100 to 1100) it differs on 32, where macOS's
+/// `pow` is not correctly rounded and the capture host decides the last
+/// bit.
+pub fn pow(base: f64, x: f64) -> f64 {
+    if x.is_nan() || base.is_nan() {
+        return f64::NAN;
+    }
+    if x == x.trunc() && x.abs() <= 1100.0 && base == base.trunc() && base.abs() >= 2.0 {
+        if base == 2.0 {
+            return pow2(x as i32);
+        }
+        let (mut acc, mut b, mut n) = (1.0f64, base.abs(), x.abs() as u32);
+        while n > 0 && acc.abs() < 9_007_199_254_740_992.0 {
+            if n & 1 == 1 {
+                acc *= b;
+            }
+            b *= b;
+            n >>= 1;
+        }
+        if n == 0 && acc.abs() <= 9_007_199_254_740_992.0 {
+            let acc = if base < 0.0 && (x.abs() as u32) & 1 == 1 { -acc } else { acc };
+            return if x < 0.0 { 1.0 / acc } else { acc };
+        }
+        if base.abs() <= f64::from(u32::MAX) {
+            let p = exact_pow(base.abs() as u32, x.abs() as u32, x < 0.0);
+            return if base < 0.0 && (x.abs() as u32) & 1 == 1 { -p } else { p };
+        }
+    }
+    base.powf(x)
+}
+
+/// `b^n`, or `b^-n` with `reciprocal`, correctly rounded (a power half-way
+/// between two doubles to the one larger in magnitude, see [`pow`]):
+/// the power as an exact big integer, then its top bits (or the top 64 bits
+/// of its reciprocal, by long division) rounded once.
+fn exact_pow(b: u32, n: u32, reciprocal: bool) -> f64 {
+    let mut p = Big::from_u64(1);
+    for _ in 0..n {
+        p.mul_small(b);
+    }
+    if !reciprocal {
+        // A power exactly halfway between two doubles goes to the larger in
+        // magnitude, not the even, as Node's `Math.pow` (the platform's
+        // `pow`) gives 3^34 = 16677181699666569 as 16677181699666570:
+        // adding 1 below the halfway bit tips it there.
+        if p.halfway_below(53) {
+            p.add(&Big::from_u64(1));
+        }
+        return p.to_f64_scaled(0);
+    }
+    let len = p.bit_len();
+    let mut top = Big::from_u64(1);
+    top.shl(len - 1);
+    if p == top {
+        return pow2(1 - len as i32);
+    }
+    // q = ⌊2^(len + 63) / p⌋, 64 bits as p lies in (2^(len−1), 2^len): from
+    // the remainder 2^(len−1) < p, one quotient bit a step.
+    let mut rem = top;
+    let mut q = 0u64;
+    for _ in 0..64 {
+        rem.shl(1);
+        q <<= 1;
+        if rem >= p {
+            rem.sub(&p);
+            q |= 1;
+        }
+    }
+    compose(q, -(len as i32 + 63), !rem.is_zero())
+}
+
+/// 2ⁿ exactly, subnormal or infinite as it falls.
+fn pow2(n: i32) -> f64 {
+    if n > 1023 {
+        f64::INFINITY
+    } else if n >= -1022 {
+        f64::from_bits(((n + 1023) as u64) << 52)
+    } else if n >= -1074 {
+        f64::from_bits(1u64 << (n + 1074))
+    } else {
+        0.0
+    }
+}
+
 /// JavaScript's `Math.floor(Math.log10(x))`.
 pub fn floor_log10(x: f64) -> f64 {
     log10(x).floor()
@@ -505,6 +619,20 @@ mod tests {
         assert_eq!(pow10(f64::INFINITY), f64::INFINITY);
         assert_eq!(pow10(f64::NEG_INFINITY), 0.0);
         assert!(pow10(f64::NAN).is_nan());
+    }
+
+    /// REQ-REF-010: integer powers past 2⁵³ are the exact power rounded
+    /// once, the same natively and in wasm, as Node 26.5.1 gives them
+    /// (`Math.pow`, macOS arm64): a half-way power to the larger.
+    #[test]
+    fn integer_powers_past_two_to_53_round_once() {
+        assert_eq!(pow(3.0, 34.0), 16_677_181_699_666_570.0, "3^34 = 16677181699666569, half-way");
+        assert_eq!(pow(3.0, 500.0), 3.6360291795869935e238);
+        assert_eq!(pow(-3.0, 35.0), -50_031_545_098_999_704.0);
+        assert_eq!(pow(3.0, -644.0), 5.418910280090846e-308);
+        assert_eq!(pow(16.0, -300.0), 2f64.powi(-1200).max(0.0));
+        assert_eq!(pow(3.0, 700.0), f64::INFINITY);
+        assert_eq!(pow(3.0, -700.0), 0.0);
     }
 
     /// Doubles where macOS's `log10` and V8's (Node 26) disagree about the

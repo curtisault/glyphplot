@@ -13,8 +13,10 @@ repository.workspace = true
 # wasm chart modules, which take typed arrays (REQ-DATA-050).
 [features]
 default = ["all", "text"]
-all = ["line"]
+all = ["line", "candles", "bar"]
 line = []
+candles = []
+bar = []
 text = []
 # Three broken charts the contract must reject, in a `selftest` family
 # (REQ-CONTRACT-060): for `cargo test --features contract-selftest --test

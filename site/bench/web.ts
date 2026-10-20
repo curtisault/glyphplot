@@ -77,14 +77,26 @@ async function charts(): Promise<{ slug: string; shapes: string[] }[]> {
   return (m.charts as Meta[]).map((c) => ({ slug: c.slug, shapes: [...c.shapes] }));
 }
 
-/** The 1,000,000-point fixture of each shape a chart takes, by name. */
+/** How a chart of `values` with no fixture of its own is fed: as tests/timing does natively. */
+const AS_VALUES = " as values";
+
+/**
+ * The 1,000,000-point fixture of each shape a chart takes, by name. A chart
+ * of `values` (`bar`) with none of its own takes the one-series 1M series
+ * fixture's `y` as one `value` column, each row its own category, as
+ * crates/glyphplot/tests/timing does for the native budgets.
+ */
 async function fixturesFor(shapes: string[]): Promise<string[]> {
   const all = await index();
-  return all.filter((f) => f.rows === 1_000_000 && shapes.includes(f.shape)).map((f) => f.name);
+  const own = all.filter((f) => f.rows === 1_000_000 && shapes.includes(f.shape)).map((f) => f.name);
+  if (own.length > 0 || !shapes.includes("values")) return own;
+  const series = all.find((f) => f.rows === 1_000_000 && f.shape === "series" && f.tables.length === 1);
+  return series ? [series.name + AS_VALUES] : [];
 }
 
 /** A fixture in the binary data form, and its x column for the pan. */
 async function load(name: string): Promise<{ data: unknown; x: Float64Array; rows: number }> {
+  if (name.endsWith(AS_VALUES)) return loadValues(name.slice(0, -AS_VALUES.length));
   const fx = (await index()).find((f) => f.name === name);
   if (!fx) throw new Error(`no fixture ${name}`);
   if (fx.tables.length !== 1 || fx.matrices.length > 0) throw new Error(`fixture ${name}: one table expected`);
@@ -111,6 +123,18 @@ async function load(name: string): Promise<{ data: unknown; x: Float64Array; row
     },
   };
   return { data: { descriptor, columns }, x, rows: t.length };
+}
+
+/** A series fixture's `y` as one `value` column; the pan runs over its category indices. */
+async function loadValues(name: string): Promise<{ data: unknown; x: Float64Array; rows: number }> {
+  const fx = (await index()).find((f) => f.name === name);
+  if (!fx || fx.tables.length !== 1) throw new Error(`no one-table fixture ${name}`);
+  const t = fx.tables[0]!;
+  const y = t.columns.find((c) => c.role === "y");
+  if (!y?.file) throw new Error(`fixture ${name}: no y column`);
+  const value = await f64(y.file);
+  const descriptor = { tables: { [t.name]: { length: t.length, columns: [{ name: "value", type: "f64", role: "value" }] } } };
+  return { data: { descriptor, columns: { value } }, x: Float64Array.of(0, t.length - 1), rows: t.length };
 }
 
 const empty = (): Samples => ({ input: [], frame: [], draw: [], idle: 0 });

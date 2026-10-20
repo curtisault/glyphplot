@@ -18,8 +18,8 @@ declare global {
   }
 }
 
-/** The reader-action and loading events the element fires at v0.3.0. */
-export const EVENT_TYPES = ["plot-ready", "plot-error", "plot-hover", "plot-select", "plot-view", "plot-cursor", "plot-brush"];
+/** The reader-action and loading events the element fires at v0.5.0. */
+export const EVENT_TYPES = ["plot-ready", "plot-error", "plot-hover", "plot-select", "plot-view", "plot-cursor", "plot-brush", "plot-legend"];
 
 /** Console errors and uncaught exceptions on `page`, from now on. */
 export function consoleErrors(page: Page): string[] {

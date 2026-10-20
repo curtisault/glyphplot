@@ -10,6 +10,7 @@ import { appendTo, describe, descriptorJson, nfcDeep, prepare, type AppendInput,
 import { encode, type Encoded, type InputEvent } from "./input.ts";
 import { localePack, type LocalePack } from "./locale.ts";
 import { Guarded, loadFor, messageOf, type GridViews } from "./wasm.ts";
+import type { ZoneTable } from "./zone.ts";
 
 /** A view state or a partial one (spec/schemas/view.schema.json). */
 export type View = Record<string, unknown>;
@@ -27,7 +28,7 @@ export interface ChartInit {
 }
 
 /** What changed, for whoever draws the chart. */
-export type Change = "data" | "options" | "view" | "locale" | "mono" | "size";
+export type Change = "data" | "options" | "view" | "locale" | "zone" | "mono" | "size";
 
 /** The patch that returns every part of the view to its default. */
 export const VIEW_RESET: View = { x: null, y: null, axes: null, cursor: null, selection: null, hidden: null, time: null, motion: null };
@@ -39,6 +40,7 @@ type Op =
   | { k: "options"; v: Record<string, unknown> }
   | { k: "view"; v: View }
   | { k: "locale"; v: LocalePack }
+  | { k: "zone"; v: ZoneTable }
   | { k: "mono"; v: boolean }
   | { k: "resize"; cols: number; rows: number };
 
@@ -74,6 +76,7 @@ export class Chart {
   #flushQueued = false;
   #version = 0;
   #meta: Meta | null = null;
+  #zone: ZoneTable | null = null;
   #listeners = new Set<(c: Change) => void>();
   #freed = false;
 
@@ -142,6 +145,17 @@ export class Chart {
       case "locale":
         g.call((c) => c.set_locale(JSON.stringify(op.v)));
         this.#notify("locale");
+        break;
+      case "zone":
+        g.call((c) => {
+          try {
+            c.set_zone(JSON.stringify(op.v));
+          } catch (e) {
+            throw new Error(messageOf(e));
+          }
+        });
+        this.#zone = op.v;
+        this.#notify("zone");
         break;
       case "mono":
         g.call((c) => c.set_mono(op.v));
@@ -324,6 +338,14 @@ export class Chart {
   set locale(v: string | LocalePack) {
     const pack = typeof v === "string" ? localePack(v) : nfcDeep(v);
     this.#run({ k: "locale", v: pack });
+  }
+
+  /** The zone table time is drawn in (zone.schema.json, REQ-TZ-020); the last one set, or null (the core's UTC). */
+  get zone(): ZoneTable | null {
+    return this.#zone;
+  }
+  set zone(v: ZoneTable) {
+    this.#run({ k: "zone", v });
   }
 
   /** One ink for the frames that follow. */

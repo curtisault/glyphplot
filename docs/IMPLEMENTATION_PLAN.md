@@ -349,14 +349,14 @@ testing.md, with the milestone each rule lands in.
 | 16 | view round trip | `set_view(view())` changes nothing; a view through JSON onto a fresh chart draws the same frame | v0.4.0 |
 | 17 | input is deterministic | A scripted input list on two fresh charts gives the same events, views and frames; the resulting view on a third gives that frame | v0.4.0 |
 | 18 | events validate | Every event serialises to JSON that `events.schema.json` accepts | v0.4.0 |
-| 19 | hit names what was drawn | For up to 512 seeded plot cells, a named datum lies in the dot column under the probe when that column holds one, else it is the nearest datum on its left or right (hits snap, REQ-HIT-010); the datum is in the data, its x maps to the hit's column by the cell-mapping module, and that cell is inked; for a mark chart the frame drew its mark there | v0.4.0 |
+| 19 | hit names what was drawn | `hit` at every plot cell reports one cell a drawn datum, each series' cells in its rows' order, never snapping back. For up to 512 seeded plot cells the named datum is in the data (x is the category's index when there is no x), in view (or a row of a bucket drawn in view, or the nearest past an edge); when drawn, its cell is in the plot and inked and within one cell of its series' nearest cell to the probe. For a line-like chart its x also maps to that column, and it lies in the dot column under the probe when that column holds one, else it is the nearest datum left or right (REQ-HIT-010). (Reworded in v0.5.0, when bands, the index time scale and resampled candles broke the linear map.) | v0.4.0 |
 | 20 | hit and readout agree | The readout for a cursor at a cell names the datum `hit` returns there | v0.4.0 |
 | 21 | empty data | `empty` draws axes or "no data", `hit` is none, domains null | v0.4.0 |
 | 22 | one point | `one` draws its point in a padded domain; no label reads `NaN`, `inf` or `-0` | v0.4.0 |
-| 23 | gaps break lines | In line-like modes no dot column inside a NaN run is inked, unless `spanGaps` | v0.4.0 |
+| 23 | gaps break lines | In line-like modes no dot column inside a NaN run is inked, unless `spanGaps`; for a mark chart, no ink where a hit names a missing value, nor halfway between drawn marks that span a missing run | v0.4.0 |
 | 24 | tick labels distinct and fitting | No two labels on a numeric axis are equal and numeric labels are in order; no two neighbouring labels are equal on any axis (d3's hourly time format writes `01 AM` each day); none overruns its gutter | v0.4.0 |
 | 25 | log-invalid values | Values ≤ 0 on a log scale are skipped, no panic, no NaN cells | v0.4.0 |
-| 26 | unsorted and duplicate x | `unsorted-x` draws its sorted copy's frame; `duplicate-x` is deterministic | v0.4.0 |
+| 26 | unsorted and duplicate x | `unsorted-x` draws its sorted copy's frame; `duplicate-x` is deterministic; data with no x keeps its categories in data order in the table | v0.4.0 |
 | 27 | downsampling is exact | A line-like frame of x-sorted data equals the frame from every segment | v0.4.0 |
 | 28 | wrong shape | Data of a shape the chart does not accept is an error naming the shape | v0.4.0 |
 | 29 | snapshots | Frames match the snapshot files | v0.3.0 |
@@ -1362,6 +1362,53 @@ Acceptance:
 
 <a id="phase-4"></a>
 ### Phase 4 · Candles, bar, sparkline (v0.5.0)
+
+Done 2026-10-21. Every acceptance command passes: the contract and
+snapshots for `candles`, `bar` and `sparkline`; three modules under budget
+(`mise run size`); `test:site` with the linked-charts test. `mise run check`
+takes 29 s. Built in two waves:
+- **Wave 1:**
+  - core scales, ticks, formats and zones (log captures in bases 10, 2, 3
+    and 16; local-time ticks under `TZ=` for five zones; LTTB);
+  - core layout (panes, dual axes, legends, annotations, one-ink markers
+    and fills, three public-domain datasets);
+  - the element (`define`, type changes, `fit`, `link`, zone tables from
+    Intl, back colours as one image, font tier B at 29,896 B).
+- **Wave 2:** the `candles` and `bar` families and the sparkline with the
+  core integration, then one pass running the contract across every family.
+Differences from the tasks:
+- **Bar orientation and stacking are options, not modes,** since they
+  combine freely (SPEC §7.3).
+- **A one-value table draws as candles** (its closes resampled), so WTI's
+  daily closes give weekly candles (catalogue #41).
+- **Contract rule 19 is reworded again:** bands, the index time scale and
+  resampled candles broke its linear map from x to a column. Rules 23 and 26
+  gain mark-chart and no-x forms. The contract converts the edge fixtures
+  into each chart's shape, so nearly every rule runs on every family; it
+  found `bar`'s `signed: auto` reading series shown instead of series held.
+- **The budgets** time candles on `ohlcv-ticks-1m` (its first 100k rows for
+  the 100k play), and bar on a value column of the random walks. Every
+  chart is far inside its budget natively: at most 2.25 ms a frame over 1M
+  points.
+- **Found by the new tests:**
+  - wasm's `pow` (musl) is one ulp off macOS's on 26 of 3,900 log cases;
+    integer powers past 2^53 are now exact;
+  - a mouse click on a legend toggled twice;
+  - an example zone table had New York's DST start a week late, and a test
+    pinned the wrong instant.
+- **Module sizes:** line 211,435 B, candles 194,402 B, bar 178,564 B
+  gzipped. line and candles are past half the 358,400 B budget, mostly
+  serde's JSON; hand-written readers (v0.4.0's proposal) would bring them
+  back under it.
+- **Partly covered:**
+  - DATA-100 (no axis draws the unit);
+  - SPARK-010 (rule 14 is v0.6.0's);
+  - TICK-050 (the volume axis does not snap);
+  - THEME-060 (a one-cell bar's "hollow" is a shade);
+  - MONO-020 (no contract fixture has five series);
+  - AXIS-010 (no chart reads the `axes` option yet).
+- **Left for the owner:** the checklist's cases 18–29 in Chrome and Safari,
+  and the candlestick of `ohlcv-days` scrubbed with a finger on a phone.
 
 Tasks:
 1. `charts/candles/`: `candle`, `hollow`, `ohlc`; glyphs by spacing;

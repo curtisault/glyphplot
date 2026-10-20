@@ -4,7 +4,7 @@
 // pass as Markdown. Plain TypeScript over the shell's own modules: no Elm.
 
 import * as gp from "glyphplot";
-import { config, type GlyphPlot } from "glyphplot/element";
+import { config, define, type GlyphPlot } from "glyphplot/element";
 
 declare global {
   interface Window {
@@ -68,9 +68,65 @@ function daily(n: number, seed: number, a = "north", b = "south"): Record<string
   return { t, [a]: s1, [b]: s2 };
 }
 
+/** SplitMix64, as `crates/glyphplot/src/fixtures.rs` has it: the same stream, so the page draws the fixtures' own data. */
+function splitmix(seed: bigint): { f64: () => number; below: (n: number) => number } {
+  const M = (1n << 64n) - 1n;
+  let s = seed & M;
+  const next = (): bigint => {
+    s = (s + 0x9e3779b97f4a7c15n) & M;
+    let z = s;
+    z = ((z ^ (z >> 30n)) * 0xbf58476d1ce4e5b9n) & M;
+    z = ((z ^ (z >> 27n)) * 0x94d049bb133111ebn) & M;
+    return z ^ (z >> 31n);
+  };
+  return { f64: () => Number(next() >> 11n) / 9_007_199_254_740_992, below: (n) => Number(next() % BigInt(n)) };
+}
+
+/** The `ohlcv-days` fixture's rows: limit down at row 250, no trades at row 333. */
+const LIMIT_DOWN_ROW = 250;
+const ZERO_VOLUME_ROW = 333;
+
+/** The `ohlcv-days` fixture (fixtures.rs `ohlcv_days`): 500 weekday bars from Monday 2024-10-21, generated as the core generates it. */
+function ohlcvDays(n = 500): { t: Date[]; open: number[]; high: number[]; low: number[]; close: number[]; volume: number[] } {
+  // The fixture's seed: "glyplot" and its number, 19.
+  const r = splitmix(0x676c_7970_6c6f_7400n + 19n);
+  const out = { t: [] as Date[], open: [] as number[], high: [] as number[], low: [] as number[], close: [] as number[], volume: [] as number[] };
+  let day = 20_017;
+  let last = 100;
+  for (let i = 0; i < n; i++) {
+    while ((day + 4) % 7 === 0 || (day + 4) % 7 === 6) day++;
+    out.t.push(new Date(day * DAY));
+    day++;
+    const open = last * (1 + 0.01 * (r.f64() - 0.5));
+    let bar: [number, number, number, number];
+    let volume: number;
+    if (i === LIMIT_DOWN_ROW) {
+      const close = open * 0.9;
+      bar = [open, open, close, close];
+      volume = 5_000_000;
+    } else if (i === ZERO_VOLUME_ROW) {
+      bar = [last, last, last, last];
+      volume = 0;
+    } else {
+      const close = open * (1 + 0.04 * (r.f64() - 0.5));
+      const high = (open > close ? open : close) * (1 + 0.01 * r.f64());
+      const low = (open < close ? open : close) * (1 - 0.01 * r.f64());
+      bar = [open, high, low, close];
+      volume = 100_000 + r.below(900_000);
+    }
+    out.open.push(bar[0]);
+    out.high.push(bar[1]);
+    out.low.push(bar[2]);
+    out.close.push(bar[3]);
+    out.volume.push(volume);
+    last = bar[3];
+  }
+  return out;
+}
+
 // ------------------------------------------------------------ the environment and the pass
 
-const STORE = "glyphplot-checklist-v0.3.0";
+const STORE = "glyphplot-checklist-v0.5.0";
 type Mark = { state: "" | "pass" | "fail" | "na"; note: string };
 const marks: Record<string, Mark> = (() => {
   try {
@@ -154,7 +210,7 @@ function addMarks(): void {
 /** The pass as Markdown (REQ-TEST-040). */
 export function markdown(): string {
   const cell = (s: string): string => s.replace(/\|/g, "\\|").replace(/\n/g, " ");
-  const lines = [`### glyphplot v0.3.0 checklist, ${new Date().toISOString().slice(0, 10)}`, ""];
+  const lines = [`### glyphplot v0.5.0 checklist, ${new Date().toISOString().slice(0, 10)}`, ""];
   for (const [k, v] of env()) lines.push(`- ${k}: ${cell(v)}`);
   lines.push("", "| # | Case | Result | Note |", "|---|---|---|---|");
   let i = 0;
@@ -196,7 +252,7 @@ function logger(box: HTMLElement): (line: string) => void {
   };
 }
 
-const EVENTS = ["plot-ready", "plot-error", "plot-hover", "plot-select", "plot-view", "plot-cursor", "plot-brush"] as const;
+const EVENTS = ["plot-ready", "plot-error", "plot-hover", "plot-select", "plot-view", "plot-cursor", "plot-brush", "plot-legend"] as const;
 
 function short(type: string, d: unknown): string {
   if (d === null) return `${type} null`;
@@ -211,7 +267,9 @@ function short(type: string, d: unknown): string {
     case "plot-hover":
       return `${type} ${String(o["source"])} ${String(o["series"])}[${String(o["index"])}] x=${num(o["x"])} y=${num(o["y"])}`;
     case "plot-brush":
-      return `${type} ${String(o["source"])} x=${Array.isArray(o["x"]) ? (o["x"] as unknown[]).map(num).join("…") : "—"} final=${String(o["final"])}`;
+      return `${type} ${String(o["source"])} x=${Array.isArray(o["x"]) ? (o["x"] as unknown[]).map(num).join("…") : "—"} count=${String(o["count"])} final=${String(o["final"])}`;
+    case "plot-legend":
+      return `${type} ${String(o["source"])} ${String(o["series"])} visible=${String(o["visible"])} hidden=${JSON.stringify(o["hidden"])}`;
     default:
       return `${type} ${JSON.stringify(d).slice(0, 160)}`;
   }
@@ -459,6 +517,237 @@ function lazy(): void {
   });
 }
 
+/** Case 18: a tag made by define(), its type fixed whatever its attribute says. */
+function alias(): void {
+  define("line-plot", { type: "line" });
+  const el = $<GlyphPlot>("#alias-chart");
+  el.data = waves(80, ["a", "b"], 53);
+  const show = (): void => {
+    $("#alias-status").textContent = `type attribute "${el.getAttribute("type") ?? ""}", chart type "${el.type}", drawn: ${el.chart ? "yes" : "no"}`;
+  };
+  el.addEventListener("plot-ready", show);
+  $("#alias-type").addEventListener("click", () => {
+    el.setAttribute("type", "bar");
+    requestAnimationFrame(show);
+  });
+}
+
+/** Case 19: a type change carrying the data and view, or warning and drawing empty. */
+function typeChange(): void {
+  const el = plot("type-chart");
+  const out = $("#type-status");
+  el.data = waves(120, ["a", "b"], 59);
+  const show = (what: string): void => {
+    const d = el.data;
+    const rows = d ? Object.values(d.tables)[0]?.length : null;
+    out.textContent = `${what}: type ${el.type}; data rows ${rows ?? "none"}; x domain ${JSON.stringify((el.view["x"] as { domain?: unknown } | undefined)?.domain ?? null)}`;
+  };
+  el.addEventListener("plot-ready", () => show("ready"));
+  el.addEventListener("plot-error", (e) => show(`plot-error (${(e as CustomEvent<{ message: string }>).detail.message})`));
+  for (const b of document.querySelectorAll<HTMLButtonElement>("[data-type]")) {
+    b.addEventListener("click", () => el.setAttribute("type", b.dataset["type"] ?? "line"));
+  }
+}
+
+/** Case 20: fit width and contain. */
+function fit(): void {
+  const w = plot("fit-width");
+  const c = plot("fit-contain");
+  const out = $("#fit-status");
+  for (const el of [w, c]) el.data = waves(100, ["a", "b"], 61);
+  const show = (): void => {
+    out.textContent = [w, c]
+      .map((el) => {
+        const f = el.querySelector<HTMLElement>(".gp-frame")?.getBoundingClientRect();
+        return `${el.id}: fit ${el.getAttribute("fit") ?? "none"}, ${el.cols} × ${el.rows} cells, drawn ${Math.round(f?.width ?? 0)} × ${Math.round(f?.height ?? 0)} px`;
+      })
+      .join("; ");
+  };
+  for (const el of [w, c]) new ResizeObserver(() => requestAnimationFrame(show)).observe(el);
+  for (const b of document.querySelectorAll<HTMLButtonElement>("[data-fit]")) {
+    b.addEventListener("click", () => {
+      const on = b.dataset["fit"] !== "";
+      w.toggleAttribute("fit", on);
+      c.toggleAttribute("fit", on);
+      if (on) {
+        w.setAttribute("fit", "width");
+        c.setAttribute("fit", "contain");
+      }
+      requestAnimationFrame(show);
+    });
+  }
+  for (const b of document.querySelectorAll<HTMLButtonElement>("[data-fit-width]")) {
+    b.addEventListener("click", () => {
+      for (const box of document.querySelectorAll<HTMLElement>(".fit-box")) box.style.width = b.dataset["fitWidth"] ?? "";
+    });
+  }
+}
+
+/** Case 21: two linked charts of different widths. */
+function link(): void {
+  const log = logger($("#link-log"));
+  for (const id of ["link-a", "link-b"]) {
+    const el = plot(id);
+    el.data = daily(300, 67);
+    for (const t of ["plot-view", "plot-hover", "plot-cursor"]) el.addEventListener(t, (e) => log(`${id}: ${short(t, (e as CustomEvent).detail)}`));
+  }
+}
+
+/** Case 22: brush and legend events. */
+function brushLegend(): void {
+  const el = plot("events-chart");
+  el.data = daily(200, 71, "inside", "outside");
+  const log = logger($("#events-log"));
+  for (const t of ["plot-brush", "plot-legend"]) el.addEventListener(t, (e) => log(short(t, (e as CustomEvent).detail)));
+}
+
+/** Case 23: the timeZone attribute and the table the core was given. */
+function timeZone(): void {
+  const el = plot("zone-chart");
+  const out = $("#zone-status");
+  const t: Date[] = [];
+  const y: number[] = [];
+  for (let i = 0; i < 72; i++) {
+    t.push(new Date(Date.UTC(2026, 2, 7) + i * 3_600_000));
+    y.push(Math.round(Math.sin(i / 6) * 100) / 10);
+  }
+  el.data = { t, y };
+  const show = (): void => {
+    const z = el.chart?.zone;
+    if (!z) return;
+    const changes = z.transitions.map((x) => `${new Date(x.at).toISOString().slice(0, 16)}Z ${x.offset >= 0 ? "+" : "−"}${Math.abs(x.offset)} min`).join(", ");
+    out.textContent = `page zone ${gp.pageZone()}; table "${z.name}": ${changes}; covering ${new Date(z.covering[0]).toISOString().slice(0, 10)} to ${new Date(z.covering[1]).toISOString().slice(0, 10)}`;
+  };
+  el.addEventListener("plot-ready", show);
+  el.addEventListener("plot-view", () => requestAnimationFrame(show));
+  $<HTMLSelectElement>("#zone-pick").addEventListener("change", (e) => {
+    const v = (e.target as HTMLSelectElement).value;
+    if (v) el.setAttribute("timeZone", v);
+    else el.removeAttribute("timeZone");
+    requestAnimationFrame(show);
+  });
+}
+
+/** Case 24: a heatmap-like frame of back colours through both renderers. */
+async function backs(): Promise<void> {
+  const c = gp.chart("line");
+  await c.ready;
+  const palette = c.palette(pageTheme());
+  c.free();
+  const cols = 48;
+  const rows = 12;
+  const n = cols * rows;
+  const dpr = devicePixelRatio || 1;
+  const cw = Math.round(0.6 * 13 * dpr);
+  const grid = { cols, rows, cells: new Uint32Array(n).fill(32), colors: new Uint8Array(n), backs: new Uint8Array(n) };
+  let shift = 0;
+  const fill = (): void => {
+    for (let r = 0; r < rows; r++) {
+      for (let k = 0; k < cols; k++) {
+        const i = r * cols + k;
+        grid.backs[i] = 32 + Math.round(63.5 + 63.5 * Math.sin((k + shift) / 6) * Math.cos(r / 3));
+        grid.cells[i] = i % 4 === 0 ? 0x2580 : 32;
+      }
+    }
+  };
+  fill();
+  const renderers: [ReturnType<typeof gp.makeRenderer>, HTMLOutputElement | null][] = [];
+  for (const canvas of document.querySelectorAll<HTMLCanvasElement>("[data-backs]")) {
+    const name = canvas.dataset["backs"] === "atlas" ? "atlas" : "text";
+    const r = gp.makeRenderer(name, canvas);
+    r.setPalette(palette, false);
+    r.resize(cols, rows, cw);
+    Object.assign(canvas.style, { width: `${(cols * cw) / dpr}px`, height: `${(rows * cw * 2) / dpr}px` });
+    renderers.push([r, document.querySelector<HTMLOutputElement>(`[data-backs-stats="${name}"]`)]);
+  }
+  const draw = (): void => {
+    for (const [r, out] of renderers) {
+      const s = r.draw(grid);
+      if (out) out.textContent = `last draw: ${s.cells} cells, ${s.backImage ? "the backs as one image" : "cell by cell"}`;
+    }
+  };
+  draw();
+  $("#backs-shift").addEventListener("click", () => {
+    shift += 7;
+    fill();
+    draw();
+  });
+  $("#backs-one").addEventListener("click", () => {
+    grid.backs[cols + 1] = grid.backs[cols + 1] === 159 ? 32 : 159;
+    draw();
+  });
+}
+
+/** Case 25: candles on ohlcv-days, scrubbed with a finger. */
+function candles(): void {
+  const el = plot("candles-chart");
+  const d = ohlcvDays();
+  el.data = d;
+  const day = (i: number): string => d.t[i]?.toISOString().slice(0, 10) ?? "?";
+  $("#candles-status").textContent = `${d.t.length} days, ${day(0)} to ${day(d.t.length - 1)}; limit down on ${day(LIMIT_DOWN_ROW)} (row ${LIMIT_DOWN_ROW}); no trades on ${day(ZERO_VOLUME_ROW)} (row ${ZERO_VOLUME_ROW})`;
+  const log = logger($("#candles-log"));
+  for (const t of ["plot-hover", "plot-view"]) el.addEventListener(t, (e) => log(short(t, (e as CustomEvent).detail)));
+}
+
+/** Cases 26 and 27: each candle mode on the last 16 days, and the volume pane around the limit-down day. */
+function candleModes(): void {
+  const d = ohlcvDays();
+  const at = (i: number): number => d.t[i]?.getTime() ?? 0;
+  const n = d.t.length;
+  for (const id of ["mode-candle", "mode-hollow", "mode-ohlc"]) {
+    const el = plot(id);
+    el.data = d;
+    el.view = { x: { domain: [at(n - 16) - DAY / 2, at(n - 1) + DAY / 2] } };
+  }
+  for (const id of ["volume-on", "volume-off"]) {
+    const el = plot(id);
+    el.data = d;
+    el.view = { x: { domain: [at(LIMIT_DOWN_ROW - 10), at(ZERO_VOLUME_ROW + 10)] } };
+  }
+}
+
+/** Case 28: bars vertical, horizontal, grouped and stacked, with negative values. */
+function bars(): void {
+  const category = ["North Atlantic distribution centre", "Gulf coast", "Great Lakes", "Pacific northwest", "Mid-Atlantic", "Caribbean port"];
+  const change = [12.5, -5.25, 8, -11.75, 3.125, 7.5];
+  for (const id of ["bar-vertical", "bar-horizontal"]) plot(id).data = { category, change };
+  const three = { category: category.slice(0, 5), north: [14, 9, -6, 11, 4], south: [-8, 12, 7, -3, 10], west: [5, -4, 9, 6, -12] };
+  for (const id of ["bar-grouped", "bar-stacked"]) plot(id).data = three;
+}
+
+/** Case 29: three sparklines fed one stream through append(). */
+function sparklines(): void {
+  const ids = ["spark-line", "spark-area", "spark-column"];
+  const r = rng(73);
+  const x: number[] = [];
+  const y: number[] = [];
+  let w = 50;
+  for (let i = 0; i < 60; i++) {
+    w += (r() - 0.5) * 4;
+    x.push(i);
+    y.push(Math.round(w * 100) / 100);
+  }
+  for (const id of ids) plot(id).data = { x, cpu: y };
+  const status = $("#spark-status");
+  let i = x.length;
+  let timer: ReturnType<typeof setInterval> | undefined;
+  const tick = (): void => {
+    w += (r() - 0.5) * 4;
+    const v = Math.round(w * 100) / 100;
+    for (const id of ids) plot(id).append({ x: i, cpu: v });
+    status.textContent = `${i + 1} rows; last appended x ${i}, cpu ${v}`;
+    i++;
+  };
+  $("#spark-start").addEventListener("click", () => {
+    if (timer === undefined) timer = setInterval(tick, 200);
+  });
+  $("#spark-stop").addEventListener("click", () => {
+    clearInterval(timer);
+    timer = undefined;
+    status.textContent = `stopped at ${i} rows`;
+  });
+}
+
 // ------------------------------------------------------------ start
 
 showEnv();
@@ -480,6 +769,17 @@ resize();
 script();
 interaction();
 lazy();
+alias();
+typeChange();
+fit();
+link();
+brushLegend();
+timeZone();
+candles();
+candleModes();
+bars();
+sparklines();
+void backs().catch((e: unknown) => console.error(`test.html: back colours case: ${String(e)}`));
 void mounts().catch((e: unknown) => console.error(`test.html: mount cases: ${String(e)}`));
 void panic().catch((e: unknown) => console.error(`test.html: panic case: ${String(e)}`));
 window.gpReady = true;

@@ -156,6 +156,18 @@ impl Big {
         compose(top, n + shift as i32, sticky)
     }
 
+    /// Whether the bits below the top `keep` are exactly one half of the
+    /// lowest kept bit (`100…0`): the integer lies halfway between two
+    /// numbers of `keep` significant bits.
+    pub(crate) fn halfway_below(&self, keep: u32) -> bool {
+        let len = self.bit_len();
+        if len <= keep {
+            return false;
+        }
+        let half = len - keep - 1;
+        self.bit(half) && (0..half).all(|i| !self.bit(i))
+    }
+
     fn bit(&self, i: u32) -> bool {
         self.limbs.get((i / 32) as usize).is_some_and(|l| (l >> (i % 32)) & 1 == 1)
     }

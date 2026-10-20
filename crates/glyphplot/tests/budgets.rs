@@ -4,13 +4,16 @@
 //! holds one test, so nothing in it runs beside them either.
 //!
 //! For every registered chart, at 80 × 24 and 320 × 120, with default
-//! options (`tests/timing/mod.rs` says how each play is timed):
-//! - 300 frames of a view panning across the 1,000,000-point fixture against
+//! options (`tests/timing/mod.rs` says how each play is timed, and which
+//! data it draws: the 1,000,000- and 100,000-point fixture in a shape the
+//! chart takes, or, for `candles`, all and the first 100,000 rows of
+//! `ohlcv-ticks-1m` and, for `bar`, `random-walk-1m` and `-100k` as values):
+//! - 300 frames of a view panning across the 1,000,000 points against
 //!   `META.budget`'s `frameMs` and `worstMs` (REQ-PERF-030);
-//! - the same play over the 100,000-point fixture against 1 ms on average
-//!   and 8 ms the worst (REQ-PERF-040);
-//! - 300 pointer moves across a chart holding the 1,000,000-point fixture
-//!   against `inputMs` on average and 2 ms the worst (REQ-PERF-050).
+//! - the same play over the 100,000 points against 1 ms on average and 8 ms
+//!   the worst (REQ-PERF-040);
+//! - 300 pointer moves across a chart holding the 1,000,000 points against
+//!   `inputMs` on average and 2 ms the worst (REQ-PERF-050).
 //!
 //! A play over budget is played twice more and the lowest average and the
 //! lowest worst count. The test prints a table and the load average before
@@ -24,18 +27,17 @@
 mod timing;
 
 use glyphplot::data::Data;
-use glyphplot::fixtures::Fixture;
 use glyphplot::registry::Entry;
-use timing::{Row, GRIDS};
+use timing::{Row, Source, GRIDS};
 
-/// A row: `play` of `fixture`, generated as `data`, at `grid` against its budget.
-fn row(entry: &'static Entry, (fixture, data): (&'static Fixture, &Data), grid: (usize, usize), play: &'static str, req: &'static str) -> Row {
-    let limit = if play == "move" { timing::input_limit(entry.meta) } else { timing::frame_limit(entry.meta, fixture.rows) };
+/// A row: `play` of `source`, generated as `data`, at `grid` against its budget.
+fn row(entry: &'static Entry, (source, data): (&Source, &Data), grid: (usize, usize), play: &'static str, req: &'static str) -> Row {
+    let limit = if play == "move" { timing::input_limit(entry.meta) } else { timing::frame_limit(entry.meta, source.points) };
     let timing = timing::timed(limit, || match play {
         "move" => timing::pointer(entry, data, grid.0, grid.1),
         _ => timing::pan(entry, data, grid.0, grid.1),
     });
-    Row { chart: entry.meta.slug, play, fixture: fixture.name, points: fixture.rows, grid, timing, limit, req }
+    Row { chart: entry.meta.slug, play, fixture: source.name, points: source.points, grid, timing, limit, req }
 }
 
 /// REQ-CONTRACT-050, REQ-PERF-030, REQ-PERF-040, REQ-PERF-050.
@@ -51,12 +53,12 @@ fn every_chart_keeps_its_time_budgets() {
     let mut rows = Vec::new();
     let mut missing = Vec::new();
     for entry in charts {
-        let (big, small) = (timing::fixture(entry.meta, 1_000_000), timing::fixture(entry.meta, 100_000));
+        let (big, small) = (timing::source(entry.meta, 1_000_000), timing::source(entry.meta, 100_000));
         if big.is_none() {
-            missing.push(format!("{}: no 1,000,000-point fixture of one series in a shape it takes", entry.meta.slug));
+            missing.push(format!("{}: no 1,000,000-point data of one series in a shape it takes", entry.meta.slug));
         }
         if small.is_none() {
-            missing.push(format!("{}: no 100,000-point fixture of one series in a shape it takes", entry.meta.slug));
+            missing.push(format!("{}: no 100,000-point data of one series in a shape it takes", entry.meta.slug));
         }
         // Each fixture generated once a chart; the million-row one is 16 MB.
         let big = big.map(|f| (f, f.generate()));

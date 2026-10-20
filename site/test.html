@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>glyphplot checklist</title>
-<meta name="description" content="The owner's manual checklist for glyphplot v0.3.0: one chart per rendering and interaction case, in Chrome and Safari, desktop and phone.">
+<meta name="description" content="The owner's manual checklist for glyphplot v0.5.0: one chart per rendering and interaction case, in Chrome and Safari, desktop and phone.">
 <style>
   :root {
     color-scheme: light dark;
@@ -37,7 +37,9 @@
   .charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: 12px; }
   .charts figure { margin: 0; min-width: 0; }
   .charts figcaption { font-size: 0.85rem; color: var(--muted); }
-  glyph-plot { width: 100%; }
+  glyph-plot, line-plot { width: 100%; }
+  .fixed-height { height: 160px; }
+  select { font: inherit; padding: 2px 6px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel); color: var(--fg); min-height: 32px; }
   .result { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; margin-top: 0.5rem; padding: 6px 10px; background: var(--panel); border-radius: 6px; }
   .result label { display: inline-flex; gap: 4px; align-items: center; }
   .result input[type="text"] { flex: 1 1 14rem; min-width: 0; font: inherit; padding: 2px 6px; border: 1px solid var(--line); border-radius: 4px; background: var(--bg); color: var(--fg); }
@@ -56,7 +58,7 @@
 <body>
 <main>
 <header>
-  <h1>glyphplot v0.3.0 checklist</h1>
+  <h1>glyphplot v0.5.0 checklist</h1>
   <p>The owner's manual pass (REQ-TEST-030, REQ-TEST-040): run each case in Chrome and Safari, on a desktop and on a phone, mark it, then copy the pass as Markdown into the plan or the pull request. The headless browser tests cover what they can; everything here is what only a real screen, finger, font or screen reader can show.</p>
   <dl class="env" id="env"></dl>
   <div class="bar">
@@ -286,6 +288,188 @@
   <output id="lazy-status">not loaded</output>
   <div class="fold">↓ two screens of spacer ↓</div>
   <glyph-plot id="lazy-chart" type="line" label="Lazy"></glyph-plot>
+</section>
+<section class="case" id="define" data-title="define() aliases">
+  <h2>18. A tag made by <code>define()</code></h2>
+  <ul class="what">
+    <li><code>&lt;line-plot type="candles"&gt;</code> was defined by <code>define("line-plot", { type: "line" })</code>: it draws a line chart, whatever its <code>type</code> attribute says, styled like <code>&lt;glyph-plot&gt;</code> (block, full width, the focus outline).</li>
+    <li>"Set type to bar" changes the attribute and nothing else: no reload, no error.</li>
+  </ul>
+  <div class="bar" role="group" aria-label="Alias">
+    <button type="button" id="alias-type">Set type to bar</button>
+  </div>
+  <line-plot id="alias-chart" type="candles" label="An alias of the line chart"></line-plot>
+  <output id="alias-status"></output>
+</section>
+
+<section class="case" id="type-change" data-title="A type change">
+  <h2>19. A change of <code>type</code></h2>
+  <ul class="what">
+    <li>Zoom in, then switch the type: a chart that takes series data (line) gets the same data and the same x domain, printed below.</li>
+    <li>A type that does not take series data (candles, bar) warns once in the console, naming the shape (<code>series</code>), and draws empty; switching back to line still has the data.</li>
+  </ul>
+  <div class="bar" role="group" aria-label="Type">
+    <button type="button" data-type="line">line</button>
+    <button type="button" data-type="candles">candles</button>
+    <button type="button" data-type="bar">bar</button>
+  </div>
+  <glyph-plot id="type-chart" type="line" label="Type change"></glyph-plot>
+  <output id="type-status"></output>
+</section>
+
+<section class="case" id="fit" data-title="fit: width and contain">
+  <h2>20. <code>fit</code> with fixed <code>cols</code> and <code>rows</code></h2>
+  <ul class="what">
+    <li>Both charts are 40 × 8 cells whatever their size. Drag each box's corner or use the buttons.</li>
+    <li><code>fit="width"</code> (left): the drawing fills the box's width, its height following (a cell is width / 40); it scales without blur beyond a slight softening, braille dots stay square.</li>
+    <li><code>fit="contain"</code> (right, a 160 px tall box): the largest drawing that fits, keeping the cell's 1:2 shape, centred; the box's spare width or height is empty.</li>
+    <li>"No fit" draws the grid at the font's cell size, centred, whatever the box.</li>
+  </ul>
+  <div class="bar" role="group" aria-label="Fit">
+    <button type="button" data-fit="width">width / contain</button>
+    <button type="button" data-fit="">No fit</button>
+    <button type="button" data-fit-width="240px">240 px</button>
+    <button type="button" data-fit-width="100%">100 %</button>
+  </div>
+  <div class="charts">
+    <figure><div class="resizable fit-box"><glyph-plot id="fit-width" type="line" cols="40" rows="8" fit="width" label="Fit width"></glyph-plot></div><figcaption>fit="width"</figcaption></figure>
+    <figure><div class="resizable fit-box"><glyph-plot id="fit-contain" class="fixed-height" type="line" cols="40" rows="8" fit="contain" label="Fit contain"></glyph-plot></div><figcaption>fit="contain", 160 px tall</figcaption></figure>
+  </div>
+  <output id="fit-status"></output>
+</section>
+
+<section class="case" id="link" data-title="Linked charts">
+  <h2>21. Linked charts</h2>
+  <ul class="what">
+    <li>Both charts have <code>link="weather"</code> and different widths. Drag, zoom (Ctrl/⌘ + wheel, pinch, keys) or reset either: the other shows the same dates, at once.</li>
+    <li>Hover one: the other draws a crosshair at the same date. Leave: both clear.</li>
+    <li>The log shows events from the chart you touched only: the other fires none (no loop).</li>
+  </ul>
+  <glyph-plot id="link-a" type="line" link="weather" rows="8" label="Linked, wide"></glyph-plot>
+  <div style="width: 60%"><glyph-plot id="link-b" type="line" link="weather" rows="8" label="Linked, narrow"></glyph-plot></div>
+  <div class="log" id="link-log" role="region" aria-label="Linked chart events" tabindex="0"></div>
+</section>
+
+<section class="case" id="brush-legend" data-title="Brush and legend events">
+  <h2>22. <code>plot-brush</code> and <code>plot-legend</code></h2>
+  <ul class="what">
+    <li>Shift + drag (a long press on touch) brushes a range: <code>plot-brush</code> lines with <code>final=false</code> while dragging, one with <code>final=true</code> and the count at the end; Escape clears it (<code>x=—</code>, count 0).</li>
+    <li>Keys 1 and 2 hide and show each series: one <code>plot-legend</code> line each, with the hidden list.</li>
+    <li>Clicking a legend entry (top row) toggles that series once; a finger's tap does the same.</li>
+  </ul>
+  <glyph-plot id="events-chart" type="line" label="Brush and legend"></glyph-plot>
+  <div class="log" id="events-log" role="region" aria-label="Brush and legend events" tabindex="0"></div>
+</section>
+
+<section class="case" id="time-zone" data-title="The timeZone attribute">
+  <h2>23. <code>timeZone</code></h2>
+  <ul class="what">
+    <li>Hourly data across New York's switch to daylight time (2026-03-08, 07:00 UTC). Pick a zone: the time labels and the readout follow it (local midnights and hours), and the status gives the zone table the core was given.</li>
+    <li>The page's zone (the default) is named in the status. New York's table holds the 07:00 UTC change; Lord Howe's the half-hour one on 2026-04-04 15:00 UTC once you pan there.</li>
+  </ul>
+  <div class="bar">
+    <label for="zone-pick">timeZone</label>
+    <select id="zone-pick">
+      <option value="">(the page's)</option>
+      <option>UTC</option>
+      <option>+05:30</option>
+      <option>America/New_York</option>
+      <option>Australia/Lord_Howe</option>
+      <option>Asia/Tokyo</option>
+    </select>
+  </div>
+  <glyph-plot id="zone-chart" type="line" label="Time zones"></glyph-plot>
+  <output id="zone-status"></output>
+</section>
+
+<section class="case" id="backs" data-title="A back-colour frame">
+  <h2>24. A frame of back colours</h2>
+  <ul class="what">
+    <li>A heatmap-like grid: every cell has a back colour from the scale, with an upper half block (▀) over every fourth cell in the ink.</li>
+    <li>The backs are drawn as one image of 48 × 24 pixels scaled up without smoothing: hard cell edges, no blur and no hairline seams between cells, in both renderers; the half blocks sit exactly on their cells.</li>
+    <li>"Shift" changes every back (one image again); "One cell" changes a single cell (one fill); the counts say which.</li>
+  </ul>
+  <div class="bar" role="group" aria-label="Backs">
+    <button type="button" id="backs-shift">Shift</button>
+    <button type="button" id="backs-one">One cell</button>
+  </div>
+  <div class="charts">
+    <figure><canvas class="gp-canvas" data-backs="text" role="img" aria-label="Backs, text renderer"></canvas><output data-backs-stats="text"></output><figcaption>renderer: text</figcaption></figure>
+    <figure><canvas class="gp-canvas" data-backs="atlas" role="img" aria-label="Backs, atlas renderer"></canvas><output data-backs-stats="atlas"></output><figcaption>renderer: atlas</figcaption></figure>
+  </div>
+</section>
+<section class="case" id="candles" data-title="Candles: scrub with a finger">
+  <h2>25. Candles on <code>ohlcv-days</code>: scrub with a finger</h2>
+  <ul class="what">
+    <li>500 weekday bars from 2024-10-21 (the <code>ohlcv-days</code> fixture, generated here as the core generates it). Weekends take no columns: the candles sit side by side (the index time scale), and the date labels still read as dates.</li>
+    <li>On a phone, put one finger on the chart and move it sideways: the cursor follows candle by candle with no lag, and the page does not scroll; moving up or down scrolls the page instead.</li>
+    <li>While scrubbing, the crosshair snaps to the nearest of the candle's open, high, low and close (move the finger up and down over one candle), and the readout shows the date, <code>o h l c</code>, the volume and the signed change from the previous close.</li>
+    <li>Zoomed all the way out the candles are weekly (the readout and the table caption say so); zooming in returns to daily candles.</li>
+    <li>The status below names the limit-down day and the zero-volume day: find each by scrubbing. The limit-down day is a long falling candle that closes at its low; the zero-volume day a flat dash with no volume bar.</li>
+  </ul>
+  <glyph-plot id="candles-chart" type="candles" rows="20" label="Candles, ohlcv-days"></glyph-plot>
+  <output id="candles-status"></output>
+  <div class="log" id="candles-log" role="region" aria-label="Candle events" tabindex="0"></div>
+</section>
+
+<section class="case" id="candle-modes" data-title="Each candle mode">
+  <h2>26. Each candle mode</h2>
+  <ul class="what">
+    <li>The same last 16 days in each: <code>candle</code> (bodies filled, rising in the up colour, falling in the down colour), <code>hollow</code> (filled by close against open, coloured by close against the previous close) and <code>ohlc</code> (a stick with the open tick left and the close tick right).</li>
+    <li>At four cells a candle or more the candles are box drawing; zoom out (Ctrl/⌘ + wheel or pinch) and they turn to braille with a blank cell between at two or three cells, braille side by side at one, then weekly candles. No glyph is cut at the plot's edges.</li>
+    <li>Rising and falling are told apart by fill as well as colour: check with the OS's colour filters set to greyscale.</li>
+  </ul>
+  <glyph-plot id="mode-candle" type="candles" rows="12" options='{"mode":"candle"}' label="Mode candle"></glyph-plot>
+  <glyph-plot id="mode-hollow" type="candles" rows="12" options='{"mode":"hollow"}' label="Mode hollow"></glyph-plot>
+  <glyph-plot id="mode-ohlc" type="candles" rows="12" options='{"mode":"ohlc"}' label="Mode ohlc"></glyph-plot>
+</section>
+
+<section class="case" id="volume" data-title="The volume pane">
+  <h2>27. The volume pane</h2>
+  <ul class="what">
+    <li>Left: a second pane under the prices, sharing the x axis, its bars under their candles; its axis reads in thousands or millions. Right (<code>volume: false</code>): prices only, taking the whole height.</li>
+    <li>The view is the ten weeks around the limit-down day: its volume bar (5,000,000) is the tallest; the zero-volume day, also in view, has no bar at all.</li>
+    <li>Hovering the volume pane moves the same crosshair as the price pane, and the readout gives the volume.</li>
+  </ul>
+  <div class="charts">
+    <figure><glyph-plot id="volume-on" type="candles" rows="16" label="With the volume pane"></glyph-plot><figcaption>volume: true (default)</figcaption></figure>
+    <figure><glyph-plot id="volume-off" type="candles" rows="16" options='{"volume":false}' label="Without the volume pane"></glyph-plot><figcaption>volume: false</figcaption></figure>
+  </div>
+</section>
+
+<section class="case" id="bars" data-title="Bars: vertical, horizontal, grouped, stacked">
+  <h2>28. Bars: vertical, horizontal, grouped, stacked with negative values</h2>
+  <ul class="what">
+    <li>Vertical (one series, signed): bars above 0 in the up colour and filled <code>█</code>, below 0 in the down colour and filled <code>▒</code>; each bar's free end is an eighth block (<code>▁</code>–<code>▇</code> above, <code>▔</code> and its kin below), so bars of close values differ in height.</li>
+    <li>Horizontal: the same data across, ends <code>▏</code>–<code>▉</code>; the category labels sit on the left, cut with <code>…</code> when too long.</li>
+    <li>Grouped: three series side by side in each category, in three colours, a legend naming them. Stacked: the same three piled, positive values above 0 and negative values below it, each segment its series' colour.</li>
+    <li>Hover anywhere in a band, padding included: the readout names the category, the series under the pointer and its value; the hovered bar takes the accent colour. In a stack the series is the segment nearest the pointer.</li>
+    <li>Drag pans through the categories; Ctrl/⌘ + wheel zooms; the value axis refits to the categories in view.</li>
+  </ul>
+  <div class="charts">
+    <figure><glyph-plot id="bar-vertical" type="bar" rows="14" label="Bars, vertical"></glyph-plot><figcaption>vertical</figcaption></figure>
+    <figure><glyph-plot id="bar-horizontal" type="bar" rows="14" options='{"orient":"horizontal"}' label="Bars, horizontal"></glyph-plot><figcaption>orient: horizontal</figcaption></figure>
+    <figure><glyph-plot id="bar-grouped" type="bar" rows="14" label="Bars, grouped"></glyph-plot><figcaption>three series, grouped</figcaption></figure>
+    <figure><glyph-plot id="bar-stacked" type="bar" rows="14" options='{"stack":true}' label="Bars, stacked"></glyph-plot><figcaption>stack: true, with negative values</figcaption></figure>
+  </div>
+</section>
+
+<section class="case" id="sparklines" data-title="Sparklines with a stream">
+  <h2>29. Sparklines with an appended stream</h2>
+  <ul class="what">
+    <li>Three sparklines (<code>line</code>, <code>area</code>, <code>column</code>), one row band each, no axes; on the right of each the label, the latest value and <code>↓least ↑greatest</code>.</li>
+    <li>"Start" appends a row to all three every 200 ms (<code>element.append</code>); "Stop" stops. Each append is drawn at once: the latest value matches the last value in the status, and the least and greatest change only when a new extreme arrives.</li>
+    <li>The series compresses as it grows (the view fits all of it); nothing flickers, and hovering reads the datum under the pointer while the stream runs.</li>
+    <li>Narrow the window: the text column drops its parts (extent first) before the line loses half its columns.</li>
+  </ul>
+  <div class="bar" role="group" aria-label="Stream">
+    <button type="button" id="spark-start">Start</button>
+    <button type="button" id="spark-stop">Stop</button>
+  </div>
+  <glyph-plot id="spark-line" type="sparkline" rows="2" label="Sparkline, line"></glyph-plot>
+  <glyph-plot id="spark-area" type="sparkline" rows="2" options='{"mode":"area"}' label="Sparkline, area"></glyph-plot>
+  <glyph-plot id="spark-column" type="sparkline" rows="2" options='{"mode":"column"}' label="Sparkline, column"></glyph-plot>
+  <output id="spark-status">not started</output>
 </section>
 </main>
 <script type="module" src="./test.ts"></script>

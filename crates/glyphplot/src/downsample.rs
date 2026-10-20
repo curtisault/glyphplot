@@ -19,6 +19,11 @@
 //! in segments reduces as one. [`Cache`] keeps the result by data version, x
 //! range and width: a frame with all three unchanged reads no data
 //! (REQ-SAMPLE-020).
+//!
+//! [`lttb`] is Largest-Triangle-Three-Buckets, offered as `sample: "lttb"`
+//! and never a default ([`Sample`], REQ-SAMPLE-060), a port of the reference
+//! implementation that `tests/reference.rs` compares bit for bit
+//! (REQ-REF-010).
 
 use std::ops::Range;
 
@@ -320,11 +325,132 @@ impl Cache {
     }
 }
 
+/// How a line-like chart reduces the rows in view: the `sample` option
+/// (`options.schema.json`). M4 is every chart's default (REQ-SAMPLE-010);
+/// LTTB is offered and is never a default (REQ-SAMPLE-060).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Sample {
+    /// M4 a dot column, exact to the cell.
+    #[default]
+    M4,
+    /// Largest-Triangle-Three-Buckets ([`lttb`]): a fixed number of points,
+    /// chosen for shape, not exact to the cell.
+    Lttb,
+    /// Every row.
+    None,
+}
+
+impl Sample {
+    /// The option's value by name: `m4`, `lttb` or `none`.
+    pub fn from_name(name: &str) -> Option<Sample> {
+        match name {
+            "m4" => Some(Sample::M4),
+            "lttb" => Some(Sample::Lttb),
+            "none" => Some(Sample::None),
+            _ => None,
+        }
+    }
+}
+
+/// Largest-Triangle-Three-Buckets (Steinarsson, "Downsampling Time Series
+/// for Visual Representation", 2013): the indices of `threshold` points of
+/// the series, the first and the last always, and from each of the
+/// `threshold − 2` buckets between them the point making the largest
+/// triangle with the point kept before it and the average of the next
+/// bucket (REQ-SAMPLE-060).
+///
+/// A port of the reference implementation, flot-downsample's
+/// `largestTriangleThreeBuckets` (MIT, © 2013 Sveinn Steinarsson, commit
+/// af872e0; `scripts/fixtures/lttb-reference.js`), operation for operation,
+/// so its choices equal the reference's bit for bit (REQ-REF-010): every
+/// index when `threshold` is 0 or at least the number of points. The series
+/// is `xs` and `ys` to the shorter's length, finite, x increasing.
+pub fn lttb(xs: &[f64], ys: &[f64], threshold: usize) -> Vec<usize> {
+    let n = xs.len().min(ys.len());
+    if threshold >= n || threshold == 0 {
+        return (0..n).collect();
+    }
+    let mut out = Vec::with_capacity(threshold);
+    // Bucket size, leaving room for the first and last points.
+    let every = (n - 2) as f64 / (threshold as f64 - 2.0);
+    let mut a = 0usize;
+    let (mut max_area_point, mut next_a) = (0usize, 0usize);
+    out.push(a);
+    for i in 0..threshold.saturating_sub(2) {
+        // The average of the next bucket.
+        let avg_start = ((i + 1) as f64 * every).floor() as usize + 1;
+        let avg_end = (((i + 2) as f64 * every).floor() as usize + 1).min(n);
+        let avg_len = avg_end.saturating_sub(avg_start) as f64;
+        let (mut avg_x, mut avg_y) = (0.0, 0.0);
+        for j in avg_start..avg_end {
+            avg_x += xs[j];
+            avg_y += ys[j];
+        }
+        avg_x /= avg_len;
+        avg_y /= avg_len;
+        // This bucket's range, and the point kept before it.
+        let range_offs = (i as f64 * every).floor() as usize + 1;
+        let range_to = ((i + 1) as f64 * every).floor() as usize + 1;
+        let (pax, pay) = (xs[a], ys[a]);
+        let mut max_area = -1.0;
+        for r in range_offs..range_to.min(n) {
+            let area = ((pax - avg_x) * (ys[r] - pay) - (pax - xs[r]) * (avg_y - pay)).abs() * 0.5;
+            if area > max_area {
+                max_area = area;
+                max_area_point = r;
+                next_a = r;
+            }
+        }
+        out.push(max_area_point);
+        a = next_a;
+    }
+    out.push(n - 1);
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::fixtures::SplitMix64;
     use proptest::prelude::*;
+
+    proptest! {
+        /// REQ-SAMPLE-060, REQ-PROP-010: LTTB keeps the first and last
+        /// points, keeps `min(threshold, n)` of them (all for a threshold of
+        /// 0), and keeps them in order, each once.
+        #[test]
+        fn lttb_keeps_ends_and_order(seed in any::<u64>(), n in 0usize..2000, threshold in 0usize..2100) {
+            let mut r = SplitMix64::new(seed);
+            let mut x = 0.0;
+            let (mut xs, mut ys) = (Vec::with_capacity(n), Vec::with_capacity(n));
+            let mut y = 0.0;
+            for _ in 0..n {
+                x += 0.5 + r.next_f64();
+                y += r.next_f64() - 0.5;
+                xs.push(x);
+                ys.push(y);
+            }
+            let kept = lttb(&xs, &ys, threshold);
+            let want = if threshold == 0 || threshold >= n { n } else { threshold.max(2) };
+            prop_assert_eq!(kept.len(), want);
+            if n > 0 {
+                prop_assert_eq!(kept[0], 0);
+                prop_assert_eq!(*kept.last().unwrap(), n - 1);
+            }
+            prop_assert!(kept.windows(2).all(|w| w[0] < w[1]), "{kept:?}");
+        }
+    }
+
+    #[test]
+    fn lttb_is_never_a_default() {
+        assert_eq!(Sample::default(), Sample::M4);
+        assert_eq!(Sample::from_name("lttb"), Some(Sample::Lttb));
+        assert_eq!(Sample::from_name("LTTB"), None);
+        // A spike survives three-point reduction where it makes the largest triangle.
+        let xs: Vec<f64> = (0..9).map(f64::from).collect();
+        let ys = [0.0, 0.0, 0.0, 0.0, 9.0, 0.0, 0.0, 0.0, 0.0];
+        assert_eq!(lttb(&xs, &ys, 3), [0, 4, 8]);
+    }
 
     /// Sorted x with repeats and runs of missing y.
     fn series(seed: u64, n: usize) -> (Vec<f64>, Vec<f64>) {

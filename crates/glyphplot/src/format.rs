@@ -16,6 +16,13 @@
 //! `toExponential`, `toPrecision` and `toString` from the exact value of the
 //! `f64`; nothing here formats a float with `core::fmt` (REQ-FMT-030).
 //!
+//! [`UnitFormat`] writes SI units, IEC bytes, bit rates, durations, prices to
+//! a tick size and signed percentages (REQ-FMT-040), and [`Display`] is a
+//! column's `scale`, `offset` and `unit`, applied to ticks, readouts and the
+//! table and never to stored values (REQ-DATA-100). Date labels are
+//! `crate::time`'s strftime subset (REQ-FMT-050), on the locale pack's hour
+//! cycle.
+//!
 //! Where glyphplot differs from d3, on purpose:
 //! - NaN and ±∞ format as the locale's `nan`, empty by default, with no sign,
 //!   currency or suffix; d3 writes `NaN` and `Infinity` (REQ-FMT-030).
@@ -26,6 +33,9 @@
 mod big;
 mod fdlibm;
 pub mod js;
+mod units;
+
+pub use units::{Display, Unit, UnitFormat};
 
 use crate::ticks::tick_step;
 use crate::time::TimeLocale;
@@ -93,13 +103,15 @@ impl Locale {
     /// as one plain space cell; its minus, `-` in the default pack and U+2212
     /// when the pack says so (REQ-FMT-060); its digits (ASCII ones as none);
     /// the suffix of its percent pattern; and its month, weekday and period
-    /// names. A list of the wrong length keeps the default's.
+    /// names, and its hour cycle for time labels (REQ-FMT-050). A list of
+    /// the wrong length keeps the default's.
     pub fn from_pack(pack: &crate::locale::LocalePack) -> Locale {
         let base = Locale::default();
         let ascii = pack.numerals.iter().enumerate().all(|(d, n)| n.len() == 1 && n.as_bytes()[0] == b'0' + d as u8);
         let numerals = if ascii { None } else { exactly::<10>(&pack.numerals) };
         let percent = plain_spaces(&pack.percent.replacen('#', "", 1));
         let time = TimeLocale {
+            hour12: pack.hour_cycle == crate::locale::HourCycle::H12,
             periods: pack.periods.clone(),
             days: exactly(&pack.days).unwrap_or(base.time.days.clone()),
             days_short: exactly(&pack.days_short).unwrap_or(base.time.days_short.clone()),
@@ -130,6 +142,9 @@ pub struct FormatError {
     pub specifier: String,
     /// What is wrong with it.
     pub reason: &'static str,
+    /// Whether it was a date pattern (REQ-FMT-050) rather than a number
+    /// specifier (REQ-FMT-020).
+    pub date: bool,
 }
 
 impl core::fmt::Display for FormatError {
@@ -137,7 +152,7 @@ impl core::fmt::Display for FormatError {
         f.write_str(&self.option)?;
         f.write_str(": \"")?;
         f.write_str(&self.specifier)?;
-        f.write_str("\" is not a number format: ")?;
+        f.write_str(if self.date { "\" is not a date format: " } else { "\" is not a number format: " })?;
         f.write_str(self.reason)
     }
 }
@@ -199,7 +214,7 @@ impl Specifier {
     /// Parses a specifier from the option named `option`, refusing anything
     /// outside the subset with an error that names the option (REQ-FMT-020).
     pub fn parse(option: &str, specifier: &str) -> Result<Specifier, FormatError> {
-        let error = |reason| Err(FormatError { option: option.into(), specifier: specifier.into(), reason });
+        let error = |reason| Err(FormatError { option: option.into(), specifier: specifier.into(), reason, date: false });
         if specifier == "auto" {
             return Ok(Specifier::default());
         }
@@ -524,7 +539,13 @@ fn precision_round(step: f64, max: f64) -> Option<i32> {
 /// a missing precision comes from the tick step; `s` takes one SI prefix
 /// from the larger end of the domain (REQ-FMT-010).
 pub fn tick_format(start: f64, stop: f64, count: f64, spec: &Specifier, locale: &Locale) -> NumberFormat {
-    let step = tick_step(start, stop, count);
+    step_format(tick_step(start, stop, count), start, stop, spec, locale)
+}
+
+/// The format of ticks `step` apart over `[start, stop]`, as
+/// [`tick_format`] gives it for that step: for ticks placed some other way
+/// than d3's, such as one a row (REQ-TICK-050).
+pub fn step_format(step: f64, start: f64, stop: f64, spec: &Specifier, locale: &Locale) -> NumberFormat {
     let mut spec = spec.clone();
     if spec.kind == Kind::Auto {
         spec.kind = Kind::Fixed;
@@ -682,5 +703,153 @@ mod tests {
         }
         let pct = LocalePack { percent: "#\u{00A0}%".into(), ..LocalePack::default() };
         assert_eq!(NumberFormat::new(&Specifier::parse("f", ".0%").unwrap(), &Locale::from_pack(&pct)).format(0.5), "50 %");
+    }
+
+    /// REQ-FMT-040: SI units, IEC bytes, bits a second, durations from
+    /// nanoseconds to days, prices to a tick size and signed percentages,
+    /// one table a unit.
+    #[test]
+    fn unit_table() {
+        let l = Locale::default();
+        let check = |unit: Unit, digits: u32, table: &[(f64, &str)]| {
+            let f = UnitFormat::new(unit.clone(), digits, &l);
+            for &(v, want) in table {
+                assert_eq!(f.format(v), want, "{unit:?} {digits} {v}");
+            }
+        };
+        check(
+            Unit::Si("W".into()),
+            3,
+            &[(0.0, "0 W"), (1.0, "1 W"), (999.0, "999 W"), (1500.0, "1.5 kW"), (999_950.0, "1 MW"), (-2.5e9, "-2.5 GW"), (0.02, "20 mW"), (4.7e-6, "4.7 µW")],
+        );
+        check(Unit::Si("Hz".into()), 4, &[(1_234_567.0, "1.235 MHz"), (60.0, "60 Hz")]);
+        check(
+            Unit::Bytes,
+            3,
+            &[
+                (0.0, "0 B"),
+                (512.0, "512 B"),
+                (1023.0, "1023 B"),
+                (1024.0, "1 KiB"),
+                (1536.0, "1.5 KiB"),
+                (1_048_575.0, "1 MiB"),
+                (5.0 * 1_048_576.0, "5 MiB"),
+                (1.5 * 1_073_741_824.0, "1.5 GiB"),
+                (2.0f64.powi(40), "1 TiB"),
+                (-3072.0, "-3 KiB"),
+            ],
+        );
+        check(
+            Unit::BitsPerSecond,
+            3,
+            &[(0.0, "0 b/s"), (999.0, "999 b/s"), (1000.0, "1 kb/s"), (12_000_000.0, "12 Mb/s"), (2.5e9, "2.5 Gb/s"), (1e12, "1 Tb/s")],
+        );
+        check(
+            Unit::Duration,
+            3,
+            &[
+                (0.0, "0 s"),
+                (5e-10, "0.5 ns"),
+                (42e-9, "42 ns"),
+                (250e-6, "250 µs"),
+                (0.0125, "12.5 ms"),
+                (0.9999, "1 s"),
+                (1.5, "1.5 s"),
+                (90.0, "1.5 min"),
+                (5400.0, "1.5 h"),
+                (86_400.0, "1 d"),
+                (3.0 * 86_400.0, "3 d"),
+                (-30.0, "-30 s"),
+            ],
+        );
+        check(Unit::Price(0.01), 0, &[(182.4, "182.40"), (1234.567, "1,234.57"), (-0.004, "0.00"), (0.0, "0.00")]);
+        check(Unit::Price(0.25), 0, &[(101.3, "101.25"), (101.38, "101.50"), (99.0, "99.00")]);
+        check(Unit::Price(1.0 / 32.0), 0, &[(99.5, "99-16"), (99.03125, "99-01"), (100.99, "101-00"), (-1.25, "-1-08")]);
+        check(Unit::Price(1.0), 0, &[(1234.4, "1,234")]);
+        check(Unit::SignedPercent, 2, &[(0.0125, "+1.25%"), (-0.004, "-0.40%"), (0.0, "0.00%"), (0.00001, "0.00%"), (-0.00001, "0.00%"), (1.5, "+150.00%")]);
+        check(Unit::SignedPercent, 0, &[(0.5, "+50%"), (-0.123, "-12%")]);
+        for unit in [Unit::Si("W".into()), Unit::Bytes, Unit::BitsPerSecond, Unit::Duration, Unit::Price(0.01), Unit::SignedPercent] {
+            for v in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+                assert_eq!(UnitFormat::new(unit.clone(), 3, &l).format(v), "", "{unit:?} {v}");
+            }
+        }
+        // The locale's separators apply.
+        let de = Locale::from_pack(&crate::locale::LocalePack { decimal: ",".into(), group: ".".into(), ..crate::locale::LocalePack::default() });
+        assert_eq!(UnitFormat::new(Unit::Bytes, 3, &de).format(1536.0), "1,5 KiB");
+        assert_eq!(UnitFormat::new(Unit::Price(0.01), 0, &de).format(1234.5), "1.234,50");
+    }
+
+    /// REQ-DATA-100: a column's scale and offset change what ticks,
+    /// readouts and table cells show, never the stored values.
+    #[test]
+    fn unit_scale_and_offset_change_labels_only() {
+        use crate::data::Column;
+        let mut c = Column::f64("price", vec![18240.0, 10000.0, 20000.0]).unit("USD");
+        c.scale = Some(0.01);
+        let before = format!("{:?}", c.values);
+        let d = Display::of(&c);
+        let auto = Specifier::default();
+        assert_eq!(d.readout(18240.0, &auto, &Locale::default()), "182.40");
+        assert_eq!(d.with_unit(&d.readout(18240.0, &auto, &Locale::default())), "182.40 USD");
+        let ticks = d.tick_labels([10000.0, 20000.0], 5.0, &auto, &Locale::default());
+        let labels: Vec<&str> = ticks.iter().map(|(_, l)| l.as_str()).collect();
+        assert_eq!(labels, ["100", "120", "140", "160", "180", "200"]);
+        assert_eq!(ticks[1].0, 12000.0, "ticks are placed at stored values");
+        assert_eq!(format!("{:?}", c.values), before, "the stored values are unchanged");
+        // An offset: stored kelvin shown in °C.
+        let k = Display::new(Some(1.0), Some(-273.15), Some("°C"));
+        assert_eq!(k.readout(300.0, &Specifier::parse("format", ".1f").unwrap(), &Locale::default()), "26.9");
+        assert_eq!(k.stored(k.shown(300.0)), 300.0);
+        // No transform: the identity, and the chart's own format.
+        let none = Display::of(&Column::f64("y", vec![1.0]));
+        assert!(none.is_identity());
+        assert_eq!(none.readout(0.1 + 0.2, &auto, &Locale::default()), "0.3");
+        assert_eq!(none.domain([3.0, 4.0]), [3.0, 4.0]);
+    }
+
+    /// REQ-FMT-050: date labels accept the strftime subset and refuse any
+    /// other directive with an error naming the option.
+    #[test]
+    fn strftime_subset() {
+        use crate::time::{check_pattern, strftime, TimeLocale};
+        let t = 1_792_328_421_005.0; // 2026-10-18 13:00:21.005 UTC, a Sunday
+        let mut s = String::new();
+        strftime("%Y %m %d %e %H %I %M %S %L %p %a %A %b %B %j %Z %%", t, &TimeLocale::default(), &mut s);
+        assert_eq!(s, "2026 10 18 18 13 01 00 21 005 PM Sun Sunday Oct October 291 +0000 %");
+        for good in ["%Y-%m-%d", "%-d %b", "%_H:%0M", "at %H o'clock", "100%%", ""] {
+            assert_eq!(check_pattern("axes[0].format", good), Ok(()), "{good}");
+        }
+        for bad in ["%y", "%U", "%c", "%x", "%Y %q", "%", "%-", "%Y-%"] {
+            let e = check_pattern("axes[0].format", bad).unwrap_err();
+            assert_eq!(e.option, "axes[0].format");
+            assert!(e.to_string().starts_with("axes[0].format: \"") && e.to_string().contains("not a date format"), "{e}");
+        }
+        assert!(crate::scale::AxisFormat::parse("axes[1].format", "%y", crate::scale::Kind::Time).is_err());
+    }
+
+    /// REQ-FMT-050: time labels are on a 24-hour clock unless the locale
+    /// pack's hour cycle is 12-hour (en-US's, the default, is).
+    #[test]
+    fn hour_cycle_follows_the_locale() {
+        use crate::locale::{HourCycle, LocalePack};
+        use crate::time::{utc_tick_label, HOUR, MINUTE};
+        let t0 = 1_792_281_600_000.0; // 2026-10-18 00:00 UTC
+        let label = |l: &Locale, t: f64| {
+            let mut s = String::new();
+            utc_tick_label(t, &l.time, &mut s);
+            s
+        };
+        let us = Locale::from_pack(&LocalePack::default());
+        assert!(us.time.hour12);
+        assert_eq!(label(&us, t0 + 15.0 * HOUR), "03 PM");
+        assert_eq!(label(&us, t0 + 15.0 * HOUR + 30.0 * MINUTE), "03:30");
+        let h23 = Locale::from_pack(&LocalePack { hour_cycle: HourCycle::H23, ..LocalePack::default() });
+        assert!(!h23.time.hour12);
+        assert_eq!(label(&h23, t0 + 15.0 * HOUR), "15:00");
+        assert_eq!(label(&h23, t0 + 15.0 * HOUR + 30.0 * MINUTE), "15:30");
+        assert_eq!(label(&h23, t0 + 9.0 * HOUR), "09:00");
+        // Coarser labels do not depend on the clock.
+        assert_eq!(label(&h23, t0), "Oct 18");
+        assert_eq!(label(&h23, t0 + 7.0 * 1000.0), ":07");
     }
 }

@@ -2,7 +2,9 @@
 // fetched once for many tags, calls queued before load, and teardown and
 // freeing on attribute changes and removal; with them REQ-EL-010 to 150,
 // REQ-LOAD-010 to 030, REQ-VIEW-030, 040, REQ-MOUNT-010, 020, plot-ready,
-// plot-error, and no new chart on a theme change (REQ-EL-040, REQ-THEME-030).
+// plot-error, and no new chart on a theme change (REQ-EL-040, REQ-THEME-030);
+// `define` aliases (REQ-EL-030) and a type change that carries the data only
+// when the new chart takes its shape (REQ-EL-050).
 
 import { expect, test, type Page } from "@playwright/test";
 import type { GlyphPlot } from "glyphplot/element";
@@ -41,8 +43,8 @@ test("the element is defined once with one style, observes the plan's attributes
       props: ["data", "options", "view"].every((p) => p in fresh),
     };
   });
-  // REQ-EL-020: the plan's element table as of v0.3.0.
-  expect(r.observed.sort()).toEqual(["cols", "data", "label", "loading", "locale", "mono", "motion", "options", "rows", "theme", "time", "type", "view"]);
+  // REQ-EL-020: the plan's element table as of v0.5.0, and timeZone (REQ-TZ-020).
+  expect(r.observed.sort()).toEqual(["cols", "data", "fit", "label", "link", "loading", "locale", "mono", "motion", "options", "rows", "theme", "time", "timezone", "type", "view"]);
   expect(r.formAssociated).toBe(false); // REQ-EL-150
   expect(r.styles).toBe(1); // REQ-EL-010
   expect(r.fontFace).toBe(true);
@@ -405,4 +407,89 @@ test("a chart draws only while it intersects the viewport", async ({ page }) => 
   await page.evaluate(() => scrollTo(0, 0));
   await frames(page, 4);
   expect(await page.evaluate(() => (window as unknown as { __frames: number }).__frames)).toBeGreaterThan(0);
+});
+
+test("define(tag, { type }) makes an alias whose type is fixed, styled, and does nothing for a tag already defined", async ({ page }) => {
+  const errors = consoleErrors(page);
+  const r = await page.evaluate(async () => {
+    const { define } = window.gpElement;
+    define("line-chart", { type: "line" });
+    const Alias = customElements.get("line-chart");
+    // A second define, of another type, changes nothing; nor does defining the main tag.
+    define("line-chart", { type: "candles" });
+    define("glyph-plot", { type: "line" });
+    const el = document.createElement("line-chart") as InstanceType<typeof window.gp.Chart> & HTMLElement & { ready: Promise<unknown>; type: string; text(): string; data: unknown };
+    el.setAttribute("type", "candles"); // ignored: the alias's type is line
+    el.setAttribute("loading", "eager");
+    el.data = { x: [0, 1, 2, 3], y: [1, 3, 2, 4] };
+    document.getElementById("stage")?.append(el);
+    await el.ready;
+    el.setAttribute("type", "bar"); // still ignored, no new chart
+    await new Promise((res) => requestAnimationFrame(() => res(null)));
+    const style = document.getElementById("glyphplot-style");
+    return {
+      same: customElements.get("line-chart") === Alias,
+      main: customElements.get("glyph-plot") !== Alias,
+      isPlot: el instanceof (customElements.get("glyph-plot") as CustomElementConstructor),
+      type: el.type,
+      drawn: el.text().includes("┤"),
+      styles: document.querySelectorAll("style#glyphplot-style").length,
+      aliasRules: style?.textContent?.includes(":where(line-chart .gp-frame)") ?? false,
+      display: getComputedStyle(el).display,
+    };
+  });
+  expect(r).toEqual({ same: true, main: true, isPlot: true, type: "line", drawn: true, styles: 1, aliasRules: true, display: "block" });
+  expect(errors).toEqual([]);
+});
+
+test("a type change carries data and view when the new chart takes the data's shape, else warns once naming it and draws empty", async ({ page }) => {
+  const warnings: string[] = [];
+  page.on("console", (m) => {
+    if (m.type() === "warning") warnings.push(m.text());
+  });
+  const el = await addChart(page);
+  await el.evaluate((e) => ((e as El).view = { x: { domain: [30, 70] } }));
+  // The line chart takes series data: carried (the meta's shapes, from the manifest's charts).
+  await el.evaluate(async (e) => {
+    e.setAttribute("type", "line ");
+    await (e as El).ready.catch(() => {});
+    e.setAttribute("type", "line");
+    await (e as El).ready;
+  });
+  expect(await el.evaluate((e) => (e as El).data?.tables["data"]?.length)).toBe(200);
+  expect(await el.evaluate((e) => ((e as El).view["x"] as { domain: unknown }).domain)).toEqual([30, 70]);
+  // A chart whose meta takes only ohlcv: the line chart's meta, patched, stands in for one (no such module is built yet).
+  await page.evaluate(() => {
+    const proto = window.gp.Chart.prototype;
+    const d = Object.getOwnPropertyDescriptor(proto, "meta") as PropertyDescriptor;
+    Object.defineProperty(proto, "meta", {
+      configurable: true,
+      get(this: InstanceType<typeof window.gp.Chart>) {
+        const m = d.get?.call(this);
+        return (window as unknown as { __ohlcv?: boolean }).__ohlcv ? { ...m, shapes: ["ohlcv"] } : m;
+      },
+    });
+  });
+  // Swaps to a type no module plays and back, the old chart's meta unpatched and the new one's patched.
+  const swap = (): Promise<{ data: unknown; domain: unknown; text: string }> =>
+    el.evaluate(async (e) => {
+      const w = window as unknown as { __ohlcv?: boolean };
+      w.__ohlcv = false;
+      e.setAttribute("type", "line ");
+      w.__ohlcv = true;
+      await (e as El).ready.catch(() => {});
+      e.setAttribute("type", "line");
+      await (e as El).ready;
+      await new Promise((res) => requestAnimationFrame(() => res(null)));
+      return { data: (e as El).data, domain: ((e as El).view["x"] as { domain: unknown }).domain, text: (e as El).text() };
+    });
+  const empty = await swap();
+  expect(empty.data).toBeNull();
+  expect(empty.domain).toBeNull();
+  expect(empty.text).not.toMatch(/[\u2801-\u28ff]/); // no braille: no data drawn
+  // A second rejection of the same shape warns no more.
+  await el.evaluate((e) => ((e as El).data = { x: [0, 1], y: [0, 1] }));
+  expect((await swap()).data).toBeNull();
+  const shape = warnings.filter((w) => w.includes("takes ohlcv data, not series"));
+  expect(shape).toEqual(["glyphplot: a line chart takes ohlcv data, not series: it is drawn empty"]);
 });

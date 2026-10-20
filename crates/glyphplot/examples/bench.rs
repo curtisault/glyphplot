@@ -39,8 +39,8 @@ fn main() -> ExitCode {
     let mut rows = Vec::new();
     for entry in charts {
         for points in POINTS {
-            let Some(fixture) = timing::fixture(entry.meta, points) else {
-                println!("bench: {}: no {points}-point fixture of one series in a shape it takes", entry.meta.slug);
+            let Some(fixture) = timing::source(entry.meta, points) else {
+                println!("bench: {}: no {points}-point data of one series in a shape it takes", entry.meta.slug);
                 continue;
             };
             let data = fixture.generate();

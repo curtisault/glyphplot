@@ -13,9 +13,21 @@
 //!   kept base, REQ-OVERLAY-010).
 //!
 //! Each play makes a fresh chart with default options from the registry and
-//! draws with [`Env::plain`]. Times are wall clock (`Instant`), in ms. A play
-//! over its limit is played twice more, and the lowest average and the lowest
-//! worst count (REQ-CONTRACT-050, ADR-126).
+//! draws with [`Env::plain`], over the data [`source`] gives it for the
+//! play's size: the fixture of one series and that many rows in a shape the
+//! chart takes; else, for a chart of a shape no fixture of that size has,
+//! data derived from a fixture without changing the budget it is held to:
+//! - `ohlcv` (`candles`): the first rows of `ohlcv-ticks-1m`, the one OHLCV
+//!   fixture of a million rows (all of it at 1,000,000, its first 100,000
+//!   rows at 100,000);
+//! - `values` (`bar`): the `y` of the series fixture of that many rows
+//!   (`random-walk-1m`, `random-walk-100k`, `sine-1k`) as one `value`
+//!   column, each row its own category, as `bar`'s own timing test built
+//!   it before rule 30 timed `bar`.
+//!
+//! Times are wall clock (`Instant`), in ms. A play over its limit is played
+//! twice more, and the lowest average and the lowest worst count
+//! (REQ-CONTRACT-050, ADR-126).
 // Each of the two uses a part.
 #![allow(dead_code)]
 
@@ -24,7 +36,7 @@ use std::process::Command;
 use std::time::Instant;
 
 use glyphplot::chart::{Chart, Env, Meta};
-use glyphplot::data::Data;
+use glyphplot::data::{Column, Data, Role, Shape, Table, Values};
 use glyphplot::fixtures::{Fixture, FIXTURES};
 use glyphplot::grid::Grid;
 use glyphplot::input::{Input, Mods, PointerType};
@@ -93,11 +105,90 @@ pub fn input_limit(meta: &Meta) -> Limit {
     Limit { avg: meta.budget.input_ms, worst: INPUT_WORST_MS }
 }
 
-/// The fixture of one series and `points` rows in a shape the chart takes,
-/// first in the fixtures' table order (`random-walk-1m`, `random-walk-100k`,
-/// `sine-1k` for a series chart).
-pub fn fixture(meta: &Meta, points: usize) -> Option<&'static Fixture> {
-    FIXTURES.iter().find(|f| f.rows == points && f.series == 1 && meta.shapes.contains(&f.shape))
+/// How a play's data comes from its fixture.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Derive {
+    /// The fixture as it is.
+    Same,
+    /// Its first rows.
+    First(usize),
+    /// Its `y` as one `value` column.
+    Values,
+}
+
+/// The data a play draws: a fixture, or data derived from one (the module
+/// says how).
+#[derive(Clone, Copy, Debug)]
+pub struct Source {
+    /// Its name in the table: the fixture's, and how it was derived.
+    pub name: &'static str,
+    /// Its rows.
+    pub points: usize,
+    fixture: &'static Fixture,
+    derive: Derive,
+}
+
+impl Source {
+    /// The data, generated afresh.
+    pub fn generate(&self) -> Data {
+        let data = self.fixture.generate();
+        let Some(t) = data.first_table() else { return data };
+        let columns: Vec<Column> = match self.derive {
+            Derive::Same => return data,
+            Derive::First(n) => t
+                .columns()
+                .iter()
+                .map(|c| {
+                    let mut k = c.clone();
+                    k.values = match &c.values {
+                        Values::Num(v) => Values::Num(v[..n.min(v.len())].to_vec()),
+                        Values::Codes(v) => Values::Codes(v[..n.min(v.len())].to_vec()),
+                        Values::Text(v) => Values::Text(v[..n.min(v.len())].to_vec()),
+                    };
+                    k
+                })
+                .collect(),
+            Derive::Values => {
+                let Some(y) = t.columns().iter().find(|c| c.role == Some(Role::Y)) else { return data };
+                vec![Column::f64("value", y.nums().unwrap_or(&[]).to_vec()).role(Role::Value)]
+            }
+        };
+        Table::from_columns(columns).map(Data::from_table).unwrap_or(data)
+    }
+}
+
+/// The data a chart's play of `points` rows draws: the fixture of one series
+/// and `points` rows in a shape the chart takes, first in the fixtures'
+/// table order (`random-walk-1m`, `random-walk-100k`, `sine-1k` for a series
+/// chart); else the first `points` rows of an OHLCV fixture at least that
+/// long for a chart of `ohlcv`; else a series fixture of `points` rows as
+/// `values` for a chart of `values`. `None` when there is none.
+pub fn source(meta: &Meta, points: usize) -> Option<Source> {
+    let takes = |s: Shape| meta.shapes.contains(&s);
+    let one = |f: &&Fixture| f.series == 1;
+    let named = |f: &'static Fixture, how: &str| -> &'static str {
+        if how.is_empty() {
+            f.name
+        } else {
+            // A few names a run; leaked so a source stays `Copy`.
+            Box::leak(format!("{} {how}", f.name).into_boxed_str())
+        }
+    };
+    if let Some(f) = FIXTURES.iter().filter(one).find(|f| f.rows == points && takes(f.shape)) {
+        return Some(Source { name: f.name, points, fixture: f, derive: Derive::Same });
+    }
+    if takes(Shape::Ohlcv) {
+        if let Some(f) = FIXTURES.iter().filter(one).find(|f| f.shape == Shape::Ohlcv && f.rows >= points) {
+            let name = named(f, &format!("first {}k", points / 1000));
+            return Some(Source { name, points, fixture: f, derive: Derive::First(points) });
+        }
+    }
+    if takes(Shape::Values) {
+        if let Some(f) = FIXTURES.iter().filter(one).find(|f| f.shape == Shape::Series && f.rows == points) {
+            return Some(Source { name: named(f, "as values"), points, fixture: f, derive: Derive::Values });
+        }
+    }
+    None
 }
 
 /// The registered charts, or those `CHART=<type>[,…]` or `only` names; an
@@ -235,7 +326,7 @@ impl Row {
 /// The rows as a table, one line each, with a header.
 pub fn table(rows: &[Row]) -> String {
     let mut out = format!(
-        "{:<8} {:<6} {:<18} {:>9} {:>9} {:>9} {:>9} {:>13} {:>4}  {:<4} {}\n",
+        "{:<9} {:<6} {:<26} {:>9} {:>9} {:>9} {:>9} {:>13} {:>4}  {:<4} {}\n",
         "chart", "play", "fixture", "points", "grid", "avg ms", "worst ms", "budget ms", "runs", "", "req"
     );
     for r in rows {
@@ -247,7 +338,7 @@ pub fn table(rows: &[Row]) -> String {
         };
         let mark = if r.over() { "OVER" } else { "ok" };
         out += &format!(
-            "{:<8} {:<6} {:<18} {:>9} {:>9} {:>9} {:>9} {:>13} {:>4}  {:<4} {}\n",
+            "{:<9} {:<6} {:<26} {:>9} {:>9} {:>9} {:>9} {:>13} {:>4}  {:<4} {}\n",
             r.chart, r.play, r.fixture, r.points, grid, avg, worst, budget, runs, mark, r.req
         );
     }

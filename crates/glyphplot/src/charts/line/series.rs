@@ -20,6 +20,7 @@ use std::collections::BTreeMap;
 
 use crate::data::{ColumnType, Encode, Role, Table, Values, Warning, Warnings};
 use crate::events::Value;
+use crate::format::Display;
 use crate::scale::Kind;
 
 /// Where a series' values are.
@@ -27,8 +28,9 @@ use crate::scale::Kind;
 enum Src {
     /// A y column of a wide table, sharing the table's x.
     Wide(usize),
-    /// One label's rows of a long table: their x, y and data rows.
-    Long { x: Vec<f64>, y: Vec<f64>, rows: Vec<usize> },
+    /// One label's rows of a long table: their x, y and data rows, and the
+    /// y column.
+    Long { x: Vec<f64>, y: Vec<f64>, rows: Vec<usize>, col: usize },
 }
 
 /// One series: its name and its values.
@@ -149,7 +151,7 @@ impl Prepared {
                     let rows: Vec<usize> = (0..table.len()).filter(|&r| codes[r] == code as u32).collect();
                     let sx = rows.iter().map(|&r| xs[r]).collect();
                     let sy = rows.iter().map(|&r| yv[r]).collect();
-                    p.series.push(Series { name: label.clone(), src: Src::Long { x: sx, y: sy, rows } });
+                    p.series.push(Series { name: label.clone(), src: Src::Long { x: sx, y: sy, rows, col: y } });
                 }
             }
             _ => p.series = ys.into_iter().map(|i| Series { name: cols[i].name.clone(), src: Src::Wide(i) }).collect(),
@@ -206,6 +208,40 @@ impl Prepared {
         match &self.series[s].src {
             Src::Wide(_) => (row < self.xs(s).len()).then_some(row),
             Src::Long { rows, .. } => rows.binary_search(&row).ok(),
+        }
+    }
+
+    /// Series `s`'s display transform: its y column's `scale`, `offset` and
+    /// `unit` (REQ-DATA-100).
+    pub fn display(&self, s: usize) -> Display {
+        let col = match &self.series[s].src {
+            Src::Wide(i) => *i,
+            Src::Long { col, .. } => *col,
+        };
+        self.table.as_ref().and_then(|t| t.column(col)).map_or_else(Display::default, Display::of)
+    }
+
+    /// The display transform every series in `shown` shares, which a y
+    /// axis over them takes; the identity when they differ.
+    pub fn shared_display(&self, shown: impl Fn(usize) -> bool) -> Display {
+        let mut out: Option<Display> = None;
+        for s in (0..self.series.len()).filter(|&s| shown(s)) {
+            let d = self.display(s);
+            match &out {
+                None => out = Some(d),
+                Some(o) if *o == d => {}
+                Some(_) => return Display::default(),
+            }
+        }
+        out.unwrap_or_default()
+    }
+
+    /// The x column's display transform (REQ-DATA-100); the identity for
+    /// time, whose labels are dates.
+    pub fn x_display(&self) -> Display {
+        match (self.kind, self.x_col, &self.table) {
+            (Kind::Linear, Some(i), Some(t)) => t.column(i).map_or_else(Display::default, Display::of),
+            _ => Display::default(),
         }
     }
 

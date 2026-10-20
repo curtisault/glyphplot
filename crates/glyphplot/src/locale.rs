@@ -9,9 +9,12 @@
 //! [`Locale::from_pack`](crate::format::Locale::from_pack).
 //!
 //! The default pack is en-US as the CLI writes it, with `-` for the minus; a
-//! pack may set U+2212, as the browser's does (REQ-FMT-060). The zone table
-//! is UTC only until local-time ticks arrive in v0.5.0: a chart carries it
-//! and draws in UTC whatever it says.
+//! pack may set U+2212, as the browser's does (REQ-FMT-060). A zone table
+//! becomes a time scale's [`Zone`](crate::time::Zone) through
+//! [`ZoneTable::zone`]: UTC's stays d3's `scaleUtc`, any other draws local
+//! time by the table as d3's `scaleTime` does under `TZ=<zone>`
+//! (REQ-TZ-030). The pack's hour cycle picks 12- or 24-hour time labels
+//! (REQ-FMT-050).
 
 use std::fmt;
 
@@ -179,7 +182,8 @@ pub struct Transition {
 }
 
 /// A zone's UTC offsets over a span, in the shape of `zone.schema.json`
-/// (REQ-TZ-020). Charts carry it and draw in UTC until v0.5.0.
+/// (REQ-TZ-020); local-time ticks and labels read it and nothing else
+/// (REQ-TZ-010, REQ-TZ-030).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ZoneTable {
@@ -217,10 +221,29 @@ impl ZoneTable {
     }
 
     /// The offset in minutes at the instant `t` (epoch ms): the last
-    /// transition's at or before it, else the first's.
+    /// transition's at or before it, else the first's; 0 for a table with
+    /// none.
     pub fn offset_at(&self, t: f64) -> i32 {
         let i = self.transitions.partition_point(|tr| (tr.at as f64) <= t);
-        self.transitions[i.saturating_sub(1)].offset
+        self.transitions.get(i.saturating_sub(1)).map_or(0, |tr| tr.offset)
+    }
+
+    /// Whether every offset is 0: the table is UTC's.
+    pub fn is_utc(&self) -> bool {
+        self.transitions.iter().all(|tr| tr.offset == 0)
+    }
+
+    /// The zone a time scale draws in by this table: [`Zone::Utc`] for a
+    /// table whose offsets are all 0, so UTC keeps d3's `scaleUtc` ticks and
+    /// labels; otherwise local time by the table (REQ-TZ-030).
+    ///
+    /// [`Zone::Utc`]: crate::time::Zone::Utc
+    pub fn zone(&self) -> crate::time::Zone {
+        if self.is_utc() {
+            crate::time::Zone::Utc
+        } else {
+            crate::time::Zone::table(self.clone())
+        }
     }
 }
 
@@ -239,7 +262,7 @@ mod tests {
         let back = LocalePack::from_json(&de.to_json()).unwrap();
         assert_eq!(back, de);
         let ny = ZoneTable::from_json(&example("zone.json")).unwrap();
-        assert_eq!((ny.offset_at(1_773_471_600_000.0), ny.offset_at(1_773_471_599_999.0)), (-240, -300));
+        assert_eq!((ny.offset_at(1_772_953_200_000.0), ny.offset_at(1_772_953_199_999.0)), (-240, -300));
         assert_eq!(ZoneTable::from_json(&example("zone.utc.json")).unwrap().offset_at(5.0), 0);
     }
 

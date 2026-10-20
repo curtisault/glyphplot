@@ -5,6 +5,10 @@
 
 use crate::registry::Family;
 
+#[cfg(feature = "bar")]
+pub mod bar;
+#[cfg(feature = "candles")]
+pub mod candles;
 #[cfg(feature = "line")]
 pub mod line;
 #[cfg(feature = "contract-selftest")]
@@ -15,6 +19,10 @@ pub mod selftest;
 pub const FAMILIES: &[Family] = &[
     #[cfg(feature = "line")]
     line::FAMILY,
+    #[cfg(feature = "candles")]
+    candles::FAMILY,
+    #[cfg(feature = "bar")]
+    bar::FAMILY,
     // The contract's self-test: broken charts it must reject
     // (REQ-CONTRACT-060), never in a default or wasm build.
     #[cfg(feature = "contract-selftest")]

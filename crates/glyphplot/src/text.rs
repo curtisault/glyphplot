@@ -377,6 +377,36 @@ impl Frame<'_, stage::Gridlines> {
             }
         }
     }
+
+    /// Draws every pane's gridlines as [`Frame::gridlines`] does: the x
+    /// axis's ticks in every pane when the layout asks for them, and in each
+    /// pane the ticks of the one y axis that gives its gridlines, never both
+    /// of its axes (REQ-AXIS-010).
+    pub fn pane_gridlines(&mut self, layout: &Layout) {
+        let x = layout.x_axis.as_ref().filter(|_| layout.x_grid);
+        for p in &layout.panes {
+            let y = p.grid_axis();
+            if x.is_some() || y.is_some() {
+                self.gridlines(p.plot, x, y);
+            }
+        }
+    }
+}
+
+/// One legend entry to draw: its cells (from [`crate::layout::legend_spans`]),
+/// its one-cell key and its name (REQ-MONO-040).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct LegendEntry<'a> {
+    /// The entry's cells: the key, a blank, then the name.
+    pub rect: Rect,
+    /// The key: the series' line, pattern, marker or fill.
+    pub key: char,
+    /// The key's ink: the series' colour, or `muted` for a hidden series.
+    pub key_ink: u8,
+    /// The series' name.
+    pub name: &'a str,
+    /// The name's ink.
+    pub name_ink: u8,
 }
 
 impl Frame<'_, stage::Axes> {
@@ -441,14 +471,35 @@ impl Frame<'_, stage::Labels> {
         rect.h > 0 && self.place(rect.x, rect.y, &truncate(text, rect.w), ink)
     }
 
+    /// Draws the legend's entries (REQ-LAYOUT-060, REQ-MONO-040): each key in
+    /// its entry's first cell and the name two cells on, cut with `…` to the
+    /// entry's cells, as labels. Returns how many names were drawn.
+    pub fn legend(&mut self, entries: &[LegendEntry<'_>]) -> usize {
+        let mut drawn = 0;
+        for e in entries {
+            let mut key = [0u8; 4];
+            self.place(e.rect.x, e.rect.y, e.key.encode_utf8(&mut key), e.key_ink);
+            if e.rect.w > 2 {
+                let name = truncate(e.name, e.rect.w - 2);
+                drawn += usize::from(self.place(e.rect.x + 2, e.rect.y, &name, e.name_ink));
+            }
+        }
+        drawn
+    }
+
     /// Draws a placed axis's tick labels in `INK` and returns how many were
-    /// drawn: a bottom axis's in its second row at each label's start, a left
-    /// axis's ending one cell before its line, a right axis's one cell after
-    /// it. Labels go through [`Frame::label`], so none shares a cell with
-    /// another (REQ-TEXT-010).
+    /// drawn: a bottom axis's in its second row at each label's start (and
+    /// its context labels in its third row), a left axis's ending one cell
+    /// before its line, a right axis's one cell after it. Labels go through
+    /// [`Frame::label`], so none shares a cell with another (REQ-TEXT-010).
     pub fn axis_labels(&mut self, axis: &PlacedAxis) -> usize {
         let r = axis.rect;
         let mut drawn = 0;
+        if axis.side == Side::Bottom && r.h >= 3 {
+            for l in &axis.context {
+                drawn += usize::from(self.place(r.x + l.start, r.y + 2, &l.text, INK));
+            }
+        }
         for l in axis.ticks.iter().filter_map(|t| t.label.as_ref()) {
             let (x, y) = match axis.side {
                 Side::Bottom if r.h >= 2 => (r.x + l.start, r.y + 1),
