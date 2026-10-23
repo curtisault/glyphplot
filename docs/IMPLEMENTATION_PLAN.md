@@ -1440,6 +1440,42 @@ Acceptance:
 <a id="phase-5"></a>
 ### Phase 5 · Streaming (v0.6.0)
 
+Done 2026-10-22. Every acceptance command passes: rule 14 for every chart,
+`test:site` with `streaming.spec.ts`, and `bench:web`'s streaming row at
+301.7 ms of CPU a second against 500 (headless Chromium 156, load 4.2).
+`mise run check` takes 37 s. Built in three parts at once:
+- the core ring with rule 14;
+- the Arrow reader;
+- the shell, written against the boundary table with a fallback.
+An integration pass then moved the shell onto the module's members.
+Differences from the tasks:
+- **The ring grows to `retain.rows` and is never reallocated after,** rather
+  than being allocated once: 1M rows up front would cost 8 MB a column for
+  every streaming chart. REQ-STREAM-020 and ADR-107 now say so.
+- **Rule 14's reference** is a replace with the rows the append rules keep:
+  `unsorted-x` and `duplicate-x` cannot otherwise hold. It also runs into a
+  ring of n/2 and with a following view.
+- **A replace now drops rows with a missing x** (REQ-DATA-030).
+- **The Arrow reader** adds 6,911 B gzipped; its fixtures are written by
+  pinned pyarrow (ADR-105 updated). It refuses the file format, so the shell
+  sends a file's stream part.
+- **Integration found two shell faults:** appended us and ns timestamps
+  landed decades late (the shell staged absolute values against the module's
+  origin), and the Arrow file format was sent whole.
+- **REQ-STREAM-050** holds with a thin margin: 0.75 µs a row against 1 µs,
+  after 20,000 warm rows, since V8 optimises wasm only once it is hot.
+- **Module sizes:** line 223,792 B, candles 207,925 B, bar 191,021 B
+  gzipped, past half the budget. JSON through serde is still the largest
+  part (v0.4.0's proposal).
+- **Partly covered:**
+  - DATA-140 (the CLI half waits for Phase 7);
+  - A11Y-080 (resuming with nothing appended does not move the domain until
+    the next append);
+  - A11Y-100 (the screen-reader check is the owner's).
+- **Left for the owner:** the one-line test on `site/live.html` (a
+  simulated feed) on a phone over a throttled network, scrubbed with a
+  finger, with only the `candles` module fetched; and checklist cases 30–32.
+
 Tasks:
 1. The ring (`retain.rows`, `retain.age`), `staging`/`append`, the equal-x
    and late-row rules, `plot-data`, the shell's per-frame coalescing,

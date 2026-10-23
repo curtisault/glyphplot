@@ -25,10 +25,10 @@ TypeScript shell, and in the terminal by a CLI. Every chart draws data the page
 or the terminal gives it. It is the sibling of unicel (`../animate-unicode`)
 and follows its architecture (ADR-003), sharing no code with it (ADR-013).
 
-**Status: v0.5.0, candles, bar and the sparkline.** Three chart families
-(`line` with `sparkline`, `candles`, `bar`) work end to end, held by the
-chart contract, time budgets and `signoff`. The next session builds Phase 5:
-streaming.
+**Status: v0.6.0, streaming.** Three chart families (`line` with
+`sparkline`, `candles`, `bar`) work end to end and stream into a ring, held
+by the chart contract, time budgets and `signoff`. The next session builds
+Phase 6: the site.
 
 | Path | What |
 |---|---|

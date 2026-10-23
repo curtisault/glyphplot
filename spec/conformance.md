@@ -2,7 +2,7 @@
 
 Every requirement, built ([SPEC.md](SPEC.md)) or not yet
 ([ROADMAP.md](ROADMAP.md)), mapped to the test or check that covers it or
-will. v0.1.0 to v0.5.0 are built and their checks run; the checks of later milestones are
+will. v0.1.0 to v0.6.0 are built and their checks run; the checks of later milestones are
 planned, their Status `—`. The planned names follow
 [discovery/testing.md](../discovery/testing.md) where it gives one; the rest
 are proposals in the same style.
@@ -160,7 +160,7 @@ Several checks may be listed for one requirement, separated by commas.
 | REQ-STREAM-010 | v0.6.0 | `web/test/stream.wasm.test.mjs`, `web/test/stream.test.mjs`, `site/e2e/streaming.spec.ts` | yes |
 | REQ-STREAM-020 | v0.6.0 | `crates/glyphplot/tests/stream_memory.rs::the_ring_grows_no_memory_past_its_rows` (natively), `crates/glyphplot/src/ring.rs tests::appending_past_capacity_never_reallocates`, `web/test/memory.test.mjs` (wasm memory: 3,000,000 rows through `staging` and `append`, the same `byteLength` after 1,000,000 and 3,000,000) | yes |
 | REQ-STREAM-030 | v0.6.0 | `crates/glyphplot/src/ring.rs tests::retain_age_keeps_the_newest_span` | yes |
-| REQ-STREAM-040 | v0.6.0 | `crates/glyphplot/src/ring.rs tests::equal_x_replaces_and_less_is_late`, `contract::streaming_equals_replace` (rule 14), `web/test/data.test.mjs` (through the module) | partial |
+| REQ-STREAM-040 | v0.6.0 | `crates/glyphplot/src/ring.rs tests::equal_x_replaces_and_less_is_late`, `contract::streaming_equals_replace` (rule 14), `web/test/data.test.mjs` (through the module) | yes |
 | REQ-STREAM-050 | v0.6.0 | `crates/glyphplot/tests/stream_timing.rs::appends_are_timed_natively` (natively), `web/test/stream.wasm.test.mjs` (Node, the requirement's: the shell and the module) | yes |
 | REQ-STREAM-060 | v0.3.0 | `contract::replace_is_whole` (rule 15) | yes |
 | REQ-STREAM-070 | v0.6.0 | `contract::streaming_equals_replace` (rule 14: the counts `append` returns), `web/test/stream.wasm.test.mjs`, `site/e2e/streaming.spec.ts` | yes |
@@ -492,7 +492,7 @@ Several checks may be listed for one requirement, separated by commas.
 | REQ-A11Y-050 | v0.3.0 | `site/e2e/a11y.spec.ts` (under reduced motion a view change jumps) | yes |
 | REQ-A11Y-060 | v0.3.0 | `site/e2e/a11y.spec.ts`, manual (focus outline) | yes |
 | REQ-A11Y-070 | v0.3.0 | `site/e2e/a11y.spec.ts` | yes |
-| REQ-A11Y-080 | v0.6.0 | `site/e2e/streaming.spec.ts`, `web/test/stream.wasm.test.mjs` | yes |
+| REQ-A11Y-080 | v0.6.0 | `site/e2e/streaming.spec.ts`, `web/test/stream.wasm.test.mjs` | partial |
 | REQ-A11Y-090 | v0.6.0 | `site/e2e/streaming.spec.ts` | yes |
 | REQ-A11Y-100 | v0.6.0 | `site/e2e/streaming.spec.ts`, `web/test/a11y.test.mjs`, manual (screen readers: test.html case 32) | partial |
 | REQ-A11Y-110 | v0.7.0 | `site/e2e/a11y.spec.ts` | — |
