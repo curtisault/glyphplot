@@ -67,13 +67,13 @@ dir = "site"
 run = "npx playwright install chromium"
 
 [tasks."build:site"]
-description = "site/ built by Vite into site/dist over the release wasm in web/pkg: test.html, blank.html, the bench pages (bench/render.html, web.html, load.html)"
+description = "site/ built by Vite into site/dist over the release wasm in web/pkg: the Elm site (index.html, compiled by `elm make --optimize`; GLYPHPLOT_BASE=/folder/ for a site served from a folder), test.html, live.html, blank.html, the bench pages (bench/render.html, web.html, load.html)"
 depends = ["install:site", "build:wasm"]
 dir = "site"
 run = "npx vite build --logLevel warn"
 
 [tasks.serve]
-description = "The release build of site/ served for a person to open (http://localhost:4311/test.html, /live.html), one wasm module a chart family as a page meets them; `-- --host` to open it from a phone on the same network"
+description = "The release build of site/ served for a person to open (the site at http://localhost:4311/, the checklist at /test.html, /live.html), one wasm module a chart family as a page meets them; `-- --host` to open it from a phone on the same network"
 depends = ["build:site"]
 dir = "site"
 raw = true
@@ -143,7 +143,7 @@ description = "Format the Rust code (rustfmt.toml)"
 run = "cargo fmt --all"
 
 [tasks.lint]
-description = "rustfmt, clippy (host and wasm32, with and without debug), rustdoc, each family alone, tsc on web and site, the octant table, the dependency rules, no generated output in git"
+description = "rustfmt, clippy (host and wasm32, with and without debug), rustdoc, each family alone, tsc on web and site, elm-format on the Elm site (REQ-LINT-020), the octant table, the dependency rules, no generated output in git"
 depends = ["install:web", "install:site"]
 run = [
   "cargo fmt --all --check",
@@ -154,6 +154,7 @@ run = [
   "for f in $(cargo run -q -p glyphplot --example manifest -- families); do cargo check -q -p glyphplot --no-default-features --features $f || exit 1; done",
   "web/node_modules/.bin/tsc --noEmit -p web",
   "web/node_modules/.bin/tsc --noEmit -p site",
+  "elm-format --validate site/src site/tests",
   "python3 scripts/octants.py --check",
   "bash scripts/deps.sh",
   "bash scripts/generated.sh",
@@ -190,9 +191,14 @@ wait_for = ["test:rust"]
 dir = "site"
 run = 'if [ "${GLYPHPLOT_SIGNOFF:-}" = 1 ]; then npx playwright test; else npx playwright test --grep @smoke; fi'
 
+[tasks."test:elm"]
+description = "The Elm site's tests (site/tests, elm-test): routes, option controls, generated data"
+dir = "site"
+run = "elm-test"
+
 [tasks.test]
-description = "Every test: Rust, the shell's Node tests, and the browser tests' smoke set (all of them under signoff)"
-depends = ["test:rust", "test:web", "test:site:smoke"]
+description = "Every test: Rust, the shell's Node tests, the Elm site's tests, and the browser tests' smoke set (all of them under signoff)"
+depends = ["test:rust", "test:web", "test:elm", "test:site:smoke"]
 
 [tasks.size]
 description = "Each module's wasm and JS, raw and gzip -9, against its budget; WASM_GZ_LIMIT overrides it; `--charts`: each module by owner (REQ-SIZE-050)"

@@ -16,6 +16,7 @@
     "verbatimModuleSyntax": true,
     "noEmit": true,
     "skipLibCheck": true,
+    "resolveJsonModule": true,
     "types": [],
     "paths": {
       "glyphplot": ["../web/src/index.ts"],
@@ -23,5 +24,5 @@
       "glyphplot/src/*": ["../web/src/*"]
     }
   },
-  "include": ["*.ts", "e2e/**/*.ts", "bench/**/*.ts"]
+  "include": ["*.ts", "src/**/*.ts", "e2e/**/*.ts", "bench/**/*.ts"]
 }

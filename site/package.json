@@ -2,7 +2,7 @@
   "name": "glyphplot-site",
   "version": "0.3.0",
   "private": true,
-  "description": "glyphplot's site: from v0.3.0 the checklist page (test.html), the browser tests (e2e/) and the renderer bench (bench/)",
+  "description": "glyphplot's site: from v0.7.0 the Elm site (index.html, src/*.elm, compiled by elm.mjs with the elm that mise pins), and from v0.3.0 the checklist page (test.html), the browser tests (e2e/) and the benches (bench/)",
   "license": "MIT",
   "type": "module",
   "scripts": {
@@ -10,6 +10,7 @@
     "build": "vite build",
     "preview": "vite preview --strictPort",
     "test": "playwright test",
+    "test:elm": "elm-test",
     "check": "tsc --noEmit -p ."
   },
   "devDependencies": {

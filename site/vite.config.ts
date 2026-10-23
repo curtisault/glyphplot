@@ -1,10 +1,17 @@
 // Vite for site/: `glyphplot` and `glyphplot/element` alias web/src (the
 // plan's architecture diagram), so the pages run the shell's TypeScript as it
 // is and its wasm from web/pkg, whichever build `mise run build:wasm` or
-// `mise run build:wasm:debug` left there. Pages: test.html (the owner's
-// checklist, REQ-TEST-040), blank.html (the browser tests' bare page),
-// bench/render.html (the renderer bench, REQ-RENDER-010) and the pages
-// bench:web and bench:load drive (bench/web.html, bench/load.html).
+// `mise run build:wasm:debug` left there. Pages: index.html (the Elm site,
+// REQ-SITE-010: its routes are paths, which `vite` and `vite preview` answer
+// with index.html as a single-page app), test.html (the owner's checklist,
+// REQ-TEST-040), blank.html (the browser tests' bare page), bench/render.html
+// (the renderer bench, REQ-RENDER-010) and the pages bench:web and bench:load
+// drive (bench/web.html, bench/load.html).
+//
+// The Elm app is compiled by `elmPlugin` (elm.mjs) with the `elm` binary mise
+// pins (no npm package): `elm make --optimize` for a build, plain `elm make`
+// under `vite`, its output wrapped as an ES module exporting `Elm`, and in a
+// build put in a chunk of its own (assets/elm-*.js) so its size reads alone.
 //
 // Under `vite` (mise run dev), a change under web/pkg (a debug rebuild
 // swapped in by scripts/dev.sh's watcher) reloads every open page
@@ -17,6 +24,7 @@
 
 import { defineConfig, type Plugin, type ViteDevServer } from "vite";
 import { arrowStream, walk } from "../web/test/support/arrow.mjs";
+import { elmPlugin, siteBase } from "./elm.mjs";
 
 const dir = (rel: string): string => decodeURIComponent(new URL(rel, import.meta.url).pathname).replace(/\/$/, "");
 const site = dir(".");
@@ -77,8 +85,10 @@ function sampleData(): Plugin {
 
 export default defineConfig({
   root: site,
-  // Relative URLs, so the built pages work from any folder.
-  base: "./",
+  // The Elm site's routes are paths (/line, /docs/…, /examples/…), so assets
+  // sit under an absolute base: `/`, or GLYPHPLOT_BASE (`/glyphplot/`) for a
+  // site served from a folder. main.ts gives it to Elm, which prefixes every link.
+  base: siteBase(),
   resolve: {
     alias: [
       { find: /^glyphplot$/, replacement: `${src}/index.ts` },
@@ -107,7 +117,11 @@ export default defineConfig({
         "bench-web": `${site}/bench/web.html`,
         "bench-load": `${site}/bench/load.html`,
       },
+      output: {
+        // The Elm app in a chunk of its own, so its size reads alone (assets/elm-*.js).
+        codeSplitting: { groups: [{ name: "elm", test: /\.elm$/ }] },
+      },
     },
   },
-  plugins: [reloadOnWasm(), sampleData()],
+  plugins: [elmPlugin(site), reloadOnWasm(), sampleData()],
 });

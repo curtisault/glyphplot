@@ -3,17 +3,20 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>glyphplot site</title>
-<style>body { margin: 0 auto; max-width: 40rem; padding: 16px; font: 16px/1.5 system-ui, sans-serif; color: #1b1b1b; background: #fff; }</style>
+<title>glyphplot</title>
+<meta name="description" content="Interactive charts drawn in Unicode glyphs: documentation with live charts, and a gallery of examples.">
+<meta name="color-scheme" content="light dark">
+<script>
+  // The reader's theme choice before the first paint (REQ-SITE-060); without
+  // one the page follows prefers-color-scheme. site/src/main.ts keeps it.
+  try {
+    var theme = localStorage.getItem("glyphplot-theme");
+    if (theme === "light" || theme === "dark") document.documentElement.setAttribute("data-theme", theme);
+  } catch (e) {}
+</script>
+<script type="module" src="./src/main.ts"></script>
 </head>
 <body>
-<main>
-<h1>glyphplot</h1>
-<p>The site (Elm) arrives in v0.7.0. Until then:</p>
-<ul>
-  <li><a href="./test.html">test.html</a>: the checklist page, one chart per rendering and interaction case</li>
-  <li><a href="./bench/render.html">bench/render.html</a>: the renderer bench</li>
-</ul>
-</main>
+<noscript><p>glyphplot's site and its charts need JavaScript. The plain checklist page is <a href="./test.html">test.html</a>.</p></noscript>
 </body>
 </html>
