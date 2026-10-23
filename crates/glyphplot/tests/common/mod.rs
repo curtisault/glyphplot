@@ -7,6 +7,7 @@ pub mod form;
 pub mod probe;
 pub mod schema;
 pub mod snap;
+pub mod stream;
 
 use std::cell::{Cell, RefCell};
 use std::collections::{BTreeMap, BTreeSet};

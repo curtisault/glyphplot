@@ -47,6 +47,7 @@ use crate::options::Options;
 use crate::palette::GROUND;
 use crate::reduce::{reduce, DragMode, Gesture, Interaction, Plot, Scene, WheelMode};
 use crate::registry::{Entry, Family};
+use crate::ring::Retain;
 use crate::scale::{AxisFormat, Extents, Kind, Scale};
 use crate::table::pick_rows;
 use crate::ticks::Snap;
@@ -68,7 +69,9 @@ pub static META: Meta = Meta {
     family: "candles",
     modes: &["candle", "hollow", "ohlc"],
     shapes: &[Shape::Ohlcv],
-    options: Some(r#"{"mode":"candle","title":"","encode":{},"xScale":"index","snap":"auto","volume":true,"drag":"pan","wheel":"scroll","motion":false}"#),
+    options: Some(
+        r#"{"mode":"candle","title":"","encode":{},"xScale":"index","snap":"auto","volume":true,"drag":"pan","wheel":"scroll","motion":false,"retain":{"rows":1000000}}"#,
+    ),
     min: Size { cols: 26, rows: 10 },
     drop: &[Part::Title, Part::Axes],
     mono: Mono::Authored,
@@ -122,6 +125,8 @@ struct Config {
     /// Whether a volume column draws its pane.
     volume: bool,
     interaction: Interaction,
+    /// The `retain` option: the ring's rows and age (REQ-STREAM-020).
+    retain: Retain,
 }
 
 /// The options read: every key has a default in [`META`]'s (REQ-OPT-010).
@@ -152,6 +157,7 @@ fn config(o: &Options) -> Result<Config, MakeError> {
             wheel: if o.choice("wheel", &["scroll", "zoom"]) == "zoom" { WheelMode::Zoom } else { WheelMode::Scroll },
             motion: o.bool("motion"),
         },
+        retain: Retain::from_options(o),
     })
 }
 
@@ -337,7 +343,7 @@ impl CandlesChart {
         let r = self.data.rows.clone();
         let (mut lo, mut hi) = (f64::INFINITY, f64::NEG_INFINITY);
         for k in 0..4 {
-            for &v in self.data.price(k).get(r.clone()).unwrap_or(&[]) {
+            for &v in self.data.price(k).slice(r.clone()).iter() {
                 if v.is_finite() {
                     lo = lo.min(v);
                     hi = hi.max(v);
@@ -696,15 +702,27 @@ impl CandlesChart {
     fn take_data(&mut self, data: Data) -> Result<Accepted, DataError> {
         data.shape(META.shapes, &self.cfg.encode)?;
         let table = data.into_tables().into_iter().next().map(|(_, t)| t);
-        let prepared = table.map_or_else(Prepared::empty, |t| Prepared::new(t, &self.cfg.encode));
+        let prepared = table.map_or_else(Prepared::empty, |t| Prepared::new(t, &self.cfg.encode, self.cfg.retain).0);
+        self.geom = None;
+        self.data = prepared;
+        self.changed();
+        Ok(Accepted { rows: self.data.len(), version: self.data_version, warnings: self.data.warnings.as_slice().to_vec() })
+    }
+
+    /// After the data changed: a new version, the levels and extents
+    /// dropped, a following view moved to end at the newest candle with its
+    /// span kept (REQ-VIEW-060), and the cursor snapped again.
+    fn changed(&mut self) {
         self.geom = None;
         self.levels.get_mut().clear();
         *self.all.get_mut() = None;
         self.base_key = None;
-        self.data = prepared;
         self.data_version += 1;
+        if self.view.x.follow {
+            let end = self.view.x.domain.map(|d| self.resolve_x(Some(d), true)[1]);
+            self.view.follow_to(end);
+        }
         self.resnap();
-        Ok(Accepted { rows: self.data.len(), version: self.data_version, warnings: self.data.warnings.as_slice().to_vec() })
     }
 
     /// The hit of the candle holding `row` at the current interval, at price
@@ -721,24 +739,14 @@ impl Chart for CandlesChart {
     }
 
     fn append(&mut self, batch: Data) -> Result<Appended, DataError> {
-        // Streaming is v0.6.0's (REQ-CANDLE-060): until then an append
-        // replaces the data with the rows of both, sorted.
-        let Some(old) = self.data.table.clone() else {
+        if self.data.ring.is_none() {
             let a = self.take_data(batch)?;
-            return Ok(Appended { rows: a.rows, dropped: 0, late: 0, version: a.version });
-        };
-        let Some(new) = batch.first_table() else { return Err(DataError::Shape { expected: META.shapes.to_vec() }) };
-        let mut columns = Vec::with_capacity(old.columns().len());
-        for c in old.columns() {
-            let (Some(a), Some(b)) = (c.nums(), new.by_name(&c.name).filter(|b| b.kind == c.kind && b.origin == c.origin).and_then(|b| b.nums())) else {
-                return Err(DataError::Append(format!("column `{}` is missing, of another type or not held as numbers", c.name)));
-            };
-            let mut v = a.to_vec();
-            v.extend_from_slice(b);
-            columns.push(crate::data::Column { values: crate::data::Values::Num(v), categories: Vec::new(), ..c.clone() });
+            return Ok(Appended { rows: a.rows, dropped: self.data.ring.as_ref().map_or(0, |r| r.first() as usize), late: 0, version: a.version });
         }
-        let a = self.take_data(Data::from_table(crate::data::Table::from_columns(columns)?))?;
-        Ok(Appended { rows: a.rows, dropped: 0, late: 0, version: a.version })
+        let Some(new) = batch.first_table() else { return Err(DataError::Shape { expected: META.shapes.to_vec() }) };
+        let counts = self.data.append(new)?;
+        self.changed();
+        Ok(Appended { rows: self.data.len(), dropped: counts.dropped, late: counts.late, version: self.data_version })
     }
 
     fn set_options(&mut self, options: &Options) -> Result<(), MakeError> {
@@ -750,10 +758,10 @@ impl Chart for CandlesChart {
         self.opts_version += 1;
         if encode_changed {
             let table = std::mem::replace(&mut self.data, Prepared::empty()).into_table();
-            self.data = table.map_or_else(Prepared::empty, |t| Prepared::new(t, &self.cfg.encode));
-            self.data_version += 1;
-            self.levels.get_mut().clear();
-            self.resnap();
+            self.data = table.map_or_else(Prepared::empty, |t| Prepared::new(t, &self.cfg.encode, self.cfg.retain).0);
+            self.changed();
+        } else if self.data.set_retain(self.cfg.retain) > 0 {
+            self.changed();
         }
         Ok(())
     }
@@ -899,7 +907,7 @@ impl Scene for CandlesChart {
         let (_, g) = self.geom.as_ref()?;
         let xs = self.data.xs();
         let r = self.data.rows.clone();
-        let (a, b) = (lower_bound(xs, r.start, r.end, domain[0]), xs[r.clone()].partition_point(|&x| x <= domain[1]) + r.start);
+        let (a, b) = (lower_bound(xs, r.start, r.end, domain[0]), xs.slice(r.clone()).partition_point(|&x| x <= domain[1]) + r.start);
         if a >= b {
             return None;
         }
@@ -918,7 +926,7 @@ impl Scene for CandlesChart {
         let xs = self.data.xs();
         let r = self.data.rows.clone();
         let a = lower_bound(xs, r.start, r.end, range[0]);
-        let b = r.start + xs[r.clone()].partition_point(|&x| x <= range[1]);
+        let b = r.start + xs.slice(r.clone()).partition_point(|&x| x <= range[1]);
         b.saturating_sub(a) as u64
     }
 

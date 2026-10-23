@@ -136,12 +136,14 @@ fn an_empty_stream_is_a_table_of_no_rows() {
     assert_eq!((t.len(), kinds), (0, vec![ColumnType::Timestamp, ColumnType::F64, ColumnType::Category]));
 }
 
-/// The streams draw: a line chart takes the batches' x and y.
+/// The streams draw: a line chart takes the batches' x and y. Of the 17 rows
+/// (2 + 3 + 11 + 1 by batch), one has a null x, which a chart drops
+/// (REQ-DATA-030: a row with a missing x is not drawn).
 #[test]
 fn a_line_chart_takes_a_stream() {
     let (_, mut chart) = registry::make("line", "{}").unwrap();
     let accepted = chart.set_data(Data::from_table(read("batches"))).unwrap();
-    assert_eq!(accepted.rows, 2 + 3 + 11 + 1);
+    assert_eq!(accepted.rows, 2 + 3 + 11 + 1 - 1);
 }
 
 /// Bad input is an error naming what is wrong: compression, an unsupported

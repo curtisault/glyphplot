@@ -14,6 +14,7 @@ use super::draw;
 use super::series::Prepared;
 use crate::cells::Axis;
 use crate::format::{js, Display, Kind as FormatKind, Locale, NumberFormat, Specifier};
+use crate::ring::Seq;
 use crate::scale::Kind;
 use crate::time::Zone;
 use crate::view::View;
@@ -99,7 +100,7 @@ fn digits(v: f64, step: f64, near: &[f64]) -> Option<usize> {
 }
 
 /// The values before and after position `i` of `values`, NaN past the ends.
-fn neighbours(values: &[f64], i: usize) -> [f64; 2] {
+fn neighbours(values: Seq<f64>, i: usize) -> [f64; 2] {
     let at = |j: Option<usize>| j.and_then(|j| values.get(j)).copied().unwrap_or(f64::NAN);
     [at(i.checked_sub(1)), at(i.checked_add(1))]
 }

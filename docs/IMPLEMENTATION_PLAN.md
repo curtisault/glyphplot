@@ -344,7 +344,7 @@ testing.md, with the milestone each rule lands in.
 | 11 | one ink tells series apart | In `multi-4`, each series draws a glyph or pattern the others do not | v0.4.0 |
 | 12 | paper | `paper` frames keep rules 3–6 | v0.4.0 |
 | 13 | resize | A chart drawn at A, then B, then A draws its first A frame again; its B frame equals a fresh chart's; its view is unchanged in data units | v0.4.0 |
-| 14 | streaming equals replace | Appending in batches of 1, 7, ⌊n/3⌋ and the rest ends on the frame and view of a replace; with ring capacity c < n, of the last c rows | v0.6.0 |
+| 14 | streaming equals replace | Appending in batches of 1, 7, ⌊n/3⌋ and the rest ends on the frame and view of a replace with the rows the append rules keep (the same rows for sorted, distinct x); with ring capacity c < n, of the last c of them | v0.6.0 |
 | 15 | replace is whole | Replacing with a, then b, draws what b alone draws | v0.4.0 |
 | 16 | view round trip | `set_view(view())` changes nothing; a view through JSON onto a fresh chart draws the same frame | v0.4.0 |
 | 17 | input is deterministic | A scripted input list on two fresh charts gives the same events, views and frames; the resulting view on a third gives that frame | v0.4.0 |
@@ -476,7 +476,7 @@ Built by `crates/wasm` once per family. The shell is its only consumer
 | `text()` | string | The frame as text | v0.3.0 |
 | `summary()`, `table_json(max_rows)` | string | The drawing's label, and the hidden table as `{caption, columns, rows, total, domain}`: cells are the core's formatted strings, `domain` the x domain drawn (the slider's min and max) | v0.3.0 |
 | `meta_json()` | string | The type's `Meta` | v0.3.0 |
-| `staging(n)`, `append(n)` | pointer, integer | Streaming: a staging buffer of `n` rows, then commit it; returns rows, dropped, late | v0.6.0 |
+| `staging(n)`, `append(n)` | pointer, `Float64Array` | Streaming: `staging(n)` returns the address of `k × n` `f64`s, `k` the columns last committed, column after column (column `j` at byte `ptr + 8·j·n`), each written as a `reserve_column` kind-0 buffer holds it; `append(n)` appends them by the append rules and returns `[rows, dropped, late, version]` | v0.6.0 |
 | `set_arrow(bytes)` | integer | An Arrow IPC stream as the new data | v0.6.0 |
 | `svg(theme_json)`, `ansi(theme_json)` | string | The exports, in Rust (ADR-135) | v0.8.0 |
 | `free()` | — | Releases the chart | v0.3.0 |

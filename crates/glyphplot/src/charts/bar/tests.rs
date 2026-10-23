@@ -4,7 +4,7 @@
 //! (`tests/contract.rs`) checks the rules every chart keeps.
 
 use super::*;
-use crate::data::{Column, Matrix};
+use crate::data::{Column, Matrix, Table as DataTable};
 use crate::fixtures::generate;
 use crate::input::{Mods, PointerType};
 use crate::mono;

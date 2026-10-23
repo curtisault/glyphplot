@@ -18,6 +18,17 @@
 //! (REQ-MEM-020). The module holds no JSON data parser, because the core's
 //! `text` feature is off here.
 //!
+//! Streamed rows cross the same way (REQ-STREAM-010): `staging(n)` returns
+//! the address of one buffer of `k × n` `f64`s, `k` the columns of the data
+//! last committed, column after column (column `j`'s `n` values from byte
+//! `ptr + 8·j·n`), each written as `reserve_column` kind 0 takes it; then
+//! `append(n)` appends those rows by the core's append rules (`ring.rs`,
+//! REQ-STREAM-040) and returns `[rows, dropped, late, version]` for
+//! `plot-data` (REQ-STREAM-070). No JSON crosses per append. A commit
+//! remembers the committed table's columns (`Chart::remember`) for the
+//! staging buffer to be read by; any other way of replacing the data must
+//! too.
+//!
 //! A panic traps (`panic = "abort"`, REQ-WASM-040). Nothing here is static
 //! but the debug hook's flag, and every chart owns its locale, zone, grid
 //! and buffers, so a trap leaves no global lock held and nothing global
@@ -27,7 +38,7 @@
 #![warn(missing_docs)]
 
 use glyphplot::chart::{Chart as Plot, Env, Meta};
-use glyphplot::data::{Buffer, Data, MISSING_CODE};
+use glyphplot::data::{Buffer, Data, Table, MISSING_CODE};
 use glyphplot::events::{self, Event};
 use glyphplot::grid::{Grid, WIDE_TAIL};
 use glyphplot::input::Input;
@@ -70,6 +81,13 @@ pub struct Chart {
     zone: ZoneTable,
     mono: bool,
     events: Vec<Event>,
+    /// The columns of the data last committed, of no rows: what staged rows
+    /// are read by.
+    template: Option<Table>,
+    /// The staging buffer, `k × n` values, column after column.
+    staging: Vec<f64>,
+    /// The `n` of the last `staging(n)`, until its rows are appended.
+    staged: Option<usize>,
 }
 
 /// A made chart and its type's meta, or why it could not be made.
@@ -109,6 +127,9 @@ impl Chart {
             zone: ZoneTable::default(),
             mono: false,
             events: Vec::new(),
+            template: None,
+            staging: Vec::new(),
+            staged: None,
         })
     }
 
@@ -176,7 +197,9 @@ impl Chart {
     pub fn commit(&mut self, descriptor_json: &str) -> Result<f64, JsError> {
         let buffers = std::mem::take(&mut self.reserved);
         let data = Data::from_typed(descriptor_json, buffers).map_err(thrown)?;
+        let template = data.first_table().map(Table::empty_like);
         let accepted = self.chart.set_data(data).map_err(thrown)?;
+        self.remember(template);
         #[cfg(feature = "debug")]
         accepted.warnings.iter().for_each(|w| debug::warn(&format!("glyphplot: {} chart: {w}", self.meta.slug)));
         Ok(accepted.version as f64)
@@ -189,10 +212,58 @@ impl Chart {
     /// data error's message) the chart keeps the data it had (REQ-DATA-130).
     pub fn set_arrow(&mut self, bytes: &[u8]) -> Result<f64, JsError> {
         let table = glyphplot::data::Table::from_arrow_ipc(bytes).map_err(thrown)?;
+        // The table's shape, kept for staging (REQ-STREAM-010), as `commit` keeps it.
+        let template = Some(table.empty_like());
         let accepted = self.chart.set_data(Data::from_table(table)).map_err(thrown)?;
+        self.remember(template);
         #[cfg(feature = "debug")]
         accepted.warnings.iter().for_each(|w| debug::warn(&format!("glyphplot: {} chart: {w}", self.meta.slug)));
         Ok(accepted.version as f64)
+    }
+
+    /// A staging buffer for `n` rows of the data's columns, as a byte address
+    /// in this module's memory for the shell to fill through a view made
+    /// after this call (REQ-DATA-060, REQ-STREAM-010): `k × n` `f64`s, `k`
+    /// the columns of the descriptor last committed, column after column, so
+    /// column `j`'s `n` values start at byte `ptr + 8·j·n`. Each is written as
+    /// a `reserve_column` buffer of kind 0 holds it: numbers; booleans 1 and
+    /// 0; timestamps and durations in the column's `time_unit`, a `us` or
+    /// `ns` timestamp as an offset from the descriptor's `origin`; a category
+    /// as its code into the committed `categories`; a `string` column's
+    /// values are not read (its rows are missing). The buffer starts missing
+    /// (NaN) and is reused, so a steady `n` allocates once. Valid until the
+    /// next call that may allocate. Throws before any data is committed.
+    pub fn staging(&mut self, n: usize) -> Result<usize, JsError> {
+        let Some(template) = &self.template else { return Err(JsError::new("append: there is no data to append to; commit data first")) };
+        let k = template.columns().len();
+        let total = k.checked_mul(n).ok_or_else(|| JsError::new(&format!("staging: {n} rows of {k} columns are more than memory can hold")))?;
+        self.staging.clear();
+        self.staging.try_reserve_exact(total).map_err(|_| JsError::new(&format!("staging: {n} rows of {k} columns are more than memory can hold")))?;
+        self.staging.resize(total, f64::NAN);
+        self.staged = Some(n);
+        Ok(self.staging.as_ptr() as usize)
+    }
+
+    /// Appends the `n` rows staged by `staging(n)` (REQ-STREAM-010): a row
+    /// whose x equals the last row's replaces it, one whose x is less is
+    /// dropped as late (REQ-STREAM-040), and the oldest past `retain` are
+    /// dropped (REQ-STREAM-020, REQ-STREAM-030). Returns `[rows, dropped,
+    /// late, version]` as a `Float64Array`: the rows held, the rows trimmed by
+    /// retention in this append, the rows dropped as late and the data
+    /// version, `plot-data`'s detail (REQ-STREAM-070). Throws when `n` is not
+    /// the last `staging(n)`'s or its rows were appended already, or with
+    /// the data error's message; the chart then keeps its data.
+    pub fn append(&mut self, n: usize) -> Result<Vec<f64>, JsError> {
+        let (Some(template), Some(staged)) = (&self.template, self.staged) else {
+            return Err(JsError::new("append: call staging(n) and fill it first"));
+        };
+        if staged != n {
+            return Err(JsError::new(&format!("append: {n} rows, but staging was for {staged}")));
+        }
+        self.staged = None;
+        let batch = template.staged(&self.staging, n).map_err(thrown)?;
+        let a = self.chart.append(Data::from_table(batch)).map_err(thrown)?;
+        Ok(vec![a.rows as f64, a.dropped as f64, a.late as f64, a.version as f64])
     }
 
     /// The locale pack labels are written with (locale.schema.json). Throws
@@ -316,6 +387,15 @@ impl Chart {
 }
 
 impl Chart {
+    /// Keeps the columns of data just replaced, `template`, as what staged
+    /// rows are read by (`Table::empty_like`); `None` for data of no table.
+    /// A commit calls it after the chart took the data; a later way of
+    /// replacing it (an Arrow stream) does the same.
+    fn remember(&mut self, template: Option<Table>) {
+        self.template = template;
+        self.staged = None;
+    }
+
     /// The reservation of column `i`, made when it is not there yet.
     fn slot(&mut self, i: usize) -> &mut Option<Buffer> {
         if self.reserved.len() <= i {

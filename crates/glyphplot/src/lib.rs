@@ -32,6 +32,7 @@ pub mod overlay;
 pub mod palette;
 pub mod reduce;
 pub mod registry;
+pub mod ring;
 pub mod scale;
 pub mod table;
 pub mod text;

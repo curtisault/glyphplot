@@ -227,6 +227,20 @@ impl View {
         }
     }
 
+    /// After data changed, with `x.follow` on and an x domain set: the
+    /// domain keeps its span and moves to end at `end`, the newest datum's
+    /// x (REQ-VIEW-060). A fitted domain already ends there, and no event is
+    /// fired: data is not the reader's action (REQ-VIEW-040), so linked views
+    /// cannot echo it back. `None` or a non-finite end changes nothing.
+    pub fn follow_to(&mut self, end: Option<f64>) {
+        if let (true, Some([a, b]), Some(end)) = (self.x.follow, self.x.domain, end.filter(|e| e.is_finite())) {
+            let span = b - a;
+            if span.is_finite() && span > 0.0 {
+                self.x.domain = Some([end - span, end]);
+            }
+        }
+    }
+
     /// Whether series `name` is hidden.
     pub fn is_hidden(&self, name: &str) -> bool {
         self.hidden.iter().any(|h| h == name)
@@ -534,6 +548,63 @@ mod tests {
         assert_eq!(v.x.domain, Some([1.0, 5.0]), "kept low to high");
         v.apply(&ViewPatch::from_json(r#"{"x":{"domain":[2,2]}}"#).unwrap());
         assert_eq!(v.x.domain, None, "no span is the fitted default");
+    }
+
+    /// REQ-VIEW-060: with `x.follow`, new data keeps the span and ends the
+    /// domain at the newest datum; without it, or fitted, nothing moves.
+    #[test]
+    fn follow_keeps_the_span_on_its_own() {
+        let mut v = View { x: XView { domain: Some([10.0, 30.0]), follow: true }, ..View::default() };
+        v.follow_to(Some(100.0));
+        assert_eq!(v.x.domain, Some([80.0, 100.0]));
+        v.follow_to(None);
+        v.follow_to(Some(f64::NAN));
+        assert_eq!(v.x.domain, Some([80.0, 100.0]));
+        v.x.follow = false;
+        v.follow_to(Some(200.0));
+        assert_eq!(v.x.domain, Some([80.0, 100.0]));
+        let mut fitted = View { x: XView { domain: None, follow: true }, ..View::default() };
+        fitted.follow_to(Some(5.0));
+        assert_eq!(fitted.x.domain, None);
+    }
+
+    /// REQ-VIEW-060 on a chart: an append moves a following domain to end at
+    /// the newest datum with its span kept and fires no event; a pan away
+    /// from the end turns follow off, and `End` turns it on again with one
+    /// `plot-view`.
+    #[cfg(feature = "line")]
+    #[test]
+    fn follow_keeps_the_span() {
+        use crate::chart::{Chart, Env};
+        use crate::data::{Column, Data, Table};
+        use crate::grid::Grid;
+        use crate::input::{Input, Key, Mods};
+        let rows = |from: usize, n: usize| {
+            let x: Vec<f64> = (from..from + n).map(|i| i as f64).collect();
+            Data::from_table(Table::from_columns(vec![Column::f64("x", x.clone()), Column::f64("y", x)]).unwrap())
+        };
+        let mut c = crate::charts::line::LineChart::new(&Default::default()).unwrap();
+        c.set_data(rows(0, 100)).unwrap();
+        c.set_view(&ViewPatch::from_json(r#"{"x":{"domain":[20,50],"follow":true}}"#).unwrap());
+        c.append(rows(100, 10)).unwrap();
+        assert_eq!(c.view().x.domain, Some([79.0, 109.0]), "the span of 30 kept, ending at the newest x");
+        assert!(c.view().x.follow);
+        let mut g = Grid::new(80, 24);
+        c.frame(0.0, &Env::plain(), &mut g);
+        // Shift+← pans away from the end: follow is off and stays off.
+        let pan = c.input(&Input::Key { t: 0.1, key: Key::Left, mods: Mods::SHIFT });
+        assert!(!c.view().x.follow);
+        assert_eq!(pan.events.len(), 1);
+        let before = c.view().x.domain;
+        c.append(rows(110, 5)).unwrap();
+        assert_eq!(c.view().x.domain, before, "a view panned away stays put");
+        let end = c.input(&Input::Key { t: 0.2, key: Key::End, mods: Mods::NONE });
+        assert!(c.view().x.follow);
+        assert_eq!(end.events.iter().filter(|e| matches!(e, crate::events::Event::View(_))).count(), 1);
+        c.append(rows(115, 1)).unwrap();
+        let [a, b] = c.view().x.domain.unwrap();
+        assert_eq!(b, 115.0);
+        assert_eq!(b - a, before.map(|[a, b]| b - a).unwrap());
     }
 
     /// REQ-VIEW-030: a partial view merges key by key, and the whole view

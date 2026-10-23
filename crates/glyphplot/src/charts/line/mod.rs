@@ -27,7 +27,7 @@ use std::ops::Range;
 use crate::annotate::{self, Annotation};
 use crate::cells::Axis;
 use crate::chart::{Accepted, Appended, CellPos, Changes, Charset, Chart, Env, Hit, MakeError, Meta, Mono, Part, Size, Table};
-use crate::data::{Column, Data, DataError, Encode, Shape, Values};
+use crate::data::{Data, DataError, Encode, Shape};
 use crate::downsample::{view_rows, Cache, Edges};
 use crate::events::Value;
 use crate::format::{Display, Locale};
@@ -41,6 +41,7 @@ use crate::options::Options;
 use crate::palette::GROUND;
 use crate::reduce::{reduce, DragMode, Gesture, Interaction, Plot, Scene, WheelMode};
 use crate::registry::{Entry, Family};
+use crate::ring::Retain;
 use crate::scale::{resolve_domain, Domain, Extents, Kind, Scale, ScaleOptions, ScaleType};
 use crate::table::pick_rows;
 use crate::time::Zone;
@@ -59,7 +60,7 @@ pub static META: Meta = Meta {
     modes: &["line", "step", "area"],
     shapes: &[Shape::Series],
     options: Some(
-        r#"{"mode":"line","step":"after","spanGaps":false,"title":"","encode":{},"legend":{"position":"auto"},"sample":"m4","baseline":0,"drag":"pan","wheel":"scroll","patterns":"auto","motion":false,"annotations":[]}"#,
+        r#"{"mode":"line","step":"after","spanGaps":false,"title":"","encode":{},"legend":{"position":"auto"},"sample":"m4","baseline":0,"drag":"pan","wheel":"scroll","patterns":"auto","motion":false,"annotations":[],"retain":{"rows":1000000}}"#,
     ),
     min: Size { cols: 23, rows: 6 },
     drop: &[Part::Title, Part::Legend, Part::Axes],
@@ -124,6 +125,8 @@ struct Config {
     patterns: Patterns,
     /// The `annotations` option (REQ-ANNOT-010).
     annotations: Vec<Annotation>,
+    /// The `retain` option: the ring's rows and age (REQ-STREAM-020).
+    retain: Retain,
 }
 
 /// The options read: every key has a default in [`META`]'s (REQ-OPT-010).
@@ -161,6 +164,7 @@ fn config(o: &Options) -> Result<Config, MakeError> {
         },
         patterns: Patterns::from_option(o.choice("patterns", &["auto", "on", "off"])),
         annotations: annotate::parse(o.get("annotations"))?,
+        retain: Retain::from_options(o),
     })
 }
 
@@ -593,20 +597,30 @@ impl LineChart {
     fn take_data(&mut self, data: Data) -> Result<Accepted, DataError> {
         data.shape(META.shapes, &self.cfg.encode)?;
         let table = data.into_tables().into_iter().next().map(|(_, t)| t);
-        let prepared = table.map_or_else(Prepared::empty, |t| Prepared::new(t, &self.cfg.encode));
+        let prepared = table.map_or_else(Prepared::empty, |t| Prepared::new(t, &self.cfg.encode, self.cfg.retain).0);
         // The old data's layout goes before the old data does, and the M4
         // and path memory is kept for reuse, so the next frame's allocations
         // take the room the old ones leave, not the old columns': a replace
         // of the same size then fits where the old columns were
         // (REQ-MEM-030, web/test/memory.test.mjs).
         self.geom = None;
+        self.data = prepared;
+        self.changed();
+        Ok(Accepted { rows: self.data.rows(), version: self.data_version, warnings: self.data.warnings.as_slice().to_vec() })
+    }
+
+    /// After the data changed: a new version, the caches dropped, a
+    /// following view moved to end at the newest datum with its span kept
+    /// (REQ-VIEW-060), and the cursor snapped again.
+    fn changed(&mut self) {
+        self.geom = None;
         self.m4.invalidate();
         *self.extents.get_mut() = Extents2::default();
         self.base_key = None;
-        self.data = prepared;
         self.data_version += 1;
+        let end = self.data.x_extent().map(|[_, b]| b);
+        self.view.follow_to(end);
         self.resnap();
-        Ok(Accepted { rows: self.data.rows(), version: self.data_version, warnings: self.data.warnings.as_slice().to_vec() })
     }
 }
 
@@ -625,102 +639,20 @@ fn tick_step_of(axis: Option<&PlacedAxis>, domain: [f64; 2], count: usize) -> f6
     }
 }
 
-/// The rows of `batch` appended to `table`'s: the same columns, numbers held
-/// without an origin (no `us` or `ns` timestamps); a row whose x is below the
-/// last row's is late and dropped, one whose x equals it replaces it
-/// (REQ-STREAM-040, the v0.6.0 ring aside).
-fn appended(table: &crate::data::Table, batch: &crate::data::Table, x: Option<usize>) -> Result<(crate::data::Table, usize), DataError> {
-    let cols = table.columns();
-    if batch.columns().len() != cols.len() {
-        return Err(DataError::Append(format!("rows have {} columns; the data has {}", batch.columns().len(), cols.len())));
-    }
-    let mut olds = Vec::with_capacity(cols.len());
-    let mut news = Vec::with_capacity(cols.len());
-    for c in cols {
-        let new = batch.by_name(&c.name).filter(|b| b.kind == c.kind && b.origin == 0 && c.origin == 0);
-        let (Some(old), Some(new)) = (c.nums(), new.and_then(Column::nums)) else {
-            return Err(DataError::Append(format!(
-                "column `{}` is missing, of another type or not held as numbers; until v0.6.0 append takes such columns only",
-                c.name
-            )));
-        };
-        olds.push(old);
-        news.push(new);
-    }
-    let mut values: Vec<Vec<f64>> = olds
-        .iter()
-        .zip(&news)
-        .map(|(o, n)| {
-            let mut v = Vec::with_capacity(o.len() + n.len());
-            v.extend_from_slice(o);
-            v
-        })
-        .collect();
-    let mut late = 0;
-    let mut last = x.and_then(|xi| values[xi].iter().rev().find(|v| !v.is_nan()).copied());
-    for r in 0..batch.len() {
-        if let Some(xi) = x {
-            let xv = news[xi][r];
-            match last {
-                Some(l) if xv < l => {
-                    late += 1;
-                    continue;
-                }
-                Some(l) if xv == l && values[xi].last() == Some(&l) => {
-                    for (v, n) in values.iter_mut().zip(&news) {
-                        if let Some(end) = v.last_mut() {
-                            *end = n[r];
-                        }
-                    }
-                    continue;
-                }
-                _ => {}
-            }
-            if !xv.is_nan() {
-                last = Some(xv);
-            }
-        }
-        for (v, n) in values.iter_mut().zip(&news) {
-            v.push(n[r]);
-        }
-    }
-    let columns = cols
-        .iter()
-        .zip(values)
-        .map(|(c, v)| Column {
-            name: c.name.clone(),
-            kind: c.kind,
-            role: c.role,
-            unit: c.unit.clone(),
-            scale: c.scale,
-            offset: c.offset,
-            time_unit: c.time_unit,
-            origin: 0,
-            zone: c.zone.clone(),
-            categories: Vec::new(),
-            values: Values::Num(v),
-        })
-        .collect();
-    let mut t = crate::data::Table::from_columns(columns)?;
-    t.sorted = table.sorted.clone();
-    Ok((t, late))
-}
-
 impl Chart for LineChart {
     fn set_data(&mut self, data: Data) -> Result<Accepted, DataError> {
         self.take_data(data)
     }
 
     fn append(&mut self, batch: Data) -> Result<Appended, DataError> {
-        let Some(old) = self.data.table.as_ref() else {
+        if self.data.ring.is_none() {
             let a = self.take_data(batch)?;
-            return Ok(Appended { rows: a.rows, dropped: 0, late: 0, version: a.version });
-        };
+            return Ok(Appended { rows: a.rows, dropped: self.data.first() as usize, late: 0, version: a.version });
+        }
         let Some(new) = batch.first_table() else { return Err(DataError::Shape { expected: META.shapes.to_vec() }) };
-        let x = self.data.table.as_ref().and_then(|t| t.find(&self.data.x_name));
-        let (table, late) = appended(old, new, x)?;
-        let a = self.take_data(Data::from_table(table))?;
-        Ok(Appended { rows: a.rows, dropped: 0, late, version: a.version })
+        let counts = self.data.append(new)?;
+        self.changed();
+        Ok(Appended { rows: self.data.rows(), dropped: counts.dropped, late: counts.late, version: self.data_version })
     }
 
     fn set_options(&mut self, options: &Options) -> Result<(), MakeError> {
@@ -732,9 +664,10 @@ impl Chart for LineChart {
         self.opts_version += 1;
         if encode_changed {
             let table = std::mem::replace(&mut self.data, Prepared::empty()).into_table();
-            self.data = table.map_or_else(Prepared::empty, |t| Prepared::new(t, &self.cfg.encode));
-            self.data_version += 1;
-            self.resnap();
+            self.data = table.map_or_else(Prepared::empty, |t| Prepared::new(t, &self.cfg.encode, self.cfg.retain).0);
+            self.changed();
+        } else if self.data.set_retain(self.cfg.retain) > 0 {
+            self.changed();
         }
         Ok(())
     }

@@ -30,6 +30,7 @@ use std::sync::Arc;
 
 use super::data::Prepared;
 use crate::hit::lower_bound;
+use crate::ring::Seq;
 use crate::scale::Kind;
 use crate::time::{civil_from_days, days_from_civil, Zone, DAY, HOUR, MINUTE, SECOND};
 
@@ -337,7 +338,7 @@ impl Level {
 /// The spacing of the first rows (`first`) or the last, the first that is
 /// above 0 within 64 rows: what the data's end candles are padded by half
 /// of; a second or 1 when the rows give none.
-fn edge_gap(xs: &[f64], rows: &std::ops::Range<usize>, first: bool, kind: Kind) -> f64 {
+fn edge_gap(xs: Seq<f64>, rows: &std::ops::Range<usize>, first: bool, kind: Kind) -> f64 {
     let n = rows.len();
     let mut gaps = (1..n.min(65)).map(|i| if first { xs[rows.start + i] - xs[rows.start + i - 1] } else { xs[rows.end - i] - xs[rows.end - i - 1] });
     gaps.find(|g| *g > 0.0 && g.is_finite()).unwrap_or(if kind == Kind::Time { SECOND } else { 1.0 })
@@ -411,7 +412,7 @@ pub fn build(data: &Prepared, interval: Option<Interval>, from: usize, to: usize
                 }
             }
         }
-        let val = |col: &[f64], i: Option<usize>| i.map_or(f64::NAN, |i| col[i]);
+        let val = |col: Seq<f64>, i: Option<usize>| i.map_or(f64::NAN, |i| col[i]);
         lv.start.push(xs[r]);
         lv.end.push(xs[e - 1]);
         lv.stamp.push(stamp);
@@ -435,8 +436,8 @@ fn bucket_rows(data: &Prepared, interval: Option<Interval>, r: usize, zone: &Zon
     let time = data.kind == Kind::Time;
     let key = |t: f64| i.bucket(t + offset(zone, time, t)).0;
     let k = key(xs[r]);
-    let first = rows.start + xs[rows.start..=r].partition_point(|&t| key(t) < k);
-    let past = r + xs[r..rows.end].partition_point(|&t| key(t) <= k);
+    let first = rows.start + xs.slice(rows.start..r + 1).partition_point(|&t| key(t) < k);
+    let past = r + xs.slice(r..rows.end).partition_point(|&t| key(t) <= k);
     (first, past.max(r + 1))
 }
 
@@ -593,7 +594,7 @@ mod tests {
     use crate::fixtures::generate;
 
     fn prep(name: &str) -> Prepared {
-        Prepared::new(generate(name).unwrap().into_tables().remove(0).1, &Encode::default())
+        Prepared::new(generate(name).unwrap().into_tables().remove(0).1, &Encode::default(), crate::ring::Retain::default()).0
     }
 
     fn ctx(data: &Prepared) -> Ctx<'_> {
@@ -640,12 +641,12 @@ mod tests {
         let lv = build(&days, Some(Interval::Week), days.rows.start, days.rows.end, &Zone::Utc);
         assert_eq!(lv.len(), 100);
         let rows = 0..5;
-        let col = |k: usize| &days.price(k)[rows.clone()];
+        let col = |k: usize| days.price(k).slice(rows.clone());
         assert_eq!(lv.ohlc[0][0], col(0)[0]);
         assert_eq!(lv.ohlc[1][0], col(1).iter().copied().fold(f64::MIN, f64::max));
         assert_eq!(lv.ohlc[2][0], col(2).iter().copied().fold(f64::MAX, f64::min));
         assert_eq!(lv.ohlc[3][0], col(3)[4]);
-        assert_eq!(lv.volume[0], days.volume()[rows].iter().sum::<f64>());
+        assert_eq!(lv.volume[0], days.volume().slice(rows).iter().sum::<f64>());
         // Monday 2024-10-21 00:00 UTC.
         assert_eq!(lv.stamp[0], 20_017.0 * DAY);
         assert!(lv.rows.iter().all(|r| days.price(1)[r[3]] >= days.price(1)[r[0]]));

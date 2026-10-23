@@ -812,7 +812,7 @@ fn append_extends_the_data() {
     c.set_data(xy(vec![0.0, 1.0, 2.0], vec![5.0, 6.0, 7.0])).unwrap();
     let a = c.append(xy(vec![1.5, 2.0, 3.0], vec![0.0, 8.0, 9.0])).unwrap();
     assert_eq!((a.rows, a.late, a.version), (4, 1, 2));
-    assert_eq!(c.data.ys(0), &[5.0, 6.0, 8.0, 9.0]);
+    assert_eq!(c.data.ys(0).to_vec(), [5.0, 6.0, 8.0, 9.0]);
     let mut whole = LineChart::new(&Options::new()).unwrap();
     whole.set_data(xy(vec![0.0, 1.0, 2.0, 3.0], vec![5.0, 6.0, 8.0, 9.0])).unwrap();
     assert_eq!(draw(&mut c, 40, 12, 0.0), draw(&mut whole, 40, 12, 0.0));

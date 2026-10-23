@@ -158,12 +158,12 @@ Several checks may be listed for one requirement, separated by commas.
 | Requirement | Milestone | Planned check | Status |
 |---|---|---|---|
 | REQ-STREAM-010 | v0.6.0 | `web/test/stream.wasm.test.mjs`, `web/test/stream.test.mjs`, `site/e2e/streaming.spec.ts` | yes |
-| REQ-STREAM-020 | v0.6.0 | `web/test/memory.test.mjs` | — |
-| REQ-STREAM-030 | v0.6.0 | `crates/glyphplot/src/ring.rs tests::retain_age_keeps_the_newest_span` | — |
-| REQ-STREAM-040 | v0.6.0 | `crates/glyphplot/src/ring.rs tests::equal_x_replaces_and_less_is_late`, `web/test/data.test.mjs` | — |
-| REQ-STREAM-050 | v0.6.0 | `web/test/stream.wasm.test.mjs` (todo until the module has `staging` and `append`) | — |
+| REQ-STREAM-020 | v0.6.0 | `crates/glyphplot/tests/stream_memory.rs::the_ring_grows_no_memory_past_its_rows` (natively), `crates/glyphplot/src/ring.rs tests::appending_past_capacity_never_reallocates`, `web/test/memory.test.mjs` (wasm memory), `web/test/memory.test.mjs` (planned) | partial |
+| REQ-STREAM-030 | v0.6.0 | `crates/glyphplot/src/ring.rs tests::retain_age_keeps_the_newest_span` | yes |
+| REQ-STREAM-040 | v0.6.0 | `crates/glyphplot/src/ring.rs tests::equal_x_replaces_and_less_is_late`, `contract::streaming_equals_replace` (rule 14), `web/test/data.test.mjs` (through the module) | partial |
+| REQ-STREAM-050 | v0.6.0 | `crates/glyphplot/tests/stream_timing.rs::appends_are_timed_natively` (natively), `web/test/stream.wasm.test.mjs` (Node, the requirement's) | partial |
 | REQ-STREAM-060 | v0.3.0 | `contract::replace_is_whole` (rule 15) | yes |
-| REQ-STREAM-070 | v0.6.0 | `web/test/stream.wasm.test.mjs`, `site/e2e/streaming.spec.ts` | yes |
+| REQ-STREAM-070 | v0.6.0 | `contract::streaming_equals_replace` (rule 14: the counts `append` returns), `web/test/stream.wasm.test.mjs`, `site/e2e/streaming.spec.ts` | yes |
 
 ### 3.3 Downsampling (SAMPLE)
 
@@ -259,7 +259,7 @@ Several checks may be listed for one requirement, separated by commas.
 | REQ-VIEW-030 | v0.3.0 | `web/test/view.test.mjs`, `site/e2e/element.spec.ts` | yes |
 | REQ-VIEW-040 | v0.3.0 | `site/e2e/element.spec.ts` | yes |
 | REQ-VIEW-050 | v0.3.0 | `crates/glyphplot/src/view.rs tests::motion_frames_depend_only_on_t`, `site/e2e/a11y.spec.ts` (reduced motion) | yes |
-| REQ-VIEW-060 | v0.6.0 | `crates/glyphplot/src/view.rs tests::follow_keeps_the_span` (the core's follow on append), `web/test/stream.wasm.test.mjs` (End, the round trip, the shell's fallback; the module's follow todo until it has `append`), `site/e2e/streaming.spec.ts` | partial |
+| REQ-VIEW-060 | v0.6.0 | `crates/glyphplot/src/view.rs tests::follow_keeps_the_span`, `contract::streaming_equals_replace` (rule 14, following), `web/test/stream.wasm.test.mjs` (End and the round trip), `site/e2e/streaming.spec.ts` | partial |
 
 ### 5.2 Input (INPUT)
 
@@ -321,7 +321,7 @@ Several checks may be listed for one requirement, separated by commas.
 | REQ-CONTRACT-010 | v0.3.0 | `contract::every_chart_keeps_the_contract` (rules 1–9), `contract::every_chart_matches_its_snapshots` (rule 29), `contract::selftest_rejects_broken_charts` | yes |
 | REQ-CONTRACT-020 | v0.3.0 | `contract::every_chart_keeps_the_contract` (itself), review (`CHART=` and the table) | partial |
 | REQ-CONTRACT-030 | v0.4.0 | `contract::every_chart_keeps_the_contract` (rules 10–13, 21–26, 28), `contract::replace_is_whole`, `contract::view_round_trips`, `contract::input_is_deterministic`, `contract::hits_name_what_was_drawn`, `contract::downsampling_is_exact`, `web/test/events.test.mjs` (rule 18) | partial |
-| REQ-CONTRACT-040 | v0.6.0 | `contract::streaming_equals_replace` (rule 14) | — |
+| REQ-CONTRACT-040 | v0.6.0 | `contract::streaming_equals_replace` (rule 14), `contract::selftest_rejects_broken_charts` | yes |
 | REQ-CONTRACT-050 | v0.4.0 | `budgets::every_chart_keeps_its_time_budgets` (rule 30) | yes |
 | REQ-CONTRACT-060 | v0.4.0 | `contract::selftest_rejects_broken_charts` | yes |
 | REQ-FIX-010 | v0.2.0 | `crates/glyphplot/src/fixtures.rs tests::generations_are_bitwise_equal`, `web/test/reference.test.mjs` (fixtures in wasm) | yes |
@@ -349,7 +349,7 @@ Several checks may be listed for one requirement, separated by commas.
 | REQ-LINE-030 | v0.3.0 | `contract::every_chart_keeps_the_contract` (rule 23) | yes |
 | REQ-LINE-040 | v0.3.0 | `contract::hits_name_what_was_drawn` (rule 20), `crates/glyphplot/src/charts/line/mod.rs tests::readout_names_the_nearest_x` | yes |
 | REQ-LINE-050 | v0.9.0 | `contract::every_chart_matches_its_snapshots` (`band`, `baseline`, stacked `area`), `crates/glyphplot/src/charts/line/mod.rs tests::percent_stack_sums_to_100` | — |
-| REQ-SPARK-010 | v0.5.0 | `contract::every_chart_matches_its_snapshots` (`sparkline`), `crates/glyphplot/src/charts/line/spark/tests.rs tests::one_series_a_band_and_no_axes`, `crates/glyphplot/src/charts/line/spark/tests.rs tests::the_ring_keeps_the_last_capacity_rows`, `crates/glyphplot/src/charts/line/spark/tests.rs tests::text_parts_by_option_and_room`, `contract::streaming_equals_replace` (rule 14, v0.6.0) | partial |
+| REQ-SPARK-010 | v0.5.0 | `contract::every_chart_matches_its_snapshots` (`sparkline`), `crates/glyphplot/src/charts/line/spark/tests.rs tests::one_series_a_band_and_no_axes`, `crates/glyphplot/src/charts/line/spark/tests.rs tests::the_ring_keeps_the_last_capacity_rows`, `crates/glyphplot/src/charts/line/spark/tests.rs tests::text_parts_by_option_and_room`, `contract::streaming_equals_replace` (rule 14, v0.6.0) | yes |
 
 ### 7.2 Candles (CANDLE)
 
@@ -360,7 +360,7 @@ Several checks may be listed for one requirement, separated by commas.
 | REQ-CANDLE-030 | v0.5.0 | `contract::every_chart_keeps_the_contract` (rule 10), `crates/glyphplot/src/charts/candles/mod.rs tests::one_ink_resamples_below_four_cells` | yes |
 | REQ-CANDLE-040 | v0.5.0 | `contract::every_chart_matches_its_snapshots` (`ohlcv-days`) | yes |
 | REQ-CANDLE-050 | v0.5.0 | `contract::hits_name_what_was_drawn`, `crates/glyphplot/src/charts/candles/mod.rs tests::crosshair_snaps_to_ohlc` | yes |
-| REQ-CANDLE-060 | v0.6.0 | `contract::streaming_equals_replace`, `crates/glyphplot/src/charts/candles/mod.rs tests::append_updates_the_last_candle` | — |
+| REQ-CANDLE-060 | v0.6.0 | `contract::streaming_equals_replace`, `crates/glyphplot/src/charts/candles/mod.rs tests::append_updates_the_last_candle` | yes |
 | REQ-CANDLE-070 | v0.9.0 | `contract::every_chart_matches_its_snapshots` (`heikin-ashi`) | — |
 
 ### 7.3 Bar (BAR)

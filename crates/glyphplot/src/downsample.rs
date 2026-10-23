@@ -29,6 +29,7 @@ use std::ops::Range;
 
 use crate::cells::Axis;
 use crate::hit::lower_bound;
+use crate::ring::Seq;
 
 /// The leading edge value of each dot column of an x axis, and its high end
 /// last: `dots + 1` values, non-decreasing (REQ-CANVAS-020).
@@ -178,11 +179,13 @@ impl M4 {
     }
 }
 
-/// The rows of `xs[..n]` whose x lies in `[lo, hi]`, by binary search on x
-/// sorted non-decreasing (REQ-SAMPLE-020).
-pub fn view_rows(xs: &[f64], lo: f64, hi: f64) -> Range<usize> {
+/// The rows of `xs` whose x lies in `[lo, hi]`, by binary search on x
+/// sorted non-decreasing (REQ-SAMPLE-020); `xs` is a slice or a ring's rows
+/// in place ([`Seq`]).
+pub fn view_rows<'a>(xs: impl Into<Seq<'a, f64>>, lo: f64, hi: f64) -> Range<usize> {
+    let xs = xs.into();
     let a = lower_bound(xs, 0, xs.len(), lo);
-    let b = a + xs[a..].partition_point(|&x| x <= hi);
+    let b = a + xs.slice(a..xs.len()).partition_point(|&x| x <= hi);
     a..b
 }
 
@@ -190,7 +193,7 @@ pub fn view_rows(xs: &[f64], lo: f64, hi: f64) -> Range<usize> {
 /// of `edges` (REQ-SAMPLE-010). A row whose x is missing or outside the
 /// edges is skipped; a row whose y is missing or infinite ends its bucket
 /// and marks a gap, unless `span_gaps`, when it is skipped (REQ-LINE-030).
-pub fn m4(xs: &[f64], ys: &[f64], rows: Range<usize>, edges: &Edges, span_gaps: bool) -> M4 {
+pub fn m4<'a>(xs: impl Into<Seq<'a, f64>>, ys: impl Into<Seq<'a, f64>>, rows: Range<usize>, edges: &Edges, span_gaps: bool) -> M4 {
     let mut out = M4::default();
     m4_into(xs, ys, rows, edges, span_gaps, &mut out);
     out
@@ -198,8 +201,10 @@ pub fn m4(xs: &[f64], ys: &[f64], rows: Range<usize>, edges: &Edges, span_gaps: 
 
 /// As [`m4`], into `out`, whose buckets' memory is reused: a frame after a
 /// data change allocates nothing new for its M4 once one was made at the
-/// width (REQ-MEM-030).
-pub fn m4_into(xs: &[f64], ys: &[f64], rows: Range<usize>, edges: &Edges, span_gaps: bool, out: &mut M4) {
+/// width (REQ-MEM-030). A ring's rows are scanned in place, part by part,
+/// as one run (ADR-107).
+pub fn m4_into<'a>(xs: impl Into<Seq<'a, f64>>, ys: impl Into<Seq<'a, f64>>, rows: Range<usize>, edges: &Edges, span_gaps: bool, out: &mut M4) {
+    let (xs, ys) = (xs.into(), ys.into());
     out.buckets.clear();
     out.gap_after = false;
     let dots = edges.dots();
@@ -213,18 +218,16 @@ pub fn m4_into(xs: &[f64], ys: &[f64], rows: Range<usize>, edges: &Edges, span_g
     let mut col = 0usize;
     let mut cur: Option<Bucket> = None;
     let mut gap = false;
-    for row in rows {
-        let x = xs[row];
+    let mut visit = |row: usize, x: f64, y: f64| {
         if !(x >= lo && x <= hi) {
-            continue;
+            return;
         }
-        let y = ys[row];
         if !y.is_finite() {
             if !span_gaps {
                 out.buckets.extend(cur.take());
                 gap = true;
             }
-            continue;
+            return;
         }
         while col + 1 < dots && x >= e[col + 1] {
             col += 1;
@@ -237,6 +240,19 @@ pub fn m4_into(xs: &[f64], ys: &[f64], rows: Range<usize>, edges: &Edges, span_g
                 cur = Some(Bucket::new(col, p, gap));
                 gap = false;
             }
+        }
+    };
+    let (xp, yp) = (xs.split(rows.clone()), ys.split(rows.clone()));
+    if xp[0].1.len() == yp[0].1.len() {
+        // Columns of one ring: their parts align, and each is a slice scan.
+        for ((start, xs), (_, ys)) in xp.into_iter().zip(yp) {
+            for (k, (&x, &y)) in xs.iter().zip(ys).enumerate() {
+                visit(start + k, x, y);
+            }
+        }
+    } else {
+        for (k, (&x, &y)) in xs.slice(rows.clone()).iter().zip(ys.slice(rows.clone()).iter()).enumerate() {
+            visit(rows.start + k, x, y);
         }
     }
     out.buckets.extend(cur);

@@ -29,9 +29,14 @@ and refuses an older one unless `historicalUpdate` is set (charts.md).
 
 ## Decision
 
-- A streaming chart keeps its rows in a ring allocated once with capacity
-  `retain.rows`, default 1,000,000; appending 3M rows to a 1M ring grows wasm
-  memory no further after the first 1M (REQ-STREAM-020).
+- A streaming chart keeps its rows in a ring of capacity `retain.rows`,
+  default 1,000,000; appending 3M rows to a 1M ring grows wasm memory no
+  further after the first 1M (REQ-STREAM-020). The ring takes a replace's
+  columns as its buffers, with no copy, and grows them by doubling, capped
+  at `retain.rows`, only while it holds fewer rows: once full it is never
+  reallocated. Allocating `retain.rows` at the first append instead would
+  hold 8 MB a column for every streaming chart, 48 MB for a candlestick of
+  six columns fed a few hundred rows (arithmetic, not a measurement).
 - `retain.age` drops rows older than the newest x minus that duration
   (REQ-STREAM-030).
 - A row whose x equals the last row's replaces it; a row whose x is less is
@@ -43,8 +48,9 @@ and refuses an older one unless `historicalUpdate` is set (charts.md).
 
 ## Consequences
 
-- Memory is fixed by capacity: 16 MB for two `f64` columns of 1M rows; the
-  downsamplers read the ring's two segments in place.
+- Memory follows the rows held up to the capacity, then stays: 16 MB for
+  two `f64` columns of 1M rows; the downsamplers read the ring's two
+  segments in place (`ring::Seq`).
 - A forming candle updates in place.
 - Out-of-order feeds lose their late rows, counted; the page sorts first.
   Revisit when a telemetry example needs out-of-order arrival.

@@ -454,6 +454,24 @@ impl Column {
         Column::with(name, ColumnType::String, Values::Text(values))
     }
 
+    /// A column of this one's name, type, role, unit, origin and labels with
+    /// `values`; this one's values are not copied.
+    pub fn with_values(&self, values: Values) -> Column {
+        Column {
+            name: self.name.clone(),
+            kind: self.kind,
+            role: self.role,
+            unit: self.unit.clone(),
+            scale: self.scale,
+            offset: self.offset,
+            time_unit: self.time_unit,
+            origin: self.origin,
+            zone: self.zone.clone(),
+            categories: self.categories.clone(),
+            values,
+        }
+    }
+
     /// The column with `role`.
     pub fn role(mut self, role: Role) -> Column {
         self.role = Some(role);
@@ -804,6 +822,18 @@ impl Table {
             }
             None => self,
         }
+    }
+
+    /// The columns and the row count, by value: how a ring takes a table's
+    /// buffers without a copy (`ring.rs`).
+    pub(crate) fn into_parts(self) -> (Vec<Column>, usize) {
+        (self.columns, self.len)
+    }
+
+    /// A table of `columns`, each of `len` values, already checked: a ring's
+    /// rows given back (`ring.rs`).
+    pub(crate) fn from_parts(columns: Vec<Column>, len: usize) -> Table {
+        Table { len, columns, sorted: None, frame: None, epoch: None }
     }
 
     /// The table with its rows in the order `order` gives; `order` must be a

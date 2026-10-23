@@ -107,7 +107,7 @@
       "additionalProperties": false,
       "properties": {
         "rows": {
-          "description": "The ring's capacity, allocated once; default 1,000,000.",
+          "description": "The ring's capacity, the most rows held; its buffers grow to it and are never reallocated after; default 1,000,000.",
           "type": "integer",
           "minimum": 1,
           "default": 1000000

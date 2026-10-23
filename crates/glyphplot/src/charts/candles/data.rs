@@ -11,15 +11,21 @@
 //! is warned of once. With no value, or when `encode` names a column the
 //! table lacks, the chart draws its empty-data frame and warns once naming
 //! the channel. The rows drawn are
-//! those of finite x: the table is sorted with missing x last, so they are
-//! one range, found once.
+//! those of finite x: the table is sorted, and rows of missing x are dropped
+//! (REQ-DATA-030), so they are one range, found once. The rows live in the
+//! core's ring of `retain.rows` (`ring.rs`, REQ-STREAM-020) and are read in
+//! place; an appended row of the last row's time replaces it, so a forming
+//! candle updates in place (REQ-CANDLE-060), and resampling reads the ring,
+//! so a row whose time falls in the last resampled candle updates that
+//! candle.
 
 use std::collections::BTreeMap;
 use std::ops::Range;
 
-use crate::data::{Column, ColumnType, Encode, Table, Values, Warning, Warnings};
+use crate::data::{Column, ColumnType, DataError, Encode, Table, Warning, Warnings};
 use crate::events::Value;
 use crate::format::Display;
+use crate::ring::{Counts, Retain, Ring, Seq};
 use crate::scale::Kind;
 
 /// The four price channels, in the readout's order.
@@ -28,8 +34,8 @@ pub const PRICES: [&str; 4] = ["open", "high", "low", "close"];
 /// The data as the chart draws it.
 #[derive(Clone, Debug)]
 pub struct Prepared {
-    /// The table, sorted by x with missing x last.
-    pub table: Option<Table>,
+    /// The rows, sorted by x, in a ring (REQ-STREAM-020).
+    pub ring: Option<Ring>,
     /// The x column.
     x_col: Option<usize>,
     /// The x values in epoch ms, when the column holds offsets from an
@@ -78,7 +84,7 @@ impl Prepared {
     /// No data.
     pub fn empty() -> Prepared {
         Prepared {
-            table: None,
+            ring: None,
             x_col: None,
             x_owned: None,
             prices: None,
@@ -96,8 +102,9 @@ impl Prepared {
     }
 
     /// The table's channels by `encode` and the columns (REQ-DATA-080), its
-    /// rows sorted by x (REQ-DATA-040).
-    pub fn new(table: Table, encode: &Encode) -> Prepared {
+    /// rows sorted by x (REQ-DATA-040) in a ring that keeps `retain`
+    /// (REQ-STREAM-020); with the rows the ring dropped.
+    pub fn new(table: Table, encode: &Encode, retain: Retain) -> (Prepared, usize) {
         let mut p = Prepared::empty();
         let cols = table.columns();
         let numeric = |i: usize| cols[i].nums().is_some() && cols[i].kind.is_numeric();
@@ -121,8 +128,7 @@ impl Prepared {
             Ok(f) => f,
             Err(w) => {
                 p.warnings.push(w);
-                p.table = Some(table);
-                return p;
+                return p.held(table, retain);
             }
         };
         let prices = match four {
@@ -137,8 +143,7 @@ impl Prepared {
                 let value = four[3].or_else(|| ys.into_iter().find(|&i| free(i))).or_else(|| (0..cols.len()).find(|&i| free(i)));
                 let Some(v) = value else {
                     p.warnings.push(Warning::NoChannel { channel: "close".into() });
-                    p.table = Some(table);
-                    return p;
+                    return p.held(table, retain);
                 };
                 if let Some(k) = four.iter().position(Option::is_some).and_then(|_| four.iter().position(Option::is_none)) {
                     p.warnings.push(Warning::NoChannel { channel: PRICES[k].into() });
@@ -154,8 +159,7 @@ impl Prepared {
         });
         let Some(x) = x else {
             p.warnings.push(Warning::NoChannel { channel: "x".into() });
-            p.table = Some(table);
-            return p;
+            return p.held(table, retain);
         };
         let table = sorted(table, x, &mut p.warnings);
         let cols = table.columns();
@@ -163,9 +167,6 @@ impl Prepared {
         p.kind = if xc.kind == ColumnType::Timestamp { Kind::Time } else { Kind::Linear };
         p.x_name = xc.name.clone();
         p.x_col = Some(x);
-        if xc.origin != 0 {
-            p.x_owned = xc.nums().map(|v| v.iter().map(|&h| xc.to_ms(h)).collect());
-        }
         p.names = prices.map(|i| cols[i].name.clone());
         p.price = Display::of(&cols[prices[3]]);
         if let Some(v) = volume {
@@ -174,22 +175,60 @@ impl Prepared {
         }
         p.prices = Some(prices);
         p.volume = volume;
-        p.table = Some(table);
-        let xs = p.all_xs();
+        let (ring, dropped) = Ring::new(table, retain, Some(x));
+        p.ring = Some(ring);
+        p.derive();
+        (p, dropped)
+    }
+
+    /// The table held as it is, with nothing to draw.
+    fn held(mut self, table: Table, retain: Retain) -> (Prepared, usize) {
+        let (ring, dropped) = Ring::new(table, retain, None);
+        self.ring = Some(ring);
+        (self, dropped)
+    }
+
+    /// What is derived from the ring's rows: the milliseconds of a `us` or
+    /// `ns` x, and the range of rows of finite x.
+    fn derive(&mut self) {
+        let Some(ring) = &self.ring else { return };
+        self.x_owned =
+            self.x_col.and_then(|x| ring.column(x).filter(|c| c.origin != 0).zip(ring.nums(x))).map(|(c, v)| v.iter().map(|&h| c.to_ms(h)).collect());
+        let xs = self.all_xs();
         let start = xs.partition_point(|v| *v == f64::NEG_INFINITY);
-        let end = start + xs[start..].partition_point(|v| v.is_finite());
-        p.rows = start..end;
-        p
+        let end = start + xs.slice(start..xs.len()).partition_point(|v| v.is_finite());
+        self.rows = start..end;
+    }
+
+    /// Appends `batch`'s rows to the ring by the append rules
+    /// (REQ-STREAM-040): a row of the last row's time replaces it, which
+    /// updates the last candle in place (REQ-CANDLE-060).
+    pub fn append(&mut self, batch: &Table) -> Result<Counts, DataError> {
+        let Some(ring) = &mut self.ring else { return Ok(Counts::default()) };
+        let counts = ring.append(batch, self.x_col, None)?;
+        self.derive();
+        Ok(counts)
+    }
+
+    /// New retention, the rows past it dropped now; how many.
+    pub fn set_retain(&mut self, retain: Retain) -> usize {
+        let Some(ring) = &mut self.ring else { return 0 };
+        if ring.retain() == retain {
+            return 0;
+        }
+        let dropped = ring.set_retain(retain, self.x_col);
+        self.derive();
+        dropped
     }
 
     /// The table back, for preparing again under new options.
     pub fn into_table(self) -> Option<Table> {
-        self.table
+        self.ring.map(Ring::into_table)
     }
 
-    /// The table's rows, drawn or not.
+    /// The rows held, drawn or not.
     pub fn len(&self) -> usize {
-        self.table.as_ref().map_or(0, Table::len)
+        self.ring.as_ref().map_or(0, Ring::len)
     }
 
     /// Whether every price channel resolved and some row has a finite x.
@@ -202,35 +241,35 @@ impl Prepared {
         self.volume.is_some() && self.prices.is_some()
     }
 
-    /// The x of every row of the table, in epoch ms for time.
-    fn all_xs(&self) -> &[f64] {
-        match (&self.x_owned, self.x_col, &self.table) {
-            (Some(v), _, _) => v,
-            (None, Some(i), Some(t)) => t.column(i).and_then(Column::nums).unwrap_or(&[]),
-            _ => &[],
+    /// The x of every row held, in epoch ms for time.
+    fn all_xs(&self) -> Seq<'_, f64> {
+        match (&self.x_owned, self.x_col, &self.ring) {
+            (Some(v), _, _) => Seq::one(v),
+            (None, Some(i), Some(r)) => r.nums(i).unwrap_or_default(),
+            _ => Seq::default(),
         }
     }
 
     /// Column `i`'s numbers, or nothing.
-    fn nums(&self, i: Option<usize>) -> &[f64] {
-        match (i, &self.table) {
-            (Some(i), Some(t)) => t.column(i).and_then(Column::nums).unwrap_or(&[]),
-            _ => &[],
+    fn nums(&self, i: Option<usize>) -> Seq<'_, f64> {
+        match (i, &self.ring) {
+            (Some(i), Some(r)) => r.nums(i).unwrap_or_default(),
+            _ => Seq::default(),
         }
     }
 
-    /// The x of every row, sorted, missing x last; index rows of the table.
-    pub fn xs(&self) -> &[f64] {
+    /// The x of every row, sorted; index rows held.
+    pub fn xs(&self) -> Seq<'_, f64> {
         self.all_xs()
     }
 
     /// Price channel `k` (0 open, 1 high, 2 low, 3 close) of every row.
-    pub fn price(&self, k: usize) -> &[f64] {
+    pub fn price(&self, k: usize) -> Seq<'_, f64> {
         self.nums(self.prices.map(|p| p[k]))
     }
 
     /// The volume of every row, or nothing without a volume column.
-    pub fn volume(&self) -> &[f64] {
+    pub fn volume(&self) -> Seq<'_, f64> {
         self.nums(self.volume)
     }
 
@@ -240,21 +279,9 @@ impl Prepared {
         (!self.rows.is_empty()).then(|| [xs[self.rows.start], xs[self.rows.end - 1]])
     }
 
-    /// Table row `row`, column by column, as events show it.
+    /// Row `row` held, column by column, as events show it.
     pub fn datum(&self, row: usize) -> BTreeMap<String, Value> {
-        let mut out = BTreeMap::new();
-        let Some(t) = &self.table else { return out };
-        for c in t.columns() {
-            let v = match &c.values {
-                Values::Num(v) => match v.get(row) {
-                    Some(&h) if !h.is_nan() => Value::Number(c.to_ms(h)),
-                    _ => Value::Null,
-                },
-                _ => c.label(row).map_or(Value::Null, |l| Value::Text(l.to_string())),
-            };
-            out.insert(c.name.clone(), v);
-        }
-        out
+        self.ring.as_ref().map(|r| r.datum(row)).unwrap_or_default()
     }
 }
 
@@ -265,7 +292,7 @@ mod tests {
     use crate::fixtures::generate;
 
     fn prep(data: Data) -> Prepared {
-        Prepared::new(data.into_tables().remove(0).1, &Encode::default())
+        Prepared::new(data.into_tables().remove(0).1, &Encode::default(), Retain::default()).0
     }
 
     /// REQ-DATA-080: the price channels come by role or name, x falls back
@@ -303,8 +330,8 @@ mod tests {
         assert_eq!(p.warnings.as_slice(), &[Warning::NoChannel { channel: "close".into() }]);
     }
 
-    /// REQ-DATA-040: unsorted x is drawn sorted, missing x last and out of
-    /// the rows drawn.
+    /// REQ-DATA-040, REQ-DATA-030: unsorted x is drawn sorted, and a row of
+    /// missing x is dropped.
     #[test]
     fn rows_are_sorted_and_missing_x_left_out() {
         let t = Table::from_columns(vec![
@@ -317,8 +344,8 @@ mod tests {
         .unwrap();
         let p = prep(Data::from_table(t));
         assert_eq!(p.rows, 0..3);
-        assert_eq!(&p.xs()[..3], &[1.0, 2.0, 3.0]);
-        assert_eq!(&p.price(0)[..3], &[10.0, 20.0, 30.0]);
+        assert_eq!((p.len(), p.xs().to_vec()), (3, vec![1.0, 2.0, 3.0]));
+        assert_eq!(p.price(0).to_vec(), [10.0, 20.0, 30.0]);
         assert_eq!(p.kind, Kind::Linear);
         assert_eq!(p.warnings.len(), 1);
     }

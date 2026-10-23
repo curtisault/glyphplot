@@ -477,7 +477,8 @@ frame over 1k of 1M points takes 0.034 ms at 80 × 24 against 2.47 ms for all
 From v0.5.0 the folder also plays `sparkline` (`spark.rs`, REQ-SPARK-010 in
 the roadmap): modes `line`, `area` and `column`, a band of rows a series and
 no axes, a text column of each series' label, latest value and extent, and
-a ring of `capacity` rows (1,000,000 by default). The line chart ticks and
+a ring of `retain.rows` rows (1,000,000 by default; the option was `capacity`
+until v0.6.0 shared the core's ring, `ring.rs`). The line chart ticks and
 labels time in `Env.zone`'s table, draws the date context row under a time
 span of under two days, and writes ticks, readouts and table cells under a
 column's `scale`, `offset` and `unit`.

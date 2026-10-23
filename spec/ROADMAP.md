@@ -119,7 +119,7 @@ REQ-VENDOR-010 and REQ-VENDOR-020 were withdrawn on 2026-10-18 by ADR-013, befor
 ### 3.2 Streaming (STREAM)
 
 - REQ-STREAM-010: `append()` MUST accept one row object, an array of row objects, or columns of typed arrays, and the shell MUST coalesce every append made within one animation frame into one write to wasm (a Node test counts one commit for 1,000 appends in a frame). (v0.6.0)
-- REQ-STREAM-020: A streaming chart MUST keep its rows in a ring allocated once with capacity `retain.rows` (default 1,000,000); appending 3,000,000 rows to a ring of 1,000,000 MUST NOT grow wasm memory after the first 1,000,000. [ADR-107](adr/107-a-ring-allocated-once.md) (v0.6.0)
+- REQ-STREAM-020: A streaming chart MUST keep its rows in a ring of capacity `retain.rows` (default 1,000,000), whose buffers grow only until they hold `retain.rows` rows and are never reallocated after; appending 3,000,000 rows to a ring of 1,000,000 MUST NOT grow wasm memory after the first 1,000,000. [ADR-107](adr/107-a-ring-allocated-once.md) (v0.6.0)
 - REQ-STREAM-030: `retain.age` SHOULD drop rows older than the newest x minus that duration; the oldest kept row MUST be the first with x ≥ newest − age. (v0.6.0)
 - REQ-STREAM-040: An appended row whose x equals the last row's MUST replace it; a row whose x is less MUST be dropped and counted in the `late` field of the next `plot-data` event. (v0.6.0)
 - REQ-STREAM-050: In Node on the reference machine, appending one row MUST take at most 1 µs and a batch of 1,000 at most 50 µs (median). (v0.6.0)
@@ -218,7 +218,7 @@ REQ-VENDOR-010 and REQ-VENDOR-020 were withdrawn on 2026-10-18 by ADR-013, befor
 
 - Shipped in v0.3.0 and moved to [SPEC.md](SPEC.md) §6.4: REQ-CONTRACT-010, REQ-CONTRACT-020.
 - Shipped in v0.4.0 and moved to [SPEC.md](SPEC.md) §6.4: REQ-CONTRACT-030, REQ-CONTRACT-050, REQ-CONTRACT-060.
-- REQ-CONTRACT-040: Appending a fixture in the batches 1, 7, ⌊n/3⌋ and the rest, with frames drawn between, MUST end on the frame and view that replacing with the same rows gives; with a ring of capacity c < n, on replacing with the last c rows (rule 14). (v0.6.0)
+- REQ-CONTRACT-040: Appending a fixture in the batches 1, 7, ⌊n/3⌋ and the rest, with frames drawn between, MUST end on the frame and view that replacing with the rows the append rules keep gives (REQ-STREAM-040: the same rows, for x sorted and distinct); with a ring of capacity c < n, on replacing with the last c of them (rule 14). (v0.6.0)
 - Shipped in v0.2.0 and moved to [SPEC.md](SPEC.md) §6.5: REQ-FIX-010, REQ-REF-010, REQ-PROP-010.
 - Shipped in v0.5.0 and moved to [SPEC.md](SPEC.md) §6.5: REQ-FIX-020.
 
