@@ -2,7 +2,7 @@
 
 Every requirement, built ([SPEC.md](SPEC.md)) or not yet
 ([ROADMAP.md](ROADMAP.md)), mapped to the test or check that covers it or
-will. v0.1.0 to v0.6.0 are built and their checks run; the checks of later milestones are
+will. v0.1.0 to v0.7.0 are built and their checks run; the checks of later milestones are
 planned, their Status `—`. The planned names follow
 [discovery/testing.md](../discovery/testing.md) where it gives one; the rest
 are proposals in the same style.
@@ -642,7 +642,7 @@ Several checks may be listed for one requirement, separated by commas.
 | REQ-PKG-030 | v0.11.0 | `mise run lint` (`tsc` on the JSX fixture) | — |
 | REQ-PKG-040 | v0.1.0 | review (crate names in each `Cargo.toml`) | — |
 | REQ-PKG-050 | v0.11.0 | `web/test/package.test.mjs`, review (`package.json`) | — |
-| REQ-PKG-060 | v0.7.0 | `site/e2e/site.spec.ts`, review (install snippets) | — |
+| REQ-PKG-060 | v0.7.0 | `site/e2e/site.spec.ts`, review (install snippets) | partial |
 
 ## Summary
 
@@ -685,6 +685,6 @@ kind of the first check listed.
 
 | Status | Requirements |
 |---|---|
-| yes | 188 |
-| partial | 62 |
-| — | 90 |
+| yes | 199 |
+| partial | 64 |
+| — | 77 |

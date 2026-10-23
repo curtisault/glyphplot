@@ -1,6 +1,6 @@
 # glyphplot — Specification
 
-Version 0.6.0 · 2026-10-22 · License: MIT
+Version 0.7.0 · 2026-10-23 · License: MIT
 
 glyphplot is an interactive charting library whose charts are drawn in
 Unicode glyphs, one code point and one colour a cell. Charts are Rust,
@@ -9,7 +9,7 @@ by a `<glyph-plot>` custom element over a small TypeScript shell and in the
 terminal by a CLI; every chart draws data the page or the terminal gives it.
 
 This document describes the application exactly as it stands. On
-2026-10-22 v0.6.0, streaming, is built: a section with nothing
+2026-10-23 v0.7.0, the site, is built: a section with nothing
 built
 holds only its heading and the words "nothing is built". Requirements arrive
 from
@@ -163,7 +163,9 @@ the `candles` and `bar` families, the sparkline, log, symlog, band and index
 time scales, zones, units, panes, dual axes, annotations and linked charts.
 v0.6.0 (Phase 5) was built on 2026-10-22: the ring, appends through
 staging, `x.follow`, rule 14, the Arrow reader, `src`, `paused` and
-`announce`. Phase 6, the site, is next (`docs/IMPLEMENTATION_PLAN.md`).
+`announce`. v0.7.0 (Phase 6) was built on 2026-10-23: the Elm site, its doc
+pages, the gallery of 60 examples, the dataset manifest, show data, forced
+colours and print. Phase 7, the CLI, is next (`docs/IMPLEMENTATION_PLAN.md`).
 
 ---
 
@@ -714,6 +716,8 @@ resolves it through the module, repainting without a new frame.
 - REQ-THEME-060: Up and down MUST be theme tokens, never fixed colours, and candles and bars MUST tell them apart by fill (hollow and solid) as well as by colour. Note: (v0.5.0)
 - REQ-THEME-065: The default `up` and `down` tokens MUST be a blue and an orange at least 50 CIEDE2000 apart under normal vision and the three simulated deficiencies, overridable like every token. [ADR-123](adr/123-colour-defaults-held-to-measured-bars.md) Note: (v0.5.0)
 
+- REQ-THEME-100: Under `forced-colors: active` the element MUST draw in one ink in `CanvasText` on `Canvas`, with the accent in `Highlight`; under `@media print` it SHOULD draw on paper. Note: (v0.7.0)
+
 ### 11.2 One ink
 
 - REQ-MONO-010: In one ink, line series 1–4 MUST draw with the dash patterns solid, 3 on 1 off, 1 on 1 off, and 3 on 1 off 1 on 1 off, counted in dot columns from the x scale's origin, so a pan by n whole dots shifts the pattern by n dots. [ADR-123](adr/123-colour-defaults-held-to-measured-bars.md) Note: (v0.3.0)
@@ -740,6 +744,8 @@ or dark.
 - REQ-A11Y-090: While data streams, the table MUST be rebuilt at most once a second and never while focus is inside it. Note: (v0.6.0)
 - REQ-A11Y-100: With `announce="<seconds>"` (at least 5), a polite live region MUST announce the latest value at most once per interval, silent while paused or while the cursor has focus; without it there MUST be no live region. Note: (v0.6.0)
 
+- REQ-A11Y-110: A "show data" control MUST make the table visible. Note: (v0.7.0)
+
 ---
 
 ## 12. The CLI
@@ -758,15 +764,44 @@ Nothing is built.
 
 ### 14.1 The site
 
-Nothing is built.
+Elm 0.19.1 through the repository's own Vite plugin (`site/elm.mjs`),
+with no npm package for Elm. Routes: `/`, a page per chart type,
+`/docs/<page>` (getting started, data, view and events, theming,
+accessibility, performance, the CLI), `/examples` and `/examples/<slug>`.
+The Elm bundle is 34,376 B gzipped. A static host must answer the path
+routes with `index.html`.
+
+- REQ-SITE-010: The site MUST be Elm 0.19.1 with Vite, its flags from `web/pkg/modules.js`, loading no wasm before the page shows. Note: (v0.7.0)
+- REQ-SITE-020: The site MUST have a page per chart type with the chart live on a fixture and an example, a control per option, its attributes, a log of its events, and usage snippets that name only installs that work. Note: (v0.7.0)
+- REQ-SITE-030: The site MUST have documentation pages (getting started, the data contract, view and events, theming, accessibility, the CLI) with live charts in them. Note: (v0.7.0)
+- REQ-SITE-060: The site MUST follow `prefers-color-scheme` until the reader chooses, and its theme button MUST set `data-theme` on `<html>` and keep it in `localStorage`, every chart following it (REQ-THEME-030). Note: (v0.7.0)
+- REQ-SITE-070: An axe scan of the index, a chart page and an example, in both themes, MUST find no violation of impact serious or critical. Note: (v0.7.0)
 
 ### 14.2 Examples
 
-Nothing is built.
+60 examples, one module each under `site/examples/`, with metadata in
+`manifest.json`: line 39, candles 9, bar 9, sparkline 4. 51 use seeded
+generators; three use checked-in public-domain data; four feeds run in
+the reader's browser. `<gp-example>` shows a text still rendered at build
+time and goes live after the reader's first scroll or touch.
+
+- REQ-SITE-040: The site's examples page MUST be its gallery: every example a card with a live chart, a title, one line on what it shows, and its chart type, modes, domain and features, filterable by each and by milestone; each card MUST link to the example's own page, which shows the chart full size and the page source it runs, copyable. The first two examples MUST be a live candlestick of a synthetic market labelled "simulated market" and a live candlestick of Wikimedia edits a second, one candle a minute. [ADR-143](adr/143-site-docs-with-live-charts.md), [ADR-136](adr/136-the-sites-market-demo.md) Note: (v0.7.0)
+- REQ-SITE-050: An example over a live third-party feed MUST name the source and its licence on the page, and MUST show a message, not an error, when the feed is down. Note: (v0.7.0)
+- REQ-SITE-080: `site/examples/manifest.json` MUST list every example with its slug, title, chart types, modes, domain, features, datasets and milestone, and `mise run examples:check` MUST fail when a chart type that is built has fewer than three examples, a mode or a feature of the plan's feature list that is built has none, an example names a dataset missing from `datasets/manifest.json`, or an example in the manifest has no page. Note: (v0.7.0)
+- REQ-SITE-090: The gallery MUST hold at least 50 examples at v0.7.0 and at least 85 at v0.12.0, `examples:check` counting them. Note: (v0.7.0)
+- REQ-SITE-110: An example drawn from generated data MUST say so on its card and its page ("simulated", with the seed), as ADR-006's demo mode requires. Note: (v0.7.0)
+- REQ-SITE-120: Each gallery card MUST show a first frame rendered as text at build time (with the JS API in Node) until its element comes near the screen, so the gallery loads no wasm before the reader scrolls and each family's module is fetched once however many cards use it. Note: (v0.7.0)
 
 ### 14.3 Datasets
 
-Nothing is built.
+`datasets/manifest.json` lists every dataset (committed, build, live or
+generated). `datasets:check` holds hashes, sizes and the licence
+allow-list; `datasets:fetch` takes HYG v4.4's naked-eye subset at build
+time, never committed (CC BY-SA 4.0).
+
+- REQ-DATASET-010: Every dataset committed or served by the site MUST have an entry in `datasets/manifest.json` (publisher, URL, licence name, licence URL, retrieval date, size, SHA-256), and a check MUST fail when a file under `datasets/` or the site's data folder has no entry or a different hash. [ADR-137](adr/137-dataset-manifest-and-allow-list.md) Note: (v0.7.0)
+- REQ-DATASET-020: No committed dataset MUST exceed 1 MB or carry a NonCommercial, NoDerivatives or proprietary licence; the check MUST read the manifest's licence names against an allow-list (public domain, CC0, CC BY, ODC-By, MIT, BSD). Note: (v0.7.0)
+- REQ-DATASET-030: ShareAlike datasets MUST NOT be in any published crate or npm package; the check MUST list the package contents against the manifest. Note: (v0.7.0)
 
 ---
 
@@ -912,6 +947,8 @@ The tests are the core's unit tests and properties, `tests/reference.rs`
 
 - REQ-E2E-050: `site/e2e/streaming.spec.ts` MUST append at 1 kHz for a second and then find the frame equal to a replace of the same rows. Note: (v0.6.0)
 
+- REQ-E2E-060: Every chart type's page on the site MUST draw a first frame with nothing on the console. Note: (v0.7.0)
+
 ---
 
 ## 18. Packaging
@@ -919,6 +956,8 @@ The tests are the core's unit tests and properties, `tests/reference.rs`
 Nothing is published. The crates are named; the packs come with v0.10.0.
 
 - REQ-PKG-040: The crates MUST be `glyphplot` (library), `glyphplot-cli` (binary `glyphplot`), `glyphplot-wasm` (`publish = false`) and the packs `glyphplot-<domain>`. Note: (v0.1.0)
+
+- REQ-PKG-060: Until the package is on npm and the CLI on crates.io, every install snippet MUST say so and show how to build from the repository. Note: (v0.7.0)
 
 ---
 

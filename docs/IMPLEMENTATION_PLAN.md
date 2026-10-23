@@ -1506,6 +1506,36 @@ Acceptance:
 <a id="phase-6"></a>
 ### Phase 6 · The site (v0.7.0)
 
+Done 2026-10-23. Every acceptance command passes: `build:site`, all of
+`test:site` (163 tests in 25 s), `datasets:check` and `examples:check`.
+The gallery holds 60 examples; in headless Chromium it fetches no wasm
+before a scroll, then each family's module once. `mise run check` takes
+29.5 s. Built in three parts at once, against one example interface
+committed first (`site/examples/api.ts`):
+- the Elm site;
+- the 60 examples with `<gp-example>`;
+- the datasets with show data and forced colours.
+Then one integration pass (its notes are below the acceptance). Differences
+from the tasks:
+- **No npm package for Elm:** a Vite plugin of the repository's own runs
+  mise's `elm`.
+- **Catalogue rows needing what is not built** use a built stand-in:
+  linear y for log and symlog, two linked charts for dual axes, and
+  simulated NAB, H.10 and MIT-BIH. The examples say so, and nothing moved to
+  a later milestone.
+- **HYG v4.4** (CC BY-SA 4.0, ShareAlike) is fetched at build time and
+  never committed. Appendix B named v4.1.
+- **Cards and example pages show the data's source once,** from
+  `<gp-example>`.
+- **Partly covered:**
+  - SITE-020 (no browser test of a type page's controls, attributes, event
+    log or snippets);
+  - PKG-060 (the snippets are on the pages; no test reads them);
+  - THEME-100 (Windows high contrast is the owner's).
+- **Left for the owner:** the site in both themes on a desktop and a phone,
+  and each live example against its real feed (`node
+  scripts/examples-browser.mjs --live` reaches all four).
+
 Tasks:
 1. Elm 0.19.1 site with Vite: flags from the manifest, routes
    (`/`, `/<type>`, `/docs/<page>`, `/examples/<name>`), the theme toggle

@@ -6,7 +6,7 @@ This document holds every requirement of glyphplot not yet built, grouped by
 area, each naming the milestone that ships it. When a milestone lands, its
 requirements move into [SPEC.md](SPEC.md) with their IDs unchanged, a line
 in their old section says where they went, and the milestone's row in §20
-says when it was built. v0.1.0 to v0.6.0 have shipped. IDs go up in tens within an area so a requirement
+says when it was built. v0.1.0 to v0.7.0 have shipped. IDs go up in tens within an area so a requirement
 can be added between two others (`REQ-DATA-045`); an ID is never reused,
 even after its requirement is removed.
 
@@ -312,7 +312,7 @@ element's `type` names.
 - Shipped in v0.5.0 and moved to [SPEC.md](SPEC.md) §11.1: REQ-THEME-060, REQ-THEME-065.
 - REQ-THEME-080: The default sequential scale (cividis) sampled at nine steps MUST be monotonic in L* with neighbours at least 5 ΔE00 apart under each of the four visions, its low end the end nearer the ground's lightness; the default diverging scale MUST run blue to orange with its middle on the ground's side. (v0.9.0)
 - REQ-THEME-090: The JS API, the CLI (`--theme <file.json>`), the Rust crate and the SVG and ANSI exports MUST accept a theme object with REQ-THEME-010's token names. (v0.8.0)
-- REQ-THEME-100: Under `forced-colors: active` the element MUST draw in one ink in `CanvasText` on `Canvas`, with the accent in `Highlight`; under `@media print` it SHOULD draw on paper. (v0.7.0)
+- Shipped in v0.7.0 and moved to [SPEC.md](SPEC.md) §11.1: REQ-THEME-100.
 
 ### 10.2 One ink (MONO)
 
@@ -326,7 +326,7 @@ element's `type` names.
 
 - Shipped in v0.3.0 and moved to [SPEC.md](SPEC.md) §11.3: REQ-A11Y-010, REQ-A11Y-020, REQ-A11Y-030, REQ-A11Y-040, REQ-A11Y-050, REQ-A11Y-060, REQ-A11Y-070.
 - Shipped in v0.6.0 and moved to [SPEC.md](SPEC.md) §11.3: REQ-A11Y-080, REQ-A11Y-090, REQ-A11Y-100.
-- REQ-A11Y-110: A "show data" control MUST make the table visible. (v0.7.0)
+- Shipped in v0.7.0 and moved to [SPEC.md](SPEC.md) §11.3: REQ-A11Y-110.
 - REQ-A11Y-120: `glyphplot <type> --table` MUST print the data table as text. (v0.8.0)
 
 ---
@@ -366,7 +366,7 @@ default), and reaches `mise run size`, the contract and the benches through
 - Shipped in v0.3.0 and moved to [SPEC.md](SPEC.md) §17: REQ-TEST-020, REQ-TEST-030, REQ-TEST-040.
 - Shipped in v0.3.0 and moved to [SPEC.md](SPEC.md) §17: REQ-E2E-010, REQ-E2E-020, REQ-E2E-030, REQ-E2E-040, REQ-E2E-070.
 - Shipped in v0.6.0 and moved to [SPEC.md](SPEC.md) §17: REQ-E2E-050.
-- REQ-E2E-060: Every chart type's page on the site MUST draw a first frame with nothing on the console. (v0.7.0)
+- Shipped in v0.7.0 and moved to [SPEC.md](SPEC.md) §17: REQ-E2E-060.
 
 ---
 
@@ -400,21 +400,12 @@ default), and reaches `mise run size`, the contract and the benches through
 
 ## 16. The site and datasets
 
-- REQ-SITE-010: The site MUST be Elm 0.19.1 with Vite, its flags from `web/pkg/modules.js`, loading no wasm before the page shows. (v0.7.0)
-- REQ-SITE-020: The site MUST have a page per chart type with the chart live on a fixture and an example, a control per option, its attributes, a log of its events, and usage snippets that name only installs that work. (v0.7.0)
-- REQ-SITE-030: The site MUST have documentation pages (getting started, the data contract, view and events, theming, accessibility, the CLI) with live charts in them. (v0.7.0)
-- REQ-SITE-040: The site's examples page MUST be its gallery: every example a card with a live chart, a title, one line on what it shows, and its chart type, modes, domain and features, filterable by each and by milestone; each card MUST link to the example's own page, which shows the chart full size and the page source it runs, copyable. The first two examples MUST be a live candlestick of a synthetic market labelled "simulated market" and a live candlestick of Wikimedia edits a second, one candle a minute. [ADR-143](adr/143-site-docs-with-live-charts.md), [ADR-136](adr/136-the-sites-market-demo.md) (v0.7.0)
-- REQ-SITE-050: An example over a live third-party feed MUST name the source and its licence on the page, and MUST show a message, not an error, when the feed is down. (v0.7.0)
-- REQ-SITE-060: The site MUST follow `prefers-color-scheme` until the reader chooses, and its theme button MUST set `data-theme` on `<html>` and keep it in `localStorage`, every chart following it (REQ-THEME-030). (v0.7.0)
-- REQ-SITE-070: An axe scan of the index, a chart page and an example, in both themes, MUST find no violation of impact serious or critical. (v0.7.0)
-- REQ-SITE-080: `site/examples/manifest.json` MUST list every example with its slug, title, chart types, modes, domain, features, datasets and milestone, and `mise run examples:check` MUST fail when a chart type that is built has fewer than three examples, a mode or a feature of the plan's feature list that is built has none, an example names a dataset missing from `datasets/manifest.json`, or an example in the manifest has no page. (v0.7.0)
-- REQ-SITE-090: The gallery MUST hold at least 50 examples at v0.7.0 and at least 85 at v0.12.0, `examples:check` counting them. (v0.7.0)
+- Shipped in v0.7.0 and moved to [SPEC.md](SPEC.md) §14.1: REQ-SITE-010, REQ-SITE-020, REQ-SITE-030.
+- Shipped in v0.7.0 and moved to [SPEC.md](SPEC.md) §14.2: REQ-SITE-040, REQ-SITE-050.
+- Shipped in v0.7.0 and moved to [SPEC.md](SPEC.md) §14.1: REQ-SITE-060, REQ-SITE-070.
+- Shipped in v0.7.0 and moved to [SPEC.md](SPEC.md) §14.2: REQ-SITE-080, REQ-SITE-090, REQ-SITE-110, REQ-SITE-120.
 - REQ-SITE-100: Every milestone from v0.8.0 that ships a chart type, a mode, a pack or a feature of the plan's feature list MUST add its examples in the same milestone, so `examples:check` passes on its branch. (v0.8.0)
-- REQ-SITE-110: An example drawn from generated data MUST say so on its card and its page ("simulated", with the seed), as ADR-006's demo mode requires. (v0.7.0)
-- REQ-SITE-120: Each gallery card MUST show a first frame rendered as text at build time (with the JS API in Node) until its element comes near the screen, so the gallery loads no wasm before the reader scrolls and each family's module is fetched once however many cards use it. (v0.7.0)
-- REQ-DATASET-010: Every dataset committed or served by the site MUST have an entry in `datasets/manifest.json` (publisher, URL, licence name, licence URL, retrieval date, size, SHA-256), and a check MUST fail when a file under `datasets/` or the site's data folder has no entry or a different hash. [ADR-137](adr/137-dataset-manifest-and-allow-list.md) (v0.7.0)
-- REQ-DATASET-020: No committed dataset MUST exceed 1 MB or carry a NonCommercial, NoDerivatives or proprietary licence; the check MUST read the manifest's licence names against an allow-list (public domain, CC0, CC BY, ODC-By, MIT, BSD). (v0.7.0)
-- REQ-DATASET-030: ShareAlike datasets MUST NOT be in any published crate or npm package; the check MUST list the package contents against the manifest. (v0.7.0)
+- Shipped in v0.7.0 and moved to [SPEC.md](SPEC.md) §14.3: REQ-DATASET-010, REQ-DATASET-020, REQ-DATASET-030.
 
 ---
 
@@ -454,7 +445,7 @@ default), and reaches `mise run size`, the contract and the benches through
 - REQ-PKG-030: The package SHOULD export JSX typings as `glyphplot/jsx` typing `<glyph-plot>` as a union discriminated on `type`; a `tsc` fixture MUST reject candle data on `type="line"`. (v0.11.0)
 - Shipped in v0.1.0 and moved to [SPEC.md](SPEC.md) §18: REQ-PKG-040.
 - REQ-PKG-050: `prepublishOnly` MUST run `mise run build:web`, which builds the wasm first. (v0.11.0)
-- REQ-PKG-060: Until the package is on npm and the CLI on crates.io, every install snippet MUST say so and show how to build from the repository. (v0.7.0)
+- Shipped in v0.7.0 and moved to [SPEC.md](SPEC.md) §18: REQ-PKG-060.
 
 ---
 
@@ -473,7 +464,7 @@ command verifies; real-browser checks are the owner's (REQ-TEST-030).
 | v0.4.0 (built 2026-10-20) | 3 · Contract and budgets | CONTRACT-030, 050, 060; PERF-030–060, 080; SIZE-050; BENCH; CI-020; BUILD-090 | `cargo test --profile contract --test contract --test budgets`; `mise run bench`; `mise run signoff` on the branch |
 | v0.5.0 (built 2026-10-21) | 4 · Candles, bar, sparkline | CANDLE-010–050; BAR-010–020; SPARK-010; SCALE-040–060; TICK-050–070; FMT-040–050; TZ-020–030, 050; LAYOUT-050–060; AXIS; ANNOT; LINK; EL-030, 050, 110; EVENT-010 (`plot-brush`, `plot-legend`); SAMPLE-040, 060; DATA-100; THEME-060, 065; MONO-020–030; RENDER-040; FONT-020; FIX-020 | contract and snapshots for the three types; the owner's candlestick on the checklist page |
 | v0.6.0 (built 2026-10-22) | 5 · Streaming | STREAM-010–050, 070; VIEW-060; CANDLE-060; CONTRACT-040; DATA-140–150; A11Y-080–100; PERF-070; E2E-050; EVENT-010 (`plot-data`) | `streaming.spec.ts`; `bench:web` streaming row; the owner's one-line test on a phone |
-| v0.7.0 | 6 · The site | SITE (all but 100); DATASET; A11Y-110; THEME-100; E2E-060; LINT-020 (site); PKG-060 | `mise run build:site`; `test:site` in full; `datasets:check` |
+| v0.7.0 (built 2026-10-23) | 6 · The site | SITE (all but 100); DATASET; A11Y-110; THEME-100; E2E-060; LINT-020 (site); PKG-060 | `mise run build:site`; `test:site` in full; `datasets:check` |
 | v0.8.0 | 7 · The CLI | SITE-100; CLI; TERM; CRATE-010; EXPORT; SSR; TZ-040; I18N-070; COLOR-050; THEME-090; A11Y-120; ARCH-080 | `cargo test -p glyphplot-cli`; `glyphplot candles --from feed.csv` by the owner |
 | v0.9.0 | 8 · The next tier | SCATTER; HEAT; BAR-030; LINE-050; CANDLE-070; SCALE-070; SAMPLE-050; HIT-030; THEME-080; MONO-050; I18N-060; DATA-160 | contract and snapshots for the new types and modes |
 | v0.10.0 | 9 · Domain packs | PACK; MKT; TELE; SIZE-070 | `cargo test -p glyphplot-markets -p glyphplot-telemetry`; pack sizes |
