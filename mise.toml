@@ -72,6 +72,13 @@ depends = ["install:site", "build:wasm"]
 dir = "site"
 run = "npx vite build --logLevel warn"
 
+[tasks.serve]
+description = "The release build of site/ served for a person to open (http://localhost:4311/test.html, /live.html), one wasm module a chart family as a page meets them; `-- --host` to open it from a phone on the same network"
+depends = ["build:site"]
+dir = "site"
+raw = true
+run = "npx vite preview --port 4311 --strictPort"
+
 [tasks.dev]
 description = "The debug build served with the checklist page (localhost:5310/test.html), the debug wasm rebuilt into web/pkg on a change under crates/ and the page reloaded (REQ-BUILD-080); `-- --host` for a phone. It shares web/pkg with build:wasm: test, test:site and check swap the release build in, and the pages play it until the next change under crates/"
 depends = ["install:site", "install:web"]

@@ -62,7 +62,9 @@ mise is the only entry point (`mise tasks` lists them all).
   `-- --check` compares).
 - `mise run snap [type …]` (rewrite snapshots), `mise run test:site` (all
   Playwright tests; `check` runs the smoke set), `mise run dev` (the debug
-  build with the checklist page, rebuilt on change), `mise run bench:render`.
+  build with the checklist page, rebuilt on change), `mise run serve` (the
+  release site for a person: `test.html`, `live.html`; `-- --host` for a
+  phone), `mise run bench:render`.
 - `mise run bench` (native, exits 1 over budget), `bench:web`, `bench:load`,
   `test:budgets`, `size --charts`.
 - `mise run signoff` checks every open PR's head and posts a `signoff`

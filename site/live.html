@@ -25,6 +25,7 @@
 <main>
   <h1>Live candles <span class="simulated">simulated</span></h1>
   <p class="note">A seeded synthetic feed (site/feed.ts), not market data: 5-second candles, a tick every 250 ms appended with <code>element.append</code>, the forming candle replaced in place. Open this page on a phone over a throttled network and scrub with a finger; the network panel shows one wasm module, <code>candles</code>.</p>
+  <p class="note">Serve it, don't open the file: <code>mise run serve -- --host</code> serves the release build at <code>http://&lt;this machine&gt;:4311/live.html</code> (<code>mise run serve</code> alone for this machine only). <code>mise run dev</code> serves it too, but from the debug build, whose one module plays every chart.</p>
   <glyph-plot id="live" type="candles" rows="20" loading="eager" label="Simulated live candles"></glyph-plot>
   <div class="bar" role="group" aria-label="Feed">
     <button type="button" id="pause">Pause</button>
