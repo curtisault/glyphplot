@@ -1,15 +1,15 @@
 // The shell's streaming and `src` parts without wasm: the tail's ring rules
 // (REQ-STREAM-020, 030, 040), its staging layout (the boundary's
-// `staging(n)`), reading `append(n)`'s result (REQ-STREAM-070), the CSV and
-// NDJSON readers and the format by Content-Type or extension (REQ-DATA-150),
-// and the Arrow row count, over the tests' own Arrow writer.
+// `staging(n)`), the CSV and NDJSON readers and the format by Content-Type
+// or extension (REQ-DATA-150), and the Arrow row count and a file's stream
+// part, over the tests' own Arrow writer.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { prepare, materialise } from "../src/data.ts";
-import { Tail, ageIn, xColumnOf, readAppended, DEFAULT_RETAIN_ROWS } from "../src/stream.ts";
+import { Tail, ageIn, xColumnOf, DEFAULT_RETAIN_ROWS } from "../src/stream.ts";
 import { csvRows, parseCsv, parseNdjson, formatOf } from "../src/source.ts";
-import { arrowRows } from "../src/arrow.ts";
-import { arrowStream, walk } from "./support/arrow.mjs";
+import { arrowRows, arrowStreamOf } from "../src/arrow.ts";
+import { arrowFile, arrowStream, walk } from "./support/arrow.mjs";
 
 const col = (t, i) => [...materialise(t.prepared().sources[i])];
 
@@ -98,14 +98,6 @@ test("the x column: encode, role, name, the first timestamp, the first number", 
   assert.equal(xColumnOf(c({ name: "k", type: "category" }, { name: "v", type: "f64" }), {}), 1);
 });
 
-test("append(n)'s result is read as [rows, dropped, late, version]; other shapes fill from the shell's count (REQ-STREAM-070)", () => {
-  const f = { rows: 9, dropped: 1, late: 2, version: 7 };
-  assert.deepEqual(readAppended(Float64Array.of(10, 0, 1, 8), f), { rows: 10, dropped: 0, late: 1, version: 8 });
-  assert.deepEqual(readAppended(8, f), { ...f, version: 8 });
-  assert.deepEqual(readAppended('{"rows":3,"dropped":0,"late":0,"version":4}', f), { rows: 3, dropped: 0, late: 0, version: 4 });
-  assert.deepEqual(readAppended(undefined, f), f);
-});
-
 test("csv: header, quoted fields with commas, quotes and newlines, CRLF, BOM, typed by content, empty fields missing (REQ-DATA-150)", () => {
   const text = '﻿t,price,"name, full",ok\r\n2026-01-01T00:00:00Z,1.5,"say ""hi""",true\r\n2026-01-02T00:00:00Z,,"two\nlines",false\n2026-01-03T00:00:00Z,-2e3,plain,\n';
   assert.equal(csvRows(text).length, 4);
@@ -149,4 +141,14 @@ test("arrowRows counts an Arrow stream's rows and refuses other bytes", () => {
   assert.equal(arrowRows(bytes), 37);
   assert.throws(() => arrowRows(new TextEncoder().encode("t,y\n1,2\n")), /not an Arrow IPC stream/);
   assert.throws(() => arrowRows(Uint8Array.of(0xff, 0xff, 0xff, 0xff, 0, 0, 0, 0)), /no schema/);
+});
+
+test("an Arrow file's rows are its stream's, and the stream part is what set_arrow is sent (REQ-DATA-150)", () => {
+  const w = walk(37);
+  const cols = { t: { type: "timestamp", values: w.t }, y: { type: "f64", values: w.y } };
+  const stream = arrowStream(cols);
+  const file = arrowFile(cols);
+  assert.equal(arrowRows(file), 37);
+  assert.deepEqual(arrowStreamOf(file).subarray(0, stream.length), stream);
+  assert.equal(arrowStreamOf(stream), stream, "a stream is sent as it is");
 });

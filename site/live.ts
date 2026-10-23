@@ -26,7 +26,7 @@ el.addEventListener("plot-data", (e) => {
   commits++;
   late += d.late;
   const x = el.view["x"] as { follow?: boolean } | undefined;
-  status.textContent = `simulated feed: ${d.rows} candles held, data version ${d.version}, ${commits} commits, ${late} late rows; ${el.paused ? "paused" : "live"}; follow ${x?.follow ? "on" : "off"}; module ${el.chart?.streaming === "staging" ? "staging(n) + append(n)" : "re-commit fallback"}`;
+  status.textContent = `simulated feed: ${d.rows} candles held, data version ${d.version}, ${commits} commits, ${late} late rows; ${el.paused ? "paused" : "live"}; follow ${x?.follow ? "on" : "off"}`;
 });
 el.addEventListener("plot-error", (e) => (status.textContent = `error: ${(e as CustomEvent<{ message: string }>).detail.message}`));
 

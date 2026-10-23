@@ -19,8 +19,7 @@
 // ring of 1,000,000), one sample a simulated ms appended, drawn at 60 Hz at
 // 320 × 120 for 10 simulated seconds; the summed CPU of the appends, the
 // writes and the frames, a second, against 500 ms; 3 runs, min and median.
-// Until the module writes appends through `staging(n)` the shell commits the
-// whole ring each frame (its fallback): the row says which path it timed.
+// The writes go through the module's `staging(n)` and `append(n)`.
 //
 //   node bench/web.mjs [type …]      (`stream` among them for the streaming row alone)
 import { chromium } from "@playwright/test";
@@ -139,7 +138,7 @@ async function streaming(page) {
       STREAM.type,
       STREAM.fixture,
       `${STREAM.cols} × ${STREAM.rows}`,
-      mid.streaming === "staging" ? "staging + append" : "commit (fallback)",
+      "staging + append",
       String(mid.samples),
       ms(mid.append / mid.seconds),
       ms(mid.write / mid.seconds),
@@ -148,7 +147,7 @@ async function streaming(page) {
       String(STREAM_MS),
       isOver ? "OVER" : "",
     ],
-    note: mid.streaming === "staging" ? null : `the module has no staging(n) / append(n): every frame commits the whole ring of ${mid.held.toLocaleString("en-US")} rows (the shell's fallback), the pessimistic case`,
+    note: null,
   };
 }
 

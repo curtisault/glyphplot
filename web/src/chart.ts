@@ -6,19 +6,20 @@
 // REQ-DATA-050); label text is NFC-normalised first (REQ-I18N-050).
 //
 // Appends (REQ-STREAM-010) go into the shell's tail of the first table at
-// once and are written to wasm once an animation frame: through the
-// module's `staging(n)` and `append(n)` when it has them, else by committing
-// the tail whole (the fallback until v0.6.0's modules). Each commit is
+// once and are written to wasm once an animation frame through the module's
+// `staging(n)` and `append(n)`, or by committing the tail whole when the
+// staging buffer cannot carry them (a new category label, a string column,
+// more rows than the ring holds, new `retain` or `encode`). Each commit is
 // reported as a `DataCommit`, `plot-data`'s detail (REQ-STREAM-070).
 // `paused` keeps appends in the tail without writing them (REQ-A11Y-080).
 
 import type { InputKindName, Meta, TableJson, WasmEvent } from "./api.ts";
-import { arrowRows } from "./arrow.ts";
+import { arrowRows, arrowStreamOf } from "./arrow.ts";
 import { describe, descriptorJson, isColumnar, nfcDeep, prepare, type AppendInput, type DataInput, type DataObject, type Prepared, type Row } from "./data.ts";
 import { encode, type Encoded, type InputEvent } from "./input.ts";
 import { localePack, type LocalePack } from "./locale.ts";
 import { encodeOf } from "./shape.ts";
-import { readAppended, retainOf, Tail, type DataCommit } from "./stream.ts";
+import { retainOf, Tail, type DataCommit } from "./stream.ts";
 import { Guarded, loadFor, messageOf, type GridViews } from "./wasm.ts";
 import type { ZoneTable } from "./zone.ts";
 
@@ -106,6 +107,8 @@ export class Chart {
   /** The Arrow bytes the data came as, or null. */
   #arrow: Uint8Array | null = null;
   #lastCommit: DataCommit | null = null;
+  /** The last staging buffer's view, reused while the module returns the same buffer. */
+  #stagingView: Float64Array | null = null;
   #flushQueued = false;
   #version = 0;
   #meta: Meta | null = null;
@@ -265,16 +268,14 @@ export class Chart {
     this.#notify("data");
   }
 
-  /** Arrow IPC bytes as the new data, through the module's `set_arrow` (REQ-DATA-150). */
+  /** Arrow IPC bytes, a stream or a file's stream part, as the new data through the module's `set_arrow` (REQ-DATA-150). */
   #setArrow(bytes: Uint8Array): void {
     const g = this.#g as Guarded;
-    if (typeof g.raw.set_arrow !== "function") {
-      throw new Error(`Arrow data needs a module with set_arrow (v0.6.0); this build's \`${g.loaded.name}\` module has none`);
-    }
     const rows = arrowRows(bytes);
+    const stream = arrowStreamOf(bytes);
     const version = g.call((c) => {
       try {
-        return (c.set_arrow as (b: Uint8Array) => number)(bytes);
+        return c.set_arrow(stream);
       } catch (e) {
         throw new Error(messageOf(e));
       }
@@ -320,16 +321,12 @@ export class Chart {
     }
   }
 
-  /** Whether the module writes appends through `staging(n)` and `append(n)` (v0.6.0). */
-  #stages(): boolean {
-    const raw = this.#g?.raw;
-    return !!raw && typeof raw.staging === "function" && typeof raw.append === "function";
-  }
-
   /**
    * Writes the appends waiting in the tail: the rows staged since the last
-   * write through `staging(n)` and `append(n)`, or the tail whole by `commit`
-   * (the fallback, and whenever a batch brought a new category label).
+   * write through `staging(n)` and `append(n)`, in one guarded call, or the
+   * tail whole by `commit` when the staging buffer cannot carry them. The
+   * module moves a following domain itself on either (REQ-VIEW-060). An
+   * append reports no events, so there are none to discard.
    */
   #flush(): void {
     if (!this.#g || this.#held || !this.#pending || !this.#tail) return;
@@ -337,48 +334,33 @@ export class Chart {
     const tail = this.#tail;
     this.#pending = false;
     let commit: DataCommit;
-    if (this.#stages() && !tail.whole && tail.staged > 0) {
+    if (!tail.whole && tail.staged > 0) {
       const n = tail.staged;
       const k = tail.width;
-      const ptr = g.call((c) => (c.staging as (n: number) => number)(n));
-      tail.takeStaged(new Float64Array(g.loaded.memory.buffer, ptr, n * k)); // made after the call (REQ-DATA-060)
+      const memory = g.loaded.memory;
       const r = g.call((c) => {
         try {
-          return (c.append as (n: number) => unknown)(n);
+          const ptr = c.staging(n);
+          // A view made after the call (REQ-DATA-060), or the last one while it still is the same buffer.
+          let view = this.#stagingView;
+          if (!view || view.buffer !== memory.buffer || view.byteOffset !== ptr || view.length !== n * k) view = this.#stagingView = new Float64Array(memory.buffer, ptr, n * k);
+          tail.takeStaged(view);
+          return c.append(n);
         } catch (e) {
           throw new Error(messageOf(e));
         }
       });
-      const counts = tail.takeCounts();
-      commit = readAppended(r, { rows: tail.length, ...counts, version: this.#version + 1 });
+      tail.clearCounts();
+      commit = { rows: r[0] as number, dropped: r[1] as number, late: r[2] as number, version: r[3] as number };
       this.#version = commit.version;
-      this.#drain();
     } else {
       const counts = tail.takeCounts();
       const version = this.#write(tail.prepared());
       tail.committedWhole();
       commit = { rows: tail.length, ...counts, version };
-      if (!this.#stages()) this.#follow();
     }
     this.#lastCommit = commit;
     this.#notify("data");
-  }
-
-  /**
-   * The fallback's `x.follow` (REQ-VIEW-060): with follow set and a domain,
-   * the domain keeps its span and ends at the newest x. A module with
-   * `staging` does this itself.
-   */
-  #follow(): void {
-    const g = this.#g;
-    const newest = this.#tail?.newestX ?? NaN;
-    if (!g || !Number.isFinite(newest)) return;
-    const x = (JSON.parse(g.call((c) => c.view_json())) as View)["x"] as { domain?: unknown; follow?: unknown } | undefined;
-    if (!x || x.follow !== true || !Array.isArray(x.domain)) return;
-    const [a, b] = x.domain as [number, number];
-    if (b === newest) return;
-    g.call((c) => c.set_view(JSON.stringify({ x: { domain: [newest - (b - a), newest], follow: true } })));
-    this.#drain();
   }
 
   /** Writes the appends waiting now, not at the next frame; returns the last commit (null before any). Nothing is written while paused. */
@@ -390,16 +372,6 @@ export class Chart {
   /** What the last commit of data did: `plot-data`'s detail (REQ-STREAM-070); null before any. */
   get lastCommit(): DataCommit | null {
     return this.#lastCommit ? { ...this.#lastCommit } : null;
-  }
-
-  /** Whether the module reads Arrow IPC bytes (`set_arrow`, v0.6.0); null before load. */
-  get readsArrow(): boolean | null {
-    return this.#g ? typeof this.#g.raw.set_arrow === "function" : null;
-  }
-
-  /** How appends reach wasm: `staging` (v0.6.0's modules), `commit` (the fallback), or null before load. */
-  get streaming(): "staging" | "commit" | null {
-    return this.#g ? (this.#stages() ? "staging" : "commit") : null;
   }
 
   /**
@@ -425,7 +397,6 @@ export class Chart {
         }
       }
       if (this.#pending) this.#flush();
-      else if (!this.#stages()) this.#follow();
     } catch (e) {
       console.error(`glyphplot: resume failed: ${messageOf(e)}`);
     }

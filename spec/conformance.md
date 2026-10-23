@@ -148,8 +148,8 @@ Several checks may be listed for one requirement, separated by commas.
 | REQ-DATA-110 | v0.2.0 | `contract::every_chart_keeps_the_contract` (rule 28) | yes |
 | REQ-DATA-120 | v0.3.0 | `web/test/data.test.mjs`, `site/e2e/element.spec.ts` | yes |
 | REQ-DATA-130 | v0.2.0 | `contract::replace_is_whole` (rule 15) | yes |
-| REQ-DATA-140 | v0.6.0 | `crates/glyphplot/src/arrow.rs tests::reads_every_column_type`, `web/test/data.test.mjs`, `mise run size --charts` | — |
-| REQ-DATA-150 | v0.6.0 | `site/e2e/streaming.spec.ts` (CSV, JSON, NDJSON served by the site; Arrow drawn through `set_arrow` fixme until the module has it), `web/test/stream.test.mjs`, `web/test/stream.wasm.test.mjs` (Arrow through `set_arrow` todo until the module has it) | partial |
+| REQ-DATA-140 | v0.6.0 | `crates/glyphplot/tests/arrow.rs::every_stream_reads_as_pyarrow_reads_it` and its siblings, `web/test/stream.wasm.test.mjs` (the element's `data`: a stream, and a file's stream part, through `set_arrow`), `site/e2e/streaming.spec.ts`, `mise run size --charts`; the CLI's part planned with the CLI | partial |
+| REQ-DATA-150 | v0.6.0 | `site/e2e/streaming.spec.ts` (CSV, JSON, NDJSON and Arrow served by the site; Arrow drawn through `set_arrow` equal to CSV), `web/test/stream.test.mjs`, `web/test/stream.wasm.test.mjs` | yes |
 | REQ-DATA-160 | v0.9.0 | `crates/glyphplot/src/data.rs tests::graph_edges_resolve_and_drop_unknowns` | — |
 | REQ-DATA-170 | v0.12.0 | `crates/glyphplot/src/data.rs tests::julian_epoch_offsets`, `contract::every_chart_matches_its_snapshots` (TESS fixture) | — |
 
@@ -158,10 +158,10 @@ Several checks may be listed for one requirement, separated by commas.
 | Requirement | Milestone | Planned check | Status |
 |---|---|---|---|
 | REQ-STREAM-010 | v0.6.0 | `web/test/stream.wasm.test.mjs`, `web/test/stream.test.mjs`, `site/e2e/streaming.spec.ts` | yes |
-| REQ-STREAM-020 | v0.6.0 | `crates/glyphplot/tests/stream_memory.rs::the_ring_grows_no_memory_past_its_rows` (natively), `crates/glyphplot/src/ring.rs tests::appending_past_capacity_never_reallocates`, `web/test/memory.test.mjs` (wasm memory), `web/test/memory.test.mjs` (planned) | partial |
+| REQ-STREAM-020 | v0.6.0 | `crates/glyphplot/tests/stream_memory.rs::the_ring_grows_no_memory_past_its_rows` (natively), `crates/glyphplot/src/ring.rs tests::appending_past_capacity_never_reallocates`, `web/test/memory.test.mjs` (wasm memory: 3,000,000 rows through `staging` and `append`, the same `byteLength` after 1,000,000 and 3,000,000) | yes |
 | REQ-STREAM-030 | v0.6.0 | `crates/glyphplot/src/ring.rs tests::retain_age_keeps_the_newest_span` | yes |
 | REQ-STREAM-040 | v0.6.0 | `crates/glyphplot/src/ring.rs tests::equal_x_replaces_and_less_is_late`, `contract::streaming_equals_replace` (rule 14), `web/test/data.test.mjs` (through the module) | partial |
-| REQ-STREAM-050 | v0.6.0 | `crates/glyphplot/tests/stream_timing.rs::appends_are_timed_natively` (natively), `web/test/stream.wasm.test.mjs` (Node, the requirement's) | partial |
+| REQ-STREAM-050 | v0.6.0 | `crates/glyphplot/tests/stream_timing.rs::appends_are_timed_natively` (natively), `web/test/stream.wasm.test.mjs` (Node, the requirement's: the shell and the module) | yes |
 | REQ-STREAM-060 | v0.3.0 | `contract::replace_is_whole` (rule 15) | yes |
 | REQ-STREAM-070 | v0.6.0 | `contract::streaming_equals_replace` (rule 14: the counts `append` returns), `web/test/stream.wasm.test.mjs`, `site/e2e/streaming.spec.ts` | yes |
 
@@ -259,7 +259,7 @@ Several checks may be listed for one requirement, separated by commas.
 | REQ-VIEW-030 | v0.3.0 | `web/test/view.test.mjs`, `site/e2e/element.spec.ts` | yes |
 | REQ-VIEW-040 | v0.3.0 | `site/e2e/element.spec.ts` | yes |
 | REQ-VIEW-050 | v0.3.0 | `crates/glyphplot/src/view.rs tests::motion_frames_depend_only_on_t`, `site/e2e/a11y.spec.ts` (reduced motion) | yes |
-| REQ-VIEW-060 | v0.6.0 | `crates/glyphplot/src/view.rs tests::follow_keeps_the_span`, `contract::streaming_equals_replace` (rule 14, following), `web/test/stream.wasm.test.mjs` (End and the round trip), `site/e2e/streaming.spec.ts` | partial |
+| REQ-VIEW-060 | v0.6.0 | `crates/glyphplot/src/view.rs tests::follow_keeps_the_span`, `contract::streaming_equals_replace` (rule 14, following), `web/test/stream.wasm.test.mjs` (End, the round trip, and the module following on `append(n)`), `site/e2e/streaming.spec.ts` | yes |
 
 ### 5.2 Input (INPUT)
 
@@ -685,6 +685,6 @@ kind of the first check listed.
 
 | Status | Requirements |
 |---|---|
-| yes | 176 |
-| partial | 62 |
-| — | 102 |
+| yes | 184 |
+| partial | 61 |
+| — | 95 |

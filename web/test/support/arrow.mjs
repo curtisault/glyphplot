@@ -189,6 +189,23 @@ export function arrowStream(columns) {
   return out;
 }
 
+/**
+ * An Arrow IPC file framing {@link arrowStream}'s stream: "ARROW1", two bytes
+ * of padding, the stream with its end-of-stream marker, a footer, its i32
+ * length and "ARROW1". The footer is 8 zero bytes, not a flatbuffer: neither
+ * the shell nor the core reads past the end-of-stream marker.
+ */
+export function arrowFile(columns) {
+  const stream = arrowStream(columns);
+  const magic = [0x41, 0x52, 0x52, 0x4f, 0x57, 0x31];
+  const out = new Uint8Array(8 + stream.length + 8 + 4 + 6);
+  out.set(magic, 0);
+  out.set(stream, 8);
+  new DataView(out.buffer).setInt32(8 + stream.length + 8, 8, true);
+  out.set(magic, out.length - 6);
+  return out;
+}
+
 /** The walk the site serves as data/walk.arrows and as walk.csv, .json and .ndjson: `n` rows of t (ms from 2026-01-01) and y. */
 export function walk(n = 50) {
   const t = [];

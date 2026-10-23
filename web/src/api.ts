@@ -46,7 +46,8 @@ export interface Manifest {
 
 /**
  * The `Chart` object of one wasm module (the plan's "The wasm `Chart`" table).
- * Every member exists from v0.3.0 unless marked. Methods that fail throw (a
+ * Every member exists from v0.3.0 unless marked, and every module of a build
+ * has every member: the shell and its modules ship together (web/pkg). Methods that fail throw (a
  * wasm-bindgen `Result::Err` becomes a thrown JS value; the shell reads its
  * message with `String(e)` or `e.message`). A panic traps with a
  * `WebAssembly.RuntimeError`; the shell then refuses every later call on
@@ -108,21 +109,21 @@ export interface WasmChart {
   /** This chart type's meta, as JSON ({@link Meta}). */
   meta_json(): string;
   /**
-   * v0.6.0, streaming (REQ-STREAM-010, ADR-107); optional until the module
-   * has it, the shell committing the whole table instead. A staging buffer for
-   * `n` appended rows of the first table, returned as a byte address the
-   * shell fills through a Float64Array made after the call (REQ-DATA-060):
-   * `n × k` f64, k the first table's column count, column-major in the
-   * table's column order (column j's `n` values from byte `8 × j × n`). Values
-   * are as `reserve_column` takes them: numbers, bools 1 and 0, timestamps
-   * and durations in the column's `time_unit` (a `us` or `ns` column's as
-   * offsets from the `origin` last committed), category codes into the
-   * column's `categories` as committed, missing NaN (a category's missing
-   * code 4294967295). Rows come as appended, before the ring's rules. The
-   * shell never stages a string column or a new category label: it commits
-   * the table whole instead.
+   * v0.6.0, streaming (REQ-STREAM-010, ADR-107). A staging buffer for `n`
+   * appended rows of the first table, returned as a byte address the shell
+   * fills through a Float64Array made after the call (REQ-DATA-060): `k × n`
+   * f64, k the first table's column count, column-major in the table's
+   * column order (column j's `n` values from byte `ptr + 8 × j × n`). Values
+   * are as `reserve_column` kind 0 takes them: numbers, bools 1 and 0,
+   * timestamps and durations in the column's `time_unit` (a `us` or `ns`
+   * timestamp's as offsets from the column's origin as the module holds it,
+   * which is the descriptor's `origin` when it gave one), category codes into
+   * the column's `categories` as committed (a code past them, 4294967295
+   * among them, is missing), missing NaN. A string column's rows are not
+   * read. Rows come as appended, before the ring's rules. The buffer is
+   * reused while `n` stays the same. Throws before any data is committed.
    */
-  staging?(n: number): number;
+  staging(n: number): number;
   /**
    * v0.6.0: applies the `n` staged rows to the ring: an x equal to the last
    * row's replaces it, a lesser x is dropped as late (REQ-STREAM-040), rows
@@ -131,16 +132,17 @@ export interface WasmChart {
    * newest x (REQ-VIEW-060). Returns `[rows, dropped, late, version]` as a
    * Float64Array: rows held after, rows trimmed by this append, late rows
    * dropped by it, and the data version, which commit and append increase
-   * together (`plot-data`'s detail, REQ-STREAM-070). Throws the data error's
-   * message.
+   * together (`plot-data`'s detail, REQ-STREAM-070). Throws when `n` is not
+   * the last `staging(n)`'s, or the data error's message.
    */
-  append?(n: number): Float64Array;
+  append(n: number): Float64Array;
   /**
-   * v0.6.0: an Arrow IPC stream or file as the new data (REQ-DATA-140,
+   * v0.6.0: an uncompressed Arrow IPC stream as the new data (REQ-DATA-140,
    * REQ-DATA-150, ADR-105), as `commit` replaces it; returns the data
-   * version. Throws `arrow: …`.
+   * version. The file format is refused (`arrow: this is the Arrow file
+   * format; …`): the shell sends a file's stream part. Throws `arrow: …`.
    */
-  set_arrow?(bytes: Uint8Array): number;
+  set_arrow(bytes: Uint8Array): number;
   /** Releases the chart (REQ-WASM-050). */
   free(): void;
 }

@@ -6,17 +6,14 @@
 // keeps appends unwritten (REQ-A11Y-080); `src`'s formats served over HTTP
 // (REQ-DATA-150); and the timing of REQ-STREAM-050.
 //
-// The build has no `staging(n)`, `append(n)` or `set_arrow` yet (v0.6.0's
-// ring and Arrow reader are another agent's work). The shell is checked on
-// both paths: the fallback, which commits the tail whole, and the staging
-// path over a JS shim of `staging` and `append` that keeps the ring in JS and
-// commits it. Tests needing the module's own members are `todo` until it has
-// them; they run as soon as it does.
+// Every module has `staging(n)`, `append(n)` and `set_arrow` (v0.6.0): the
+// shell writes appends through them, and commits the tail whole only when the
+// staging buffer cannot carry a write (a new category label).
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { BUILD, manifest, types, moduleFor, instantiate, shell, series, median, schema, check } from "./support/wasm.mjs";
-import { arrowStream, walk } from "./support/arrow.mjs";
+import { arrowFile, arrowStream, walk } from "./support/arrow.mjs";
 
 const TYPE = types[0];
 
@@ -26,94 +23,16 @@ const TYPE = types[0];
 const calls = new Map();
 const count = (k) => calls.set(k, (calls.get(k) ?? 0) + 1);
 const called = (k) => calls.get(k) ?? 0;
-/** Whether charts made from now on get the JS shim of `staging` and `append`. */
-let shim = false;
-
-/**
- * `staging(n)` and `append(n)` as the boundary states them (web/src/api.ts),
- * over the real chart's `reserve_column` and `commit`: the staging buffer is a
- * reserved column the shell fills; `append` reads it, applies the ring's rules
- * to a JS copy of the table (x the first column), commits that whole, and
- * returns `[rows, dropped, late, version]`. It keeps its copy by watching the
- * shell's own reserves and commits.
- */
-function stagingShim(c, memory) {
-  let table = null; // { name, desc, cols: number[][] }
-  const reserved = new Map();
-  let staged = null;
-  const retain = { rows: 1_000_000 };
-  const commitWhole = () => {
-    const n = table.cols[0].length;
-    table.cols.forEach((v, i) => {
-      const ptr = c.reserve_column(i, 0, n);
-      new Float64Array(memory.buffer, ptr, n).set(v);
-    });
-    const desc = structuredClone(table.desc);
-    desc.tables[table.name].length = n;
-    return c.commit(JSON.stringify(desc));
-  };
-  return {
-    setRetain(rows) {
-      retain.rows = rows;
-    },
-    reserve_column(i, kind, n) {
-      const ptr = c.reserve_column(i, kind, n);
-      reserved.set(i, { ptr, n, kind });
-      return ptr;
-    },
-    commit(json) {
-      const desc = JSON.parse(json);
-      const [name, t] = Object.entries(desc.tables)[0];
-      const cols = t.columns.map((_, i) => {
-        const r = reserved.get(i);
-        return r ? [...(r.kind === 1 ? new Uint32Array(memory.buffer, r.ptr, r.n) : new Float64Array(memory.buffer, r.ptr, r.n))] : [];
-      });
-      reserved.clear();
-      table = { name, desc, cols };
-      return c.commit(json);
-    },
-    staging(n) {
-      const k = table.cols.length;
-      staged = { ptr: c.reserve_column(0, 0, n * k), n, k };
-      return staged.ptr;
-    },
-    append(n) {
-      assert.equal(n, staged.n, "append(n) takes the n staged");
-      const view = new Float64Array(memory.buffer, staged.ptr, n * staged.k).slice();
-      let late = 0;
-      const x = table.cols[0];
-      for (let r = 0; r < n; r++) {
-        const row = table.cols.map((_, j) => view[j * n + r]);
-        const last = x.length ? x[x.length - 1] : -Infinity;
-        if (row[0] === last) table.cols.forEach((v, j) => (v[v.length - 1] = row[j]));
-        else if (row[0] < last) late++;
-        else table.cols.forEach((v, j) => v.push(row[j]));
-      }
-      const dropped = Math.max(0, x.length - retain.rows);
-      if (dropped) table.cols.forEach((v) => v.splice(0, dropped));
-      const version = commitWhole();
-      return Float64Array.of(table.cols[0].length, dropped, late, version);
-    },
-  };
-}
+/** Whether charts made from now on are the module's own, uncounted: for timing. */
+let bare = false;
 
 async function instrumented(name) {
   const { glue, exports } = await instantiate(name, { fresh: true });
   function Chart(type, options) {
     const c = new glue.Chart(type, options);
-    const extra = shim ? stagingShim(c, exports.memory) : {};
-    if (shim) {
-      const r = JSON.parse(options).retain?.rows;
-      if (r) extra.setRetain(r);
-    }
+    if (bare) return c;
     return new Proxy(c, {
       get(target, key) {
-        if (Object.hasOwn(extra, key)) {
-          return (...args) => {
-            count(String(key));
-            return extra[key](...args);
-          };
-        }
         const v = target[key];
         if (typeof v !== "function") return v;
         return (...args) => {
@@ -130,17 +49,6 @@ const imports = {};
 for (const name of Object.keys(manifest.imports)) imports[name] = () => instrumented(name);
 shell.wasm.setManifest({ charts: manifest.charts, modules: manifest.modules, fallback: manifest.fallback, budgets: manifest.budgets, imports });
 
-/** Whether the build's own module has the v0.6.0 streaming members. */
-const probe = await instantiate(moduleFor(TYPE), { fresh: true });
-const probeChart = new probe.glue.Chart(TYPE, "{}");
-const REAL = {
-  staging: typeof probeChart.staging === "function" && typeof probeChart.append === "function",
-  arrow: typeof probeChart.set_arrow === "function",
-};
-probeChart.free();
-const NO_STAGING = REAL.staging ? false : "the module has no staging(n) and append(n) yet (the ring, v0.6.0): on at integration";
-const NO_ARROW = REAL.arrow ? false : "the module has no set_arrow yet (the Arrow reader, v0.6.0): on at integration";
-
 // ---------------------------------------------------------------- frames, by hand
 
 /** The animation frames requested and not yet run. */
@@ -153,67 +61,122 @@ function frame() {
   for (const f of run) f(0);
 }
 
-/** A chart of TYPE holding `n` rows x = 0 … n − 1, y = sin, loaded, at 80 × 24; `staged` gives it the shim. */
-async function made(n, { staged = false, options = {} } = {}) {
-  shim = staged;
+/** A chart of TYPE holding `n` rows x = 0 … n − 1, y = sin, loaded, at 80 × 24; `uncounted` makes it of the module's own Chart, for timing. */
+async function made(n, { options = {}, uncounted = false } = {}) {
+  bare = uncounted;
   const s = series(n);
   const ch = shell.chart.chart(TYPE, { data: { x: s.xs, y: s.ys }, options, cols: 80, rows: 24 });
   await ch.ready;
-  shim = false;
+  bare = false;
   frame();
   calls.clear();
   return ch;
 }
 
-const PATHS = [
-  ["the fallback (commit)", false],
-  ["staging(n) + append(n) (a JS shim)", true],
-];
-
 // ---------------------------------------------------------------- REQ-STREAM-010
 
-for (const [path, staged] of PATHS) {
-  test(`${BUILD}: ${path}: 1,000 appends in one frame are one write to wasm (REQ-STREAM-010)`, async () => {
-    const ch = await made(100, { staged });
-    assert.equal(ch.streaming, staged ? "staging" : "commit");
-    for (let i = 0; i < 1000; i++) ch.append({ x: 100 + i, y: Math.cos(i) });
-    assert.equal(frames.length, 1, "one frame requested for the 1,000");
-    assert.equal(called("commit") + called("append"), 0, "nothing written before the frame");
-    frame();
-    if (staged) assert.deepEqual([called("staging"), called("append"), called("commit")], [1, 1, 0], [...calls].join(" "));
-    else assert.equal(called("commit"), 1, [...calls].join(" "));
-    assert.equal(ch.lastCommit.rows, 1100);
-    assert.match(ch.summary(), /1,100 points/);
-    // Each form in one frame: a row, rows, typed columns.
-    calls.clear();
-    ch.append({ x: 1100, y: 0 });
-    ch.append([{ x: 1101, y: 1 }, { x: 1102, y: 2 }]);
-    ch.append({ x: Float64Array.of(1103, 1104), y: Float64Array.of(3, 4) });
-    frame();
-    assert.equal(called("commit") + called("append"), 1);
-    assert.equal(ch.lastCommit.rows, 1105);
-    assert.equal(ch.data.tables.data.length, 1105);
-    ch.free();
-  });
-}
+test(`${BUILD}: 1,000 appends in one frame are one staging(n) and one append(n) (REQ-STREAM-010)`, async () => {
+  const ch = await made(100);
+  for (let i = 0; i < 1000; i++) ch.append({ x: 100 + i, y: Math.cos(i) });
+  assert.equal(frames.length, 1, "one frame requested for the 1,000");
+  assert.equal(called("commit") + called("append") + called("staging"), 0, "nothing written before the frame");
+  frame();
+  assert.deepEqual([called("staging"), called("append"), called("commit")], [1, 1, 0], [...calls].join(" "));
+  assert.equal(ch.lastCommit.rows, 1100);
+  assert.match(ch.summary(), /1,100 points/);
+  // Each form in one frame: a row, rows, typed columns.
+  calls.clear();
+  ch.append({ x: 1100, y: 0 });
+  ch.append([{ x: 1101, y: 1 }, { x: 1102, y: 2 }]);
+  ch.append({ x: Float64Array.of(1103, 1104), y: Float64Array.of(3, 4) });
+  frame();
+  assert.deepEqual([called("staging"), called("append"), called("commit")], [1, 1, 0], [...calls].join(" "));
+  assert.equal(ch.lastCommit.rows, 1105);
+  assert.equal(ch.data.tables.data.length, 1105);
+  ch.free();
+});
 
 test(`${BUILD}: a bad append throws at the call and holds nothing; a read writes what waits (REQ-STREAM-010)`, async () => {
   const ch = await made(10);
   assert.throws(() => ch.append({ x: 10, nope: 1 }), /no column `nope`/);
   ch.append({ x: 10, y: 1 });
   assert.equal(ch.data.tables.data.length, 11, "the data getter writes the frame's appends first");
-  assert.equal(called("commit"), 1);
+  assert.equal(called("append"), 1);
   frame();
-  assert.equal(called("commit"), 1, "and the frame finds nothing left");
+  assert.equal(called("append"), 1, "and the frame finds nothing left");
   ch.free();
+});
+
+/** A chart of TYPE over `data`, loaded, at 80 × 24, its frames run. */
+async function over(data, options = {}) {
+  const ch = shell.chart.chart(TYPE, { data, options, cols: 80, rows: 24 });
+  await ch.ready;
+  frame();
+  calls.clear();
+  return ch;
+}
+
+test(`${BUILD}: the staging buffer's layout and codes: us and ns timestamps from their origin, category codes, a new label committed whole, bools (REQ-STREAM-010)`, async () => {
+  const base = 1_767_225_600_000; // 2026-01-01 in ms
+  for (const unit of ["us", "ns"]) {
+    const per = unit === "us" ? 1000n : 1_000_000n;
+    const stamps = (from, n) => Array.from({ length: n }, (_, i) => String(BigInt(base + (from + i) * 60_000) * per));
+    const cols = (from, n) => ({ columns: [
+      { name: "t", type: "timestamp", time_unit: unit, values: stamps(from, n) },
+      { name: "y", type: "f64", values: Array.from({ length: n }, (_, i) => Math.sin(from + i)) },
+      { name: "k", type: "category", categories: ["a", "b"], values: Array.from({ length: n }, (_, i) => (from + i) % 2) },
+      { name: "on", type: "bool", values: Array.from({ length: n }, (_, i) => (from + i) % 3 === 0) },
+    ] });
+    const desc = (from, n) => ({ version: 1, tables: { data: { length: n, ...cols(from, n) } } });
+    // Typed, unexact stamps too: a Float64Array crosses without an origin, and the module picks one.
+    const typed = (from, n) => ({ version: 1, tables: { data: { length: n, columns: [{ ...cols(from, n).columns[0], values: Float64Array.from(stamps(from, n), Number) }, ...cols(from, n).columns.slice(1)] } } });
+    for (const [form, make] of [["exact", desc], ["typed", typed]]) {
+      const a = await over(make(0, 100));
+      const b = await over(make(0, 130));
+      for (let i = 100; i < 130; i++) {
+        const row = make(i, 1).tables.data.columns;
+        // The label as text: the shell codes it into the committed labels.
+        a.append({ t: [row[0].values[0]], y: [row[1].values[0]], k: [["a", "b"][row[2].values[0]]], on: [row[3].values[0]] });
+        if (i % 7 === 0) frame();
+      }
+      frame();
+      assert.equal(called("commit"), 0, `${unit} ${form}: every write staged`);
+      assert.equal(a.lastCommit.rows, 130);
+      a.frame(0);
+      b.frame(0);
+      assert.equal(a.text(), b.text(), `${unit} ${form}: appended rows draw as the same rows committed`);
+      assert.deepEqual(a.table(200), b.table(200), `${unit} ${form}: the same table`);
+      assert.equal(a.latest().t, b.latest().t);
+      a.free();
+      b.free();
+    }
+  }
+  // A new label cannot cross as a code into the committed labels: that write is a whole commit.
+  const c = await over({ version: 1, tables: { data: { columns: [
+    { name: "x", type: "f64", values: [0, 1, 2] },
+    { name: "y", type: "f64", values: [1, 2, 3] },
+    { name: "k", type: "category", categories: ["a"], values: [0, 0, 0] },
+  ] } } });
+  assert.equal(c.lastCommit.rows, 3);
+  c.append({ x: 3, y: 4, k: "a" });
+  frame();
+  assert.deepEqual([called("append"), called("commit")], [1, 0]);
+  c.append({ x: 4, y: 5, k: "z" });
+  frame();
+  assert.deepEqual([called("append"), called("commit")], [1, 1], "the new label committed whole");
+  c.append({ x: 5, y: 6, k: "z" });
+  frame();
+  assert.deepEqual([called("append"), called("commit")], [2, 1], "and staging again after");
+  assert.deepEqual(c.data.tables.data.columns.find((col) => col.name === "k").categories, ["a", "z"]);
+  c.free();
 });
 
 // ---------------------------------------------------------------- REQ-STREAM-070
 
-for (const [path, staged] of PATHS) {
-  test(`${BUILD}: ${path}: each commit's plot-data detail: rows, dropped, late, version (REQ-STREAM-070)`, async () => {
+{
+  test(`${BUILD}: each commit's plot-data detail: rows, dropped, late, version (REQ-STREAM-070)`, async () => {
     const validate = await schema("events");
-    const ch = await made(100, { staged, options: { retain: { rows: 150 } } });
+    const ch = await made(100, { options: { retain: { rows: 150 } } });
     const v0 = ch.version;
     const seen = [];
     ch.subscribe((c) => c === "data" && seen.push(ch.lastCommit));
@@ -235,9 +198,9 @@ for (const [path, staged] of PATHS) {
 
 // ---------------------------------------------------------------- appending and replacing end on one frame
 
-for (const [path, staged] of PATHS) {
-  test(`${BUILD}: ${path}: 1,000 rows appended over 60 frames draw the frame the same rows replaced draw`, async () => {
-    const a = await made(0, { staged });
+{
+  test(`${BUILD}: 1,000 rows appended over 60 frames draw the frame the same rows replaced draw`, async () => {
+    const a = await made(0);
     const b = await made(0);
     const rows = [];
     for (let i = 0; i < 1000; i++) rows.push({ x: i, y: Math.sin(i / 37) * 10 + (i % 7) });
@@ -276,7 +239,7 @@ test(`${BUILD}: End sets x.follow and it crosses the boundary both ways; a pan c
   ch.free();
 });
 
-test(`${BUILD}: the fallback follows: an append keeps the x span and ends the domain at the newest x (REQ-VIEW-060)`, async () => {
+test(`${BUILD}: through the shell, an append keeps the x span and ends the domain at the newest x (REQ-VIEW-060)`, async () => {
   const ch = await made(1000);
   ch.view = { x: { domain: [800, 950], follow: true } };
   for (let i = 0; i < 25; i++) ch.append({ x: 1000 + i, y: 0 });
@@ -289,8 +252,8 @@ test(`${BUILD}: the fallback follows: an append keeps the x span and ends the do
   ch.free();
 });
 
-test(`${BUILD}: the module follows on append(n) (REQ-VIEW-060)`, { todo: NO_STAGING }, async () => {
-  // The real module, not the shim: the core moves the domain itself.
+test(`${BUILD}: the module follows on append(n) (REQ-VIEW-060)`, async () => {
+  // The module alone, without the shell: the core moves the domain itself.
   const { glue, memory } = await instantiate(moduleFor(TYPE), { fresh: true });
   const c = new glue.Chart(TYPE, "{}");
   const s = series(1000);
@@ -319,7 +282,7 @@ test(`${BUILD}: paused keeps appends unwritten; resume writes them and shows the
   ch.paused = true;
   for (let i = 0; i < 50; i++) ch.append({ x: 100 + i, y: 5 });
   frame();
-  assert.equal(called("commit"), 0, "nothing written while paused");
+  assert.equal(called("commit") + called("append"), 0, "nothing written while paused");
   assert.equal(frames.length, 0, "no frame asked for");
   assert.equal(ch.latest().x, 149, "but the rows are kept");
   ch.view = { x: null };
@@ -327,19 +290,28 @@ test(`${BUILD}: paused keeps appends unwritten; resume writes them and shows the
   assert.equal(ch.text(), before, "the drawing is the data before the pause");
   ch.view = { x: { domain: [10, 60] } };
   ch.paused = false;
-  assert.equal(called("commit"), 1);
+  assert.deepEqual([called("staging"), called("append"), called("commit")], [1, 1, 0]);
   assert.deepEqual(ch.view.x, { domain: [99, 149], follow: true }, "resumed on the live end");
   ch.free();
 });
 
 // ---------------------------------------------------------------- REQ-STREAM-050
 
-test(`${BUILD}: appending one row takes at most 1 µs and a batch of 1,000 at most 50 µs, median, in the shell plus wasm (REQ-STREAM-050)`, { todo: NO_STAGING }, async () => {
-  const ch = await made(100_000);
+test(`${BUILD}: appending one row takes at most 1 µs and a batch of 1,000 at most 50 µs, median, in the shell plus wasm (REQ-STREAM-050)`, async () => {
+  // The module's own Chart, not the counting proxy, so the time is the shell's and the module's alone.
+  // 20,000 untimed rows first: V8 compiles a wasm function again, optimised, only once it is hot
+  // (measured: the median of 5,000 rows fell from 1.17 to 0.62 µs over the first 30,000), and the
+  // requirement is the steady state's.
+  const ch = await made(100_000, { uncounted: true });
+  let x = 100_000;
+  for (let i = 0; i < 20_000; i++) {
+    ch.append({ x: x++, y: i });
+    ch.flush();
+  }
   const one = [];
   for (let i = 0; i < 5000; i++) {
     const t0 = performance.now();
-    ch.append({ x: 100_000 + i, y: i });
+    ch.append({ x: x++, y: i });
     ch.flush();
     one.push(performance.now() - t0);
   }
@@ -348,7 +320,7 @@ test(`${BUILD}: appending one row takes at most 1 µs and a batch of 1,000 at mo
   const ys = new Float64Array(1000);
   for (let k = 0; k < 200; k++) {
     for (let i = 0; i < 1000; i++) {
-      xs[i] = 200_000 + k * 1000 + i;
+      xs[i] = x + k * 1000 + i;
       ys[i] = i;
     }
     const t0 = performance.now();
@@ -356,9 +328,9 @@ test(`${BUILD}: appending one row takes at most 1 µs and a batch of 1,000 at mo
     ch.flush();
     batch.push(performance.now() - t0);
   }
-  const m1 = median(one.slice(500)) * 1000;
+  const m1 = median(one) * 1000;
   const mb = median(batch.slice(20)) * 1000;
-  console.log(`# REQ-STREAM-050 ${BUILD} (${ch.streaming}): append + write of 1 row median ${m1.toFixed(2)} µs, of 1,000 rows (typed columns) median ${mb.toFixed(1)} µs, into ${ch.lastCommit.rows} rows; performance.now() in Node ${process.versions.node}, load ${(await import("node:os")).loadavg()[0].toFixed(2)}`);
+  console.log(`# REQ-STREAM-050 ${BUILD}: append + write of 1 row median ${m1.toFixed(2)} µs, of 1,000 rows (typed columns) median ${mb.toFixed(1)} µs, into ${ch.lastCommit.rows} rows; performance.now() in Node ${process.versions.node}, load ${(await import("node:os")).loadavg()[0].toFixed(2)}`);
   assert.ok(m1 <= 1, `one row: ${m1.toFixed(2)} µs`);
   assert.ok(mb <= 50, `1,000 rows: ${mb.toFixed(1)} µs`);
   ch.free();
@@ -412,19 +384,7 @@ test(`${BUILD}: src: CSV, JSON and NDJSON fetched and drawn as data; the format 
   });
 });
 
-test(`${BUILD}: src: Arrow bytes without the module's set_arrow fail with a clear message (REQ-DATA-150)`, { skip: REAL.arrow ? "the module has set_arrow" : false }, async () => {
-  await serving(async (base) => {
-    const got = await shell.source.loadSource("/walk.arrows", base);
-    assert.equal(got.format, "arrow");
-    assert.equal(shell.arrow.arrowRows(got.bytes), 50);
-    const ch = shell.chart.chart(TYPE, {});
-    await ch.ready;
-    assert.throws(() => (ch.data = got.bytes), /Arrow data needs a module with set_arrow \(v0\.6\.0\); this build's `\w+` module has none/);
-    ch.free();
-  });
-});
-
-test(`${BUILD}: src: Arrow bytes go to set_arrow and draw as the same rows in CSV do (REQ-DATA-150)`, { todo: NO_ARROW }, async () => {
+test(`${BUILD}: src: Arrow bytes, a stream or a file, go to set_arrow and draw as the same rows in CSV do (REQ-DATA-140, REQ-DATA-150)`, async () => {
   await serving(async (base) => {
     const arrow = await shell.source.loadSource("/walk.arrows", base);
     const csv = await shell.source.loadSource("/walk.csv", base);
@@ -433,11 +393,19 @@ test(`${BUILD}: src: Arrow bytes go to set_arrow and draw as the same rows in CS
     await Promise.all([a.ready, b.ready]);
     const seen = [];
     a.subscribe((c) => c === "data" && seen.push(a.lastCommit));
+    assert.equal(arrow.format, "arrow");
     a.data = arrow.bytes;
     assert.equal(seen[0]?.rows, 50);
     a.frame(0);
     b.frame(0);
     assert.equal(a.text(), b.text());
+    assert.equal(a.summary(), b.summary());
+    a.data = arrowFile({ t: { type: "timestamp", values: W.t }, y: { type: "f64", values: W.y } });
+    assert.equal(seen[1]?.rows, 50);
+    a.frame(0);
+    assert.equal(a.text(), b.text(), "the file's stream part, drawn the same");
+    assert.throws(() => (a.data = Uint8Array.of(1, 2, 3)), /not an Arrow IPC stream/);
+    assert.throws(() => a.append({ t: 0, y: 0 }), /Arrow bytes/, "Arrow data is not extended");
     a.free();
     b.free();
   });

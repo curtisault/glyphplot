@@ -1,6 +1,6 @@
 // Wasm memory, measured as the growth of memory.buffer.byteLength in Node,
 // each test on an instance of its own (REQ-MEM-010, REQ-MEM-030,
-// REQ-WASM-050, REQ-DATA-070).
+// REQ-WASM-050, REQ-DATA-070, REQ-STREAM-020).
 //
 // A replace reserves the new columns while the chart still holds the old
 // ones, because a refused commit keeps the data it had (REQ-DATA-130): the
@@ -127,4 +127,40 @@ test(`${BUILD}: with no frame before the first replace, the second replace grows
   console.log(`# REQ-MEM-030 ${BUILD}: growth after replaces 2 to 5 with no frame before the first: ${growth.join(", ")} B`);
   assert.ok(growth[0] <= a.xs.byteLength + MiB, `the second replace grew ${growth[0]} B, more than one column`);
   assert.deepEqual(growth.slice(1), [growth[0], growth[0], growth[0]], "the third replace on grows nothing");
+});
+
+test(`${BUILD}: streaming 3,000,000 rows through staging and append into a ring of 1,000,000 grows nothing after the first 1,000,000 (REQ-STREAM-020)`, async () => {
+  const { glue, memory } = await instantiate(moduleFor(TYPE), { fresh: true });
+  const bytes = () => memory.buffer.byteLength;
+  const c = new glue.Chart(TYPE, "{}"); // retain.rows: the default, 1,000,000
+  const one = series(1);
+  commitColumns(c, memory, one.descriptor, [one.xs, one.ys]);
+  c.resize(80, 24);
+  const B = 10_000;
+  let x = 1;
+  let last = null;
+  /** `n` rows of B, through the module's staging buffer, each view made after its call (REQ-DATA-060), a frame after each batch. */
+  const stream = (n) => {
+    for (let k = 0; k < n / B; k++) {
+      const ptr = c.staging(B);
+      const v = new Float64Array(memory.buffer, ptr, 2 * B);
+      for (let i = 0; i < B; i++) {
+        v[i] = x;
+        v[B + i] = Math.sin(x++ / 50);
+      }
+      last = c.append(B);
+      c.frame(0, false);
+    }
+  };
+  const start = bytes();
+  stream(N - 1);
+  const full = bytes();
+  assert.equal(last[0], N, "the ring holds 1,000,000 rows");
+  stream(B);
+  assert.deepEqual([last[0], last[1]], [N, B], "full: a batch drops as many rows as it adds");
+  stream(2 * N - B);
+  const after = bytes();
+  console.log(`# REQ-STREAM-020 ${BUILD}: memory.buffer.byteLength ${start} B at 1 row, ${full} B after 1,000,000 rows streamed, ${after} B after 3,000,000 (${last[0]} held), batches of ${B} through staging and append, a frame at 80 × 24 after each`);
+  assert.equal(after, full, `grew ${after - full} B after the ring was full`);
+  c.free();
 });

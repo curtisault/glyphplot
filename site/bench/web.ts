@@ -227,9 +227,8 @@ export interface StreamResult {
   append: number;
   write: number;
   frame: number;
-  /** Rows held at the end, and how appends reached wasm (`staging`, or the `commit` fallback). */
+  /** Rows held at the end. */
   held: number;
-  streaming: string | null;
   isolated: boolean;
 }
 
@@ -283,7 +282,7 @@ async function stream(type: string, fixture: string, cols: number, rows: number,
       frame += t3 - t2;
       if (f % 60 === 59) await nextFrame(); // let the page breathe between simulated seconds, untimed
     }
-    return { type, fixture, cols, rows, seconds, samples: sent, frames: FRAMES, append, write, frame, held: c.lastCommit?.rows ?? 0, streaming: c.streaming, isolated: self.crossOriginIsolated };
+    return { type, fixture, cols, rows, seconds, samples: sent, frames: FRAMES, append, write, frame, held: c.lastCommit?.rows ?? 0, isolated: self.crossOriginIsolated };
   } finally {
     c?.free();
     canvas.remove();

@@ -7,10 +7,9 @@
 // write wait, as they came, in a staging area of one f64 column each, for the
 // module's `staging(n)` and `append(n)` (the plan's boundary table, v0.6.0).
 //
-// The tail is the shell's copy of what the module holds: until a module has
-// `staging`, every frame's appends are committed whole from it (the
-// re-commit fallback); with `staging` it is what a type change carries to the
-// next chart. Pure: no DOM, no wasm.
+// The tail is the shell's copy of what the module holds: what a type change
+// carries to the next chart, and what is committed whole when the staging
+// area cannot carry a write. Pure: no DOM, no wasm.
 
 import { ColumnKind } from "./api.ts";
 import {
@@ -169,6 +168,21 @@ export class Tail {
       else (buf as Float64Array | Uint32Array).fill(kind === ColumnKind.U32 ? MISSING_CODE : NaN, 0, n);
       const { values: _drop, ...desc } = c;
       void _drop;
+      if (c.type === "timestamp" && (c.time_unit === "us" || c.time_unit === "ns") && c.origin === undefined) {
+        // Committed without an origin, the module took the least value, floored, as one and holds offsets
+        // from it (Data::from_typed): the tail does the same, so what it stages and commits are those offsets.
+        const b = buf as Float64Array;
+        let least = Infinity;
+        for (let r = 0; r < n; r++) {
+          const v = b[r] as number;
+          if (Number.isFinite(v) && v < least) least = v;
+        }
+        if (Number.isFinite(least)) {
+          const origin = Math.floor(least);
+          for (let r = 0; r < n; r++) b[r] = (b[r] as number) - origin;
+          desc.origin = BigInt(origin);
+        }
+      }
       return { desc: { ...desc }, kind, buf, labels: kind === ColumnKind.U32 ? new Labels(c.categories ?? []) : null };
     });
     this.#len = n;
@@ -412,6 +426,12 @@ export class Tail {
     return true;
   }
 
+  /** Zeroes the late and dropped counts: the module reported its own. */
+  clearCounts(): void {
+    this.#late = 0;
+    this.#dropped = 0;
+  }
+
   /** The late and dropped counts since the last take, zeroed. */
   takeCounts(): { late: number; dropped: number } {
     const out = { late: this.#late, dropped: this.#dropped };
@@ -465,31 +485,4 @@ export class Tail {
     }
     return out;
   }
-}
-
-/**
- * What `append(n)` returned, read as `[rows, dropped, late, version]` (the
- * boundary's {@link WasmChart.append}); a bare number is read as the version
- * and an object or JSON text by name. Fields it lacks come from `fallback`.
- */
-export function readAppended(r: unknown, fallback: DataCommit): DataCommit {
-  const num = (v: unknown, d: number): number => (typeof v === "number" && Number.isFinite(v) ? v : typeof v === "bigint" ? Number(v) : d);
-  if (typeof r === "number" || typeof r === "bigint") return { ...fallback, version: num(r, fallback.version) };
-  let v: unknown = r;
-  if (typeof v === "string") {
-    try {
-      v = JSON.parse(v);
-    } catch {
-      return fallback;
-    }
-  }
-  if (v !== null && typeof v === "object" && typeof (v as ArrayLike<number>).length === "number") {
-    const a = v as ArrayLike<number>;
-    return { rows: num(a[0], fallback.rows), dropped: num(a[1], fallback.dropped), late: num(a[2], fallback.late), version: num(a[3], fallback.version) };
-  }
-  if (v !== null && typeof v === "object") {
-    const o = v as Record<string, unknown>;
-    return { rows: num(o["rows"], fallback.rows), dropped: num(o["dropped"], fallback.dropped), late: num(o["late"], fallback.late), version: num(o["version"], fallback.version) };
-  }
-  return fallback;
 }

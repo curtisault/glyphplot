@@ -61,6 +61,16 @@ function isFile(b: Uint8Array): boolean {
 }
 
 /**
+ * The stream an Arrow IPC file holds (the bytes after "ARROW1" and its
+ * padding, up to its end-of-stream marker; the footer after it is not
+ * read), or `bytes` themselves when they are a stream: what the module's
+ * `set_arrow` reads (REQ-DATA-140).
+ */
+export function arrowStreamOf(bytes: Uint8Array): Uint8Array {
+  return isFile(bytes) ? bytes.subarray(8) : bytes;
+}
+
+/**
  * The rows of an Arrow IPC stream or file: the sum of its record batches'
  * lengths. Throws `not an Arrow IPC stream: …` for bytes that are not one.
  */

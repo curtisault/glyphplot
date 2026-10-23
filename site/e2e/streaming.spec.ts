@@ -5,9 +5,8 @@
 // `announce` (REQ-A11Y-100), and `src` over files the site serves
 // (REQ-DATA-150).
 //
-// Until the module has `staging(n)` and `append(n)` the shell commits the
-// whole table each frame (its fallback); the equality holds on that path too,
-// since the fallback commits exactly the rows a replace would.
+// Appends reach the module through its `staging(n)` and `append(n)`, one
+// write a frame; Arrow through its `set_arrow`.
 
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import type { GlyphPlot } from "glyphplot/element";
@@ -299,9 +298,8 @@ test("src: CSV, JSON and NDJSON from the site, each fetched once per change, dra
   expect(fetched).toEqual(["walk.csv", "walk.json", "walk.ndjson"]);
 });
 
-test("src: Arrow goes to the module's set_arrow, and without it plot-error says so; a missing file is plot-error (REQ-DATA-150)", async ({ page }) => {
+test("src: Arrow goes to the module's set_arrow; a missing file after it is plot-error, the Arrow data kept (REQ-DATA-150)", async ({ page }) => {
   const el = await addChart(page, { id: "arrow", n: 20 });
-  const reads = await el.evaluate((e) => (e as El).chart?.readsArrow ?? null);
   /** Sets `src` and resolves with the next plot-error's message. */
   const failing = (src: string): Promise<string> =>
     el.evaluate(
@@ -312,21 +310,14 @@ test("src: Arrow goes to the module's set_arrow, and without it plot-error says 
         }),
       src,
     );
-  if (reads) {
-    await el.evaluate((e) => e.setAttribute("src", "data/walk.arrows"));
-    await expect.poll(() => el.evaluate((e) => (e as El).chart?.lastCommit?.rows)).toBe(50);
-  } else {
-    expect(await failing("data/walk.arrows")).toMatch(/^src "data\/walk\.arrows": Arrow data needs a module with set_arrow \(v0\.6\.0\)/);
-    expect(await el.evaluate((e) => (e as El).data?.tables["data"]?.length)).toBe(20); // the data there was is kept
-  }
+  await el.evaluate((e) => e.setAttribute("src", "data/walk.arrows"));
+  await expect.poll(() => el.evaluate((e) => (e as El).chart?.lastCommit?.rows)).toBe(50);
   // A missing file: a 404, or (vite preview, a single-page host) its HTML fallback page.
   expect(await failing("data/none.csv")).toMatch(/^src "data\/none\.csv": (HTTP 404|the server sent an HTML page)/);
+  expect(await el.evaluate((e) => (e as El).chart?.lastCommit?.rows)).toBe(50); // the data there was is kept
 });
 
-test("src: Arrow drawn through set_arrow equals the same rows from CSV (REQ-DATA-150)", async ({ page }) => {
-  const probe = await addChart(page, { id: "probe", n: 2 });
-  const reads = await probe.evaluate((e) => (e as El).chart?.readsArrow ?? false);
-  test.fixme(!reads, "the module has no set_arrow yet (the Arrow reader, v0.6.0): on at integration");
+test("src: Arrow drawn through set_arrow equals the same rows from CSV (REQ-DATA-140, REQ-DATA-150)", async ({ page }) => {
   const a = await addChart(page, { id: "from-arrow", data: null, wait: false, attrs: { src: "data/walk.arrows" } });
   const b = await addChart(page, { id: "from-csv", data: null, wait: false, attrs: { src: "data/walk.csv" } });
   await expect.poll(() => a.evaluate((e) => (e as El).chart?.lastCommit?.rows)).toBe(50);
