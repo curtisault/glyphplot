@@ -16,10 +16,12 @@
 //! history, and nothing in this module keeps an earlier version or eases
 //! between two.
 //!
-//! The JSON form ([`Data::from_json`]) is in [`desc`]. The CSV reader and the
-//! Arrow reader arrive in later phases (REQ-DATA-030's empty CSV field and
-//! cleared validity bit, REQ-DATA-140).
+//! The JSON form ([`Data::from_json`]) is in [`desc`], and the Arrow IPC
+//! stream reader ([`Table::from_arrow_ipc`]) in [`arrow`] (REQ-DATA-140): a
+//! cleared validity bit reads as missing. CSV is read by the shell, and by
+//! the CLI's `text` feature when it lands (REQ-DATA-030's empty field).
 
+pub mod arrow;
 pub mod desc;
 #[cfg(feature = "text")]
 pub(crate) mod rfc3339;

@@ -182,6 +182,19 @@ impl Chart {
         Ok(accepted.version as f64)
     }
 
+    /// Applies an uncompressed Arrow IPC stream (an `ArrayBuffer`'s bytes,
+    /// copied in once by the glue) as the new data: one table, read by the
+    /// core's own reader (REQ-DATA-140, ADR-105). Returns the data version.
+    /// On a throw (`arrow: …` naming what is wrong in the stream, or the
+    /// data error's message) the chart keeps the data it had (REQ-DATA-130).
+    pub fn set_arrow(&mut self, bytes: &[u8]) -> Result<f64, JsError> {
+        let table = glyphplot::data::Table::from_arrow_ipc(bytes).map_err(thrown)?;
+        let accepted = self.chart.set_data(Data::from_table(table)).map_err(thrown)?;
+        #[cfg(feature = "debug")]
+        accepted.warnings.iter().for_each(|w| debug::warn(&format!("glyphplot: {} chart: {w}", self.meta.slug)));
+        Ok(accepted.version as f64)
+    }
+
     /// The locale pack labels are written with (locale.schema.json). Throws
     /// naming what is wrong and keeps the pack it had.
     pub fn set_locale(&mut self, json: &str) -> Result<(), JsError> {
