@@ -12,18 +12,23 @@
 // fires `plot-data` (REQ-STREAM-070); `paused` and Space hold a stream
 // (REQ-A11Y-080); the hidden table is rebuilt at most once a second and
 // never under focus (REQ-A11Y-090); `announce` reads the latest value in a
-// polite live region (REQ-A11Y-100).
+// polite live region (REQ-A11Y-100). From v0.7.0: the control row's "Show
+// data" toggle, `T` on the cursor and `showData` make the table visible
+// (REQ-A11Y-110); forced colours draw one ink, CanvasText on Canvas with the
+// accent in Highlight, and print draws on paper (REQ-THEME-100).
 
 import { InputKind } from "./api.ts";
 import {
   type A11yParts,
   Formats,
   REWRITE_MS,
+  SHOW_DATA_KEY,
   TABLE_ROWS,
   announceSeconds,
   figureName,
   latestText,
   makeParts,
+  showTable,
   throttle,
   valueText,
   writeTable,
@@ -43,7 +48,10 @@ import {
   entry,
   fillSeries,
   lowContrastSeries,
+  mediaChoice,
+  mediaState,
   seriesOf,
+  systemColors,
   themeFromStyle,
   toHex,
   watchTheme,
@@ -115,12 +123,24 @@ export function cssFor(tag: string): string {
     where(`${tag} .gp-drawing`, "display:block;position:absolute;left:0;top:0;margin:0;padding:0;border:0;white-space:pre;overflow:hidden;font-family:inherit;font-kerning:none;font-variant-ligatures:none;letter-spacing:0"),
     where(`${tag} .gp-cursor`, "position:absolute;inset:0;outline:none"),
     where(`${tag} .gp-cursor:focus-visible`, "outline:2px solid var(--gp-accent,Highlight);outline-offset:-2px"),
-    where(`${tag} .gp-controls`, "position:absolute;right:2px;top:2px;display:flex;gap:2px;opacity:0;pointer-events:none;transition:opacity .15s"),
+    where(`${tag} .gp-controls`, "position:absolute;right:2px;top:2px;z-index:2;display:flex;gap:2px;opacity:0;pointer-events:none;transition:opacity .15s"),
     where(`${tag}:hover .gp-controls, ${tag}:focus-within .gp-controls`, "opacity:1;pointer-events:auto"),
     where(`${tag} .gp-controls button`, "font:inherit;min-width:24px;min-height:24px;padding:0 4px;color:var(--gp-ink,CanvasText);background:var(--gp-ground,Canvas);border:1px solid var(--gp-muted,GrayText);border-radius:2px;cursor:pointer"),
     where(`${tag} .gp-sr`, "position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap"),
+    where(`${tag} .gp-controls button[aria-pressed=true]`, "border-color:var(--gp-accent,Highlight);box-shadow:inset 0 0 0 1px var(--gp-accent,Highlight)"),
+    // The table made visible (REQ-A11Y-110): over the drawing, scrolled within the element's box.
+    where(`${tag} .gp-table`, "position:absolute;inset:0;z-index:1;overflow:auto;color:var(--gp-ink,CanvasText);background:var(--gp-ground,Canvas);font:inherit;line-height:1.3"),
+    where(`${tag} .gp-table:focus-visible`, "outline:2px solid var(--gp-accent,Highlight);outline-offset:-2px"),
+    where(`${tag} .gp-table table`, "border-collapse:collapse;font-variant-numeric:tabular-nums"),
+    where(`${tag} .gp-table caption`, "text-align:start;padding:2px 4px;color:var(--gp-muted,GrayText)"),
+    where(`${tag} .gp-table th, ${tag} .gp-table td`, "padding:0 1ch;text-align:end;white-space:nowrap;border-bottom:1px solid var(--gp-rule,GrayText)"),
+    where(`${tag} .gp-table thead th`, "position:sticky;top:0;background:var(--gp-ground,Canvas)"),
     where(`${tag} .gp-loading`, "visibility:hidden"),
     `@media (prefers-reduced-motion: reduce){${where(`${tag} .gp-controls`, "transition:none")}}`,
+    // Forced colours (REQ-THEME-100): the system's colours, the focus ring and the pressed toggle in Highlight.
+    `@media (forced-colors: active){${where(`${tag} .gp-cursor:focus-visible, ${tag} .gp-table:focus-visible`, "outline-color:Highlight")}${where(`${tag} .gp-controls button[aria-pressed=true]`, "border-color:Highlight")}${where(`${tag} .gp-table, ${tag} .gp-table thead th`, "color:CanvasText;background:Canvas")}}`,
+    // Print (REQ-THEME-100): the chart on paper, no control row.
+    `@media print{${where(`${tag} .gp-controls`, "display:none")}}`,
   ].join("\n");
 }
 
@@ -193,6 +213,10 @@ export class GlyphPlot extends Base {
   #made = false;
   #mount: Mount | null = null;
   #parts: A11yParts | null = null;
+  /** The table is shown (REQ-A11Y-110). */
+  #tableShown = false;
+  /** Forced colours were active when the theme was last resolved: the chart draws one ink (REQ-THEME-100). */
+  #forced = false;
   #drawing: HTMLCanvasElement | HTMLPreElement | null = null;
   #gen = 0;
   #started = false;
@@ -279,6 +303,24 @@ export class GlyphPlot extends Base {
   }
   set paused(on: boolean) {
     this.toggleAttribute("paused", !!on);
+  }
+
+  /**
+   * Whether the data table is shown over the drawing (REQ-A11Y-110). The
+   * control row's "Show data" toggle and `T` on the cursor flip it; Escape
+   * in the shown table hides it and returns focus to the cursor. Hidden, the
+   * table is still there for screen readers (REQ-A11Y-020).
+   */
+  get showData(): boolean {
+    return this.#tableShown;
+  }
+  set showData(on: boolean) {
+    this.#tableShown = !!on;
+    const parts = this.#parts;
+    if (!parts) return;
+    if (!on && parts.tableBox.contains(this.ownerDocument.activeElement)) parts.cursor.focus();
+    showTable(parts, this.#tableShown);
+    if (on && this.#tableDue) this.#a11y.run();
   }
 
   /** The options given, as an object. Setting them keeps the chart, its data and its view (REQ-EL-040). */
@@ -461,7 +503,7 @@ export class GlyphPlot extends Base {
         break;
       case "mono":
         if (this.#made && this.#chart) {
-          this.#chart.mono = value !== null;
+          this.#chart.mono = value !== null || this.#forced;
           this.#remount();
         }
         break;
@@ -683,9 +725,10 @@ export class GlyphPlot extends Base {
     const type = this.type;
     const tag = localeOf(this);
     this.#fmt = new Formats(tag);
+    this.#forced = mediaState().forced;
     let c: Chart;
     try {
-      c = chart(type, { options: this.#options, locale: localePack(tag), mono: this.hasAttribute("mono") });
+      c = chart(type, { options: this.#options, locale: localePack(tag), mono: this.hasAttribute("mono") || this.#forced });
     } catch (e) {
       this.#fail(type, messageOf(e));
       return;
@@ -763,11 +806,16 @@ export class GlyphPlot extends Base {
   /** Builds the drawing and its accessible parts, hidden until the first frame, and mounts the chart. */
   #build(c: Chart): void {
     this.#still = this.#shown ? [] : [...this.childNodes];
-    const parts = makeParts(this.ownerDocument, (key) => {
-      const code = keyCode(key);
-      if (code >= 0) this.#mount?.send({ kind: InputKind.key, x: 0, y: 0, a: code, b: 0, buttons: 0, mods: 0 }, "key");
-    });
+    const parts = makeParts(
+      this.ownerDocument,
+      (key) => {
+        const code = keyCode(key);
+        if (code >= 0) this.#mount?.send({ kind: InputKind.key, x: 0, y: 0, a: code, b: 0, buttons: 0, mods: 0 }, "key");
+      },
+      () => (this.showData = !this.showData),
+    );
     this.#parts = parts;
+    showTable(parts, this.#tableShown);
     for (const el of [parts.frame, parts.controls]) el.classList.add("gp-loading");
     super.append(parts.frame, parts.controls, parts.tableBox);
     this.#unsubscribe = c.subscribe((what) => {
@@ -777,8 +825,21 @@ export class GlyphPlot extends Base {
     });
     // Space on the cursor pauses or resumes a stream (REQ-A11Y-080, WCAG 2.2.2).
     parts.cursor.addEventListener("keydown", (e) => {
-      if (e.key !== " " || e.isComposing || e.repeat) return;
-      this.paused = !this.paused;
+      if (e.isComposing || e.repeat) return;
+      if (e.key === " ") this.paused = !this.paused;
+      // T shows or hides the table (REQ-A11Y-110).
+      if (e.key.toLowerCase() === SHOW_DATA_KEY && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        this.showData = !this.showData;
+      }
+    });
+    // Escape in the shown table hides it and returns to the cursor.
+    parts.tableBox.addEventListener("keydown", (e) => {
+      if (e.key !== "Escape" || !this.#tableShown) return;
+      e.preventDefault();
+      e.stopPropagation();
+      this.showData = false;
+      parts.cursor.focus();
     });
     parts.cursor.addEventListener("blur", () => this.#announceSoon());
     // The table waits while focus is inside it, and is written when focus leaves (REQ-A11Y-090).
@@ -1127,19 +1188,29 @@ export class GlyphPlot extends Base {
     const m = this.#mount;
     if (!c || !this.#made || !m || c.dead) return;
     try {
-      const style = getComputedStyle(this);
-      const fromStyle = themeFromStyle(style);
-      const text = browserColor(style.color);
-      const mode = this.#mode();
-      const { series: styleSeries, ...base } = fromStyle;
-      let tokens: Theme = base;
-      if (styleSeries) {
-        const gaps = styleSeries.some((s) => s === undefined);
-        const defaults = gaps ? seriesOf(c.palette(chooseTheme(base, this.#theme, mode, text).theme)) : [];
-        tokens = { ...base, series: fillSeries(styleSeries, defaults) };
+      // Forced colours and print first (REQ-THEME-100); forced colours draw one ink.
+      const media = mediaState();
+      if (media.forced !== this.#forced) {
+        this.#forced = media.forced;
+        c.mono = this.hasAttribute("mono") || media.forced;
       }
-      const choice = chooseTheme(tokens, this.#theme, mode, text);
-      const bytes = c.palette(choice.theme);
+      let choice = mediaChoice(media, () => systemColors(this));
+      if (!choice) {
+        const style = getComputedStyle(this);
+        const fromStyle = themeFromStyle(style);
+        const text = browserColor(style.color);
+        const mode = this.#mode();
+        const { series: styleSeries, ...base } = fromStyle;
+        let tokens: Theme = base;
+        if (styleSeries) {
+          const gaps = styleSeries.some((s) => s === undefined);
+          const defaults = gaps ? seriesOf(c.palette(chooseTheme(base, this.#theme, mode, text).theme)) : [];
+          tokens = { ...base, series: fillSeries(styleSeries, defaults) };
+        }
+        choice = chooseTheme(tokens, this.#theme, mode, text);
+      }
+      const chosen = choice;
+      const bytes = c.palette(chosen.theme);
       m.setPalette(bytes, choice.paintGround);
       if (choice.paper !== this.#paper) {
         this.#paper = choice.paper;
@@ -1149,9 +1220,10 @@ export class GlyphPlot extends Base {
       this.style.setProperty("--gp-ink", toHex(entry(bytes, 0)));
       this.style.setProperty("--gp-muted", toHex(entry(bytes, 1)));
       this.style.setProperty("--gp-ground", toHex(entry(bytes, 4)));
+      this.style.setProperty("--gp-rule", toHex(entry(bytes, 2)));
       void manifest().then((mf) => {
         if (mf.fallback === null) return; // debug builds only (REQ-THEME-070)
-        for (const w of lowContrastSeries(choice.theme, bytes)) {
+        for (const w of lowContrastSeries(chosen.theme, bytes)) {
           if (this.#warned.has(w)) continue;
           this.#warned.add(w);
           console.warn(w);

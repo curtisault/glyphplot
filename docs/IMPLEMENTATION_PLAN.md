@@ -575,6 +575,7 @@ Node it reads the file instead.
 | `type`, `options`, `view`, `theme` | as the attributes, as objects; `theme` takes a theme object ([theme.schema.json](../spec/schemas/theme.schema.json)) |
 | `data` | set: replace all; get: the descriptor and lengths (REQ-EL-070) |
 | `paused` | boolean |
+| `showData` | boolean: the data table shown over the drawing, as the control row's "Show data" toggle and T set it (v0.7.0, REQ-A11Y-110) |
 | `chart` | the JS `Chart` once made, else `null` |
 | `ready` | a promise resolved after the first frame |
 | `cols`, `rows`, `currentTime` | read-only |
@@ -615,6 +616,7 @@ keyboard or screen-reader user reads values one at a time (ADR-116).
 | Space | pause or resume a stream |
 | 1–9 | toggle the nth series |
 | ? | show the keys |
+| T | show or hide the data table over the drawing; Escape in it hides it (v0.7.0, REQ-A11Y-110) |
 | CLI only: h j k l, f, q | ← ↓ ↑ →, follow the live end, quit |
 
 Pointer and touch defaults (REQ-INPUT-040, REQ-TOUCH-010): a drag pans,
@@ -808,8 +810,12 @@ From a11y-theming.md (ADR-122, ADR-123, ADR-132):
   focus and hover gives click alternatives to dragging (WCAG 2.5.7); `paused`
   and Space pause a stream (WCAG 2.2.2); an opt-in `announce` live region,
   at least 5 s apart (REQ-A11Y-010 to 100).
-- **Deferred**: forced colours and print (v0.7.0), the visible table
-  (v0.7.0), RTL reordering (v0.9.0), Arabic joining and a navigation tree for
+- **v0.7.0**: under `forced-colors: active` one ink, `CanvasText` on
+  `Canvas` with the accent in `Highlight`; under print the paper set with
+  no control row (REQ-THEME-100); a "Show data" toggle in the control row,
+  T on the cursor and `showData` show the table over the drawing
+  (REQ-A11Y-110).
+- **Deferred**: RTL reordering (v0.9.0), Arabic joining and a navigation tree for
   multi-pane charts (later), sonification (not planned).
 
 <a id="the-cli"></a>
@@ -1500,6 +1506,36 @@ Acceptance:
 <a id="phase-6"></a>
 ### Phase 6 · The site (v0.7.0)
 
+Done 2026-10-23. Every acceptance command passes: `build:site`, all of
+`test:site` (163 tests in 25 s), `datasets:check` and `examples:check`.
+The gallery holds 60 examples; in headless Chromium it fetches no wasm
+before a scroll, then each family's module once. `mise run check` takes
+29.5 s. Built in three parts at once, against one example interface
+committed first (`site/examples/api.ts`):
+- the Elm site;
+- the 60 examples with `<gp-example>`;
+- the datasets with show data and forced colours.
+Then one integration pass (its notes are below the acceptance). Differences
+from the tasks:
+- **No npm package for Elm:** a Vite plugin of the repository's own runs
+  mise's `elm`.
+- **Catalogue rows needing what is not built** use a built stand-in:
+  linear y for log and symlog, two linked charts for dual axes, and
+  simulated NAB, H.10 and MIT-BIH. The examples say so, and nothing moved to
+  a later milestone.
+- **HYG v4.4** (CC BY-SA 4.0, ShareAlike) is fetched at build time and
+  never committed. Appendix B named v4.1.
+- **Cards and example pages show the data's source once,** from
+  `<gp-example>`.
+- **Partly covered:**
+  - SITE-020 (no browser test of a type page's controls, attributes, event
+    log or snippets);
+  - PKG-060 (the snippets are on the pages; no test reads them);
+  - THEME-100 (Windows high contrast is the owner's).
+- **Left for the owner:** the site in both themes on a desktop and a phone,
+  and each live example against its real feed (`node
+  scripts/examples-browser.mjs --live` reaches all four).
+
 Tasks:
 1. Elm 0.19.1 site with Vite: flags from the manifest, routes
    (`/`, `/<type>`, `/docs/<page>`, `/examples/<name>`), the theme toggle
@@ -1525,6 +1561,48 @@ Acceptance:
   family's module once however many cards use it.
 - Owner: the site in both themes on a desktop and a phone; each live example
   against its feed.
+
+Integration notes (2026-10-23), after the Elm site, the gallery's examples
+and the dataset manifest were built apart and merged:
+- **The full-size flag:** an example's page sets the `full` attribute on
+  `<gp-example>` (site/examples/element.ts reads it), not a class.
+- **Dataset names:** the examples name `datasets/manifest.json`'s ids
+  (`wti-daily`, not `eia-wti-daily`). The manifest gained `live` entries for
+  the four feeds the reader's browser fetches (`usgs-earthquakes-month`,
+  `wikimedia-recentchange`, `noaa-swpc-kp`, `noaa-coops-8518750`; Wikimedia
+  states no licence for its stream, so its entry has a note) and a
+  `generated` entry, `synthetic`. `examples:check` and the cards read that
+  file; `site/examples/support/datasets.ts` is gone.
+- **The first page moves no focus:** Elm focused `<main>` and scrolled on
+  the first page too, which fired a `scroll` that `<gp-example>` takes for
+  the reader's act, so the gallery fetched two modules before any scroll.
+  The first page is now entered as already shown; a navigation inside the
+  site still moves focus to `<main>`.
+- **Tasks:** `examples:stills`, `examples:check`, `examples:browser`;
+  `build:site` makes the stills and fetches HYG's subset first; `check` runs
+  `examples:check` and `datasets:check`; `lint` runs tsc on
+  `site/examples`.
+- **Tests:** `site/e2e/charts.spec.ts` (every type's page, doc page and
+  example's page draws a first frame with no console error; each live feed,
+  refused, shows its message) and `site/e2e/site.spec.ts` (axe on four
+  pages in both themes, the theme button, the gallery's loading, the
+  filters, the provenance lines, the source copied). Measured with `time`
+  on this repository's Mac (Darwin 25.5.0, warm, 9 Playwright workers): `charts.spec.ts` 71 tests
+  in 5.1 s, `site.spec.ts` 15 in 8.5 s, all of `test:site` 163 in 24.6 s;
+  `mise run check` 29.5 s, its smoke set 18 tests in 12.1 s. The line page,
+  `live-market`'s page and its axe scans, the theme button, the gallery's
+  loading and a filter are in the smoke set.
+- **Provenance:** an example with both generated data and a feed
+  (`tide-gauge`, `k-index`) now says "simulated" with its seed beside the
+  feed on its card and page; the Elm line showed only the feed. Each card
+  still has two lines, the Elm page's and `<gp-example>`'s (which names a
+  checked-in dataset's publisher and licence); merging them is left open.
+- **Deployment (Phase 10):** the site's base is `/` and its routes are paths
+  (`/line`, `/docs/<page>`, `/examples/<slug>`), so a static host must answer
+  any path that is not a file with `index.html` (a single-page-app
+  fallback), or a deep link or a reload answers 404. `vite preview` does
+  this already. A site served from a folder is built with
+  `GLYPHPLOT_BASE=/folder/` and needs the same fallback under that folder.
 
 <a id="phase-7"></a>
 ### Phase 7 · The CLI (v0.8.0)

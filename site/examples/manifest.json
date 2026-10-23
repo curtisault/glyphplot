@@ -1,0 +1,1193 @@
+[
+  {
+    "slug": "live-market",
+    "title": "Live candles, simulated market",
+    "what": "A seeded market streamed as 5-second candles with a volume pane, followed live and scrubbed by finger",
+    "types": [
+      "candles"
+    ],
+    "modes": [
+      "candle"
+    ],
+    "domain": "markets",
+    "features": [
+      "streaming",
+      "pause",
+      "follow the live end",
+      "panes",
+      "touch scrubbing"
+    ],
+    "datasets": [
+      "synthetic"
+    ],
+    "milestone": "v0.7.0",
+    "feed": null
+  },
+  {
+    "slug": "wikimedia-edits",
+    "title": "Live candles of Wikimedia edits",
+    "what": "Wikimedia edits a second from EventStreams, one candle a minute, live in your browser",
+    "types": [
+      "candles"
+    ],
+    "modes": [
+      "candle"
+    ],
+    "domain": "web",
+    "features": [
+      "streaming"
+    ],
+    "datasets": [
+      "wikimedia-recentchange"
+    ],
+    "milestone": "v0.7.0",
+    "feed": {
+      "source": "Wikimedia EventStreams, recentchange (Wikimedia Foundation)",
+      "url": "https://stream.wikimedia.org/v2/stream/recentchange",
+      "licence": "Not stated for the event data; the chart shows counts of edits, which are facts"
+    }
+  },
+  {
+    "slug": "hello-line",
+    "title": "Hello, line",
+    "what": "The smallest page: one tag and data in the columns shorthand",
+    "types": [
+      "line"
+    ],
+    "modes": [
+      "line"
+    ],
+    "domain": "basics",
+    "features": [],
+    "datasets": [
+      "synthetic"
+    ],
+    "milestone": "v0.7.0",
+    "feed": null
+  },
+  {
+    "slug": "million-points",
+    "title": "A million points",
+    "what": "Pan and zoom over 1,000,000 rows drawn from M4 aggregates a dot column",
+    "types": [
+      "line"
+    ],
+    "modes": [
+      "line"
+    ],
+    "domain": "basics",
+    "features": [
+      "a million points"
+    ],
+    "datasets": [
+      "synthetic"
+    ],
+    "milestone": "v0.7.0",
+    "feed": null
+  },
+  {
+    "slug": "telemetry-gaps",
+    "title": "Gaps in telemetry",
+    "what": "Missing samples break the line; spanGaps joins across them",
+    "types": [
+      "line"
+    ],
+    "modes": [
+      "line"
+    ],
+    "domain": "operations",
+    "features": [],
+    "datasets": [
+      "synthetic"
+    ],
+    "milestone": "v0.7.0",
+    "feed": null
+  },
+  {
+    "slug": "thermostat",
+    "title": "A thermostat",
+    "what": "A setpoint as steps rising before, after and in the middle",
+    "types": [
+      "line"
+    ],
+    "modes": [
+      "step"
+    ],
+    "domain": "home",
+    "features": [],
+    "datasets": [
+      "synthetic"
+    ],
+    "milestone": "v0.7.0",
+    "feed": null
+  },
+  {
+    "slug": "cpu-area",
+    "title": "CPU under the curve",
+    "what": "A week of CPU utilisation filled to a baseline",
+    "types": [
+      "line"
+    ],
+    "modes": [
+      "area"
+    ],
+    "domain": "operations",
+    "features": [],
+    "datasets": [
+      "synthetic"
+    ],
+    "milestone": "v0.7.0",
+    "feed": null
+  },
+  {
+    "slug": "oil-year",
+    "title": "A year of oil",
+    "what": "The EIA's daily WTI price for a year, its low and high marked",
+    "types": [
+      "line"
+    ],
+    "modes": [
+      "line"
+    ],
+    "domain": "energy",
+    "features": [
+      "annotations (lines, bands, labels, markers)"
+    ],
+    "datasets": [
+      "wti-daily"
+    ],
+    "milestone": "v0.7.0",
+    "feed": null
+  },
+  {
+    "slug": "ten-year-yield",
+    "title": "The ten-year yield",
+    "what": "The Treasury's ten-year par yield in 2026, one column picked with encode",
+    "types": [
+      "line"
+    ],
+    "modes": [
+      "line"
+    ],
+    "domain": "finance",
+    "features": [],
+    "datasets": [
+      "treasury-par-yield-2026"
+    ],
+    "milestone": "v0.7.0",
+    "feed": null
+  },
+  {
+    "slug": "euro-dollar",
+    "title": "Dollars a euro",
+    "what": "A currency rate with its unit in the readout and the table",
+    "types": [
+      "line"
+    ],
+    "modes": [
+      "line"
+    ],
+    "domain": "finance",
+    "features": [],
+    "datasets": [
+      "synthetic"
+    ],
+    "milestone": "v0.7.0",
+    "feed": null
+  },
+  {
+    "slug": "latency-percentiles",
+    "title": "Latency percentiles",
+    "what": "p50, p90 and p99 as duration columns",
+    "types": [
+      "line"
+    ],
+    "modes": [
+      "line"
+    ],
+    "domain": "operations",
+    "features": [],
+    "datasets": [
+      "synthetic"
+    ],
+    "milestone": "v0.7.0",
+    "feed": null
+  },
+  {
+    "slug": "net-flow",
+    "title": "Net flow",
+    "what": "Signed values over orders of magnitude, with a line at zero",
+    "types": [
+      "line"
+    ],
+    "modes": [
+      "line"
+    ],
+    "domain": "networks",
+    "features": [
+      "annotations (lines, bands, labels, markers)"
+    ],
+    "datasets": [
+      "synthetic"
+    ],
+    "milestone": "v0.7.0",
+    "feed": null
+  },
+  {
+    "slug": "deploys",
+    "title": "Deploys on a request rate",
+    "what": "Deploys as labelled vertical lines over a day of requests",
+    "types": [
+      "line"
+    ],
+    "modes": [
+      "line"
+    ],
+    "domain": "operations",
+    "features": [
+      "annotations (lines, bands, labels, markers)"
+    ],
+    "datasets": [
+      "synthetic"
+    ],
+    "milestone": "v0.7.0",
+    "feed": null
+  },
+  {
+    "slug": "slo-band",
+    "title": "An SLO band",
+    "what": "A success rate with its objective as a line and the error budget as a band",
+    "types": [
+      "line"
+    ],
+    "modes": [
+      "area"
+    ],
+    "domain": "operations",
+    "features": [
+      "annotations (lines, bands, labels, markers)"
+    ],
+    "datasets": [
+      "synthetic"
+    ],
+    "milestone": "v0.7.0",
+    "feed": null
+  },
+  {
+    "slug": "two-units",
+    "title": "Two units, two charts",
+    "what": "Temperature and humidity in two charts sharing x and the cursor",
+    "types": [
+      "line"
+    ],
+    "modes": [
+      "line"
+    ],
+    "domain": "weather",
+    "features": [
+      "linking"
+    ],
+    "datasets": [
+      "synthetic"
+    ],
+    "milestone": "v0.7.0",
+    "feed": null
+  },
+  {
+    "slug": "three-zones",
+    "title": "One series, three zones",
+    "what": "The same instants labelled in UTC, New York and Tokyo",
+    "types": [
+      "line"
+    ],
+    "modes": [
+      "line"
+    ],
+    "domain": "operations",
+    "features": [
+      "time zones",
+      "linking"
+    ],
+    "datasets": [
+      "synthetic"
+    ],
+    "milestone": "v0.7.0",
+    "feed": null
+  },
+  {
+    "slug": "locales",
+    "title": "Locales",
+    "what": "One chart in en-US, de-DE, fr-FR, ar-EG and ja-JP",
+    "types": [
+      "line"
+    ],
+    "modes": [
+      "line"
+    ],
+    "domain": "business",
+    "features": [
+      "locales"
+    ],
+    "datasets": [
+      "synthetic"
+    ],
+    "milestone": "v0.7.0",
+    "feed": null
+  },
+  {
+    "slug": "tide-gauge",
+    "title": "A tide gauge",
+    "what": "Water level against the prediction; the live gauge from NOAA CO-OPS on request",
+    "types": [
+      "line"
+    ],
+    "modes": [
+      "line"
+    ],
+    "domain": "oceans",
+    "features": [],
+    "datasets": [
+      "synthetic",
+      "noaa-coops-8518750"
+    ],
+    "milestone": "v0.7.0",
+    "feed": {
+      "source": "NOAA CO-OPS, water level and predictions, The Battery, NY (8518750)",
+      "url": "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?station=8518750",
+      "licence": "Public domain (U.S. government work)"
+    }
+  },
+  {
+    "slug": "ecg-strip",
+    "title": "An ECG strip",
+    "what": "360 samples a second, scrubbed with a finger",
+    "types": [
+      "line"
+    ],
+    "modes": [
+      "line"
+    ],
+    "domain": "health",
+    "features": [
+      "touch scrubbing"
+    ],
+    "datasets": [
+      "synthetic"
+    ],
+    "milestone": "v0.7.0",
+    "feed": null
+  },
+  {
+    "slug": "keyboard-only",
+    "title": "Keyboard only",
+    "what": "Every interaction from the keys, reported as it happens",
+    "types": [
+      "line"
+    ],
+    "modes": [
+      "line"
+    ],
+    "domain": "accessibility",
+    "features": [
+      "keyboard-only use"
+    ],
+    "datasets": [
+      "synthetic"
+    ],
+    "milestone": "v0.7.0",
+    "feed": null
+  },
+  {
+    "slug": "screen-reader",
+    "title": "For a screen reader",
+    "what": "The drawing's label, the slider's value and the hidden table, shown",
+    "types": [
+      "line"
+    ],
+    "modes": [
+      "line"
+    ],
+    "domain": "accessibility",
+    "features": [
+      "the screen-reader table"
+    ],
+    "datasets": [
+      "synthetic"
+    ],
+    "milestone": "v0.7.0",
+    "feed": null
+  },
+  {
+    "slug": "one-ink",
+    "title": "One ink",
+    "what": "Four series told apart by dash patterns in a <pre>",
+    "types": [
+      "line"
+    ],
+    "modes": [
+      "line"
+    ],
+    "domain": "basics",
+    "features": [
+      "one ink"
+    ],
+    "datasets": [
+      "synthetic"
+    ],
+    "milestone": "v0.7.0",
+    "feed": null
+  },
+  {
+    "slug": "on-paper",
+    "title": "On paper",
+    "what": "Dark marks on a light ground for print",
+    "types": [
+      "line"
+    ],
+    "modes": [
+      "area"
+    ],
+    "domain": "weather",
+    "features": [
+      "paper"
+    ],
+    "datasets": [
+      "synthetic"
+    ],
+    "milestone": "v0.7.0",
+    "feed": null
+  },
+  {
+    "slug": "css-themes",
+    "title": "Themes from CSS",
+    "what": "Colours from --glyphplot-* custom properties and the page's own theme",
+    "types": [
+      "line"
+    ],
+    "modes": [
+      "line"
+    ],
+    "domain": "web",
+    "features": [
+      "CSS custom-property themes"
+    ],
+    "datasets": [
+      "synthetic"
+    ],
+    "milestone": "v0.7.0",
+    "feed": null
+  },
+  {
+    "slug": "brand-theme",
+    "title": "A brand theme",
+    "what": "A theme object set from script",
+    "types": [
+      "bar"
+    ],
+    "modes": [
+      "bar"
+    ],
+    "domain": "business",
+    "features": [
+      "a theme object"
+    ],
+    "datasets": [
+      "synthetic"
+    ],
+    "milestone": "v0.7.0",
+    "feed": null
+  },
+  {
+    "slug": "sizes",
+    "title": "From 4 × 1 to full screen",
+    "what": "One chart in boxes of every size, resized live",
+    "types": [
+      "line"
+    ],
+    "modes": [
+      "line"
+    ],
+    "domain": "basics",
+    "features": [
+      "sizing and resize"
+    ],
+    "datasets": [
+      "synthetic"
+    ],
+    "milestone": "v0.7.0",
+    "feed": null
+  },
+  {
+    "slug": "view-in-url",
+    "title": "A view in the URL",
+    "what": "Pan, reload, the same view",
+    "types": [
+      "line"
+    ],
+    "modes": [
+      "line"
+    ],
+    "domain": "basics",
+    "features": [
+      "the view in a URL"
+    ],
+    "datasets": [
+      "synthetic"
+    ],
+    "milestone": "v0.7.0",
+    "feed": null
+  },
+  {
+    "slug": "linked-charts",
+    "title": "Linked charts",
+    "what": "Two charts of different widths sharing x and the cursor",
+    "types": [
+      "line"
+    ],
+    "modes": [
+      "line",
+      "area"
+    ],
+    "domain": "operations",
+    "features": [
+      "linking"
+    ],
+    "datasets": [
+      "synthetic"
+    ],
+    "milestone": "v0.7.0",
+    "feed": null
+  },
+  {
+    "slug": "brush-zoom",
+    "title": "Brush to zoom another",
+    "what": "A WTI overview whose brush sets a detail chart's view",
+    "types": [
+      "line"
+    ],
+    "modes": [
+      "area",
+      "line"
+    ],
+    "domain": "energy",
+    "features": [
+      "brushing to drive another chart"
+    ],
+    "datasets": [
+      "wti-daily"
+    ],
+    "milestone": "v0.7.0",
+    "feed": null
+  },
+  {
+    "slug": "every-event",
+    "title": "Every event",
+    "what": "A live log of the plot-* events",
+    "types": [
+      "line"
+    ],
+    "modes": [
+      "line"
+    ],
+    "domain": "basics",
+    "features": [
+      "the event log"
+    ],
+    "datasets": [
+      "synthetic"
+    ],
+    "milestone": "v0.7.0",
+    "feed": null
+  },
+  {
+    "slug": "csv-src",
+    "title": "From a CSV file",
+    "what": "src pointing at a CSV, read by the shell",
+    "types": [
+      "line"
+    ],
+    "modes": [
+      "line"
+    ],
+    "domain": "operations",
+    "features": [
+      "data from CSV, JSON and Arrow `src`"
+    ],
+    "datasets": [
+      "synthetic"
+    ],
+    "milestone": "v0.7.0",
+    "feed": null
+  },
+  {
+    "slug": "arrow-million",
+    "title": "From Arrow",
+    "what": "A million rows of Arrow IPC through src",
+    "types": [
+      "line"
+    ],
+    "modes": [
+      "line"
+    ],
+    "domain": "basics",
+    "features": [
+      "data from CSV, JSON and Arrow `src`",
+      "a million points"
+    ],
+    "datasets": [
+      "synthetic"
+    ],
+    "milestone": "v0.7.0",
+    "feed": null
+  },
+  {
+    "slug": "typed-arrays",
+    "title": "Typed arrays, no element",
+    "what": "The JS API drawing Float64Arrays into a canvas",
+    "types": [
+      "line"
+    ],
+    "modes": [
+      "line"
+    ],
+    "domain": "basics",
+    "features": [
+      "typed arrays through the JS API"
+    ],
+    "datasets": [
+      "synthetic"
+    ],
+    "milestone": "v0.7.0",
+    "feed": null
+  },
+  {
+    "slug": "plain-html",
+    "title": "Plain HTML, no build",
+    "what": "One element with its data as an attribute, no script setting properties",
+    "types": [
+      "line"
+    ],
+    "modes": [
+      "line"
+    ],
+    "domain": "web",
+    "features": [
+      "plain HTML with no build"
+    ],
+    "datasets": [
+      "synthetic"
+    ],
+    "milestone": "v0.7.0",
+    "feed": null
+  },
+  {
+    "slug": "hover-event",
+    "title": "The hover event",
+    "what": "plot-hover's datum read out, as React 19's onplot-hover would",
+    "types": [
+      "candles"
+    ],
+    "modes": [
+      "hollow"
+    ],
+    "domain": "markets",
+    "features": [],
+    "datasets": [
+      "synthetic"
+    ],
+    "milestone": "v0.7.0",
+    "feed": null
+  },
+  {
+    "slug": "reduced-motion",
+    "title": "Reduced motion",
+    "what": "Eased zooms with and without the motion attribute",
+    "types": [
+      "line"
+    ],
+    "modes": [
+      "line"
+    ],
+    "domain": "accessibility",
+    "features": [
+      "reduced motion"
+    ],
+    "datasets": [
+      "synthetic"
+    ],
+    "milestone": "v0.7.0",
+    "feed": null
+  },
+  {
+    "slug": "sparkline-table",
+    "title": "Sparklines in a table",
+    "what": "Twenty services: latest, minimum and maximum beside each",
+    "types": [
+      "sparkline"
+    ],
+    "modes": [
+      "line"
+    ],
+    "domain": "operations",
+    "features": [],
+    "datasets": [
+      "synthetic"
+    ],
+    "milestone": "v0.7.0",
+    "feed": null
+  },
+  {
+    "slug": "sparkline-sentence",
+    "title": "A sparkline in a sentence",
+    "what": "An inline area one row high",
+    "types": [
+      "sparkline"
+    ],
+    "modes": [
+      "area"
+    ],
+    "domain": "operations",
+    "features": [],
+    "datasets": [
+      "synthetic"
+    ],
+    "milestone": "v0.7.0",
+    "feed": null
+  },
+  {
+    "slug": "up-down-days",
+    "title": "Up and down days",
+    "what": "WTI's daily changes as columns",
+    "types": [
+      "sparkline"
+    ],
+    "modes": [
+      "column"
+    ],
+    "domain": "energy",
+    "features": [],
+    "datasets": [
+      "wti-daily"
+    ],
+    "milestone": "v0.7.0",
+    "feed": null
+  },
+  {
+    "slug": "fifty-sparklines",
+    "title": "Fifty live sparklines",
+    "what": "Fifty streaming tags over one module",
+    "types": [
+      "sparkline"
+    ],
+    "modes": [
+      "line"
+    ],
+    "domain": "operations",
+    "features": [
+      "streaming"
+    ],
+    "datasets": [
+      "synthetic"
+    ],
+    "milestone": "v0.7.0",
+    "feed": null
+  },
+  {
+    "slug": "oil-weekly",
+    "title": "Oil in weekly candles",
+    "what": "Daily WTI closes resampled into candles",
+    "types": [
+      "candles"
+    ],
+    "modes": [
+      "candle"
+    ],
+    "domain": "energy",
+    "features": [],
+    "datasets": [
+      "wti-daily"
+    ],
+    "milestone": "v0.7.0",
+    "feed": null
+  },
+  {
+    "slug": "hollow-one-ink",
+    "title": "Hollow candles in one ink",
+    "what": "Rising hollow, falling solid, no colour",
+    "types": [
+      "candles"
+    ],
+    "modes": [
+      "hollow"
+    ],
+    "domain": "markets",
+    "features": [
+      "one ink"
+    ],
+    "datasets": [
+      "synthetic"
+    ],
+    "milestone": "v0.7.0",
+    "feed": null
+  },
+  {
+    "slug": "ohlc-bars",
+    "title": "OHLC bars",
+    "what": "Open and close as ticks, volume in its pane",
+    "types": [
+      "candles"
+    ],
+    "modes": [
+      "ohlc"
+    ],
+    "domain": "markets",
+    "features": [
+      "panes"
+    ],
+    "datasets": [
+      "synthetic"
+    ],
+    "milestone": "v0.7.0",
+    "feed": null
+  },
+  {
+    "slug": "years-to-minutes",
+    "title": "From years to minutes",
+    "what": "A million minute closes zoomed through calendar intervals",
+    "types": [
+      "candles"
+    ],
+    "modes": [
+      "candle"
+    ],
+    "domain": "markets",
+    "features": [
+      "a million points"
+    ],
+    "datasets": [
+      "synthetic"
+    ],
+    "milestone": "v0.7.0",
+    "feed": null
+  },
+  {
+    "slug": "session-gaps",
+    "title": "Session gaps",
+    "what": "The index time scale beside a plain time scale",
+    "types": [
+      "candles"
+    ],
+    "modes": [
+      "candle"
+    ],
+    "domain": "markets",
+    "features": [
+      "log, symlog and index time scales"
+    ],
+    "datasets": [
+      "synthetic"
+    ],
+    "milestone": "v0.7.0",
+    "feed": null
+  },
+  {
+    "slug": "last-price",
+    "title": "The last price",
+    "what": "A magnet crosshair and the last close",
+    "types": [
+      "candles"
+    ],
+    "modes": [
+      "candle"
+    ],
+    "domain": "markets",
+    "features": [],
+    "datasets": [
+      "synthetic"
+    ],
+    "milestone": "v0.7.0",
+    "feed": null
+  },
+  {
+    "slug": "top-talkers",
+    "title": "Top talkers",
+    "what": "Horizontal bars re-ranked every second",
+    "types": [
+      "bar"
+    ],
+    "modes": [
+      "bar"
+    ],
+    "domain": "networks",
+    "features": [],
+    "datasets": [
+      "synthetic"
+    ],
+    "milestone": "v0.7.0",
+    "feed": null
+  },
+  {
+    "slug": "budget-actual",
+    "title": "Budget against actual",
+    "what": "Grouped bars by quarter",
+    "types": [
+      "bar"
+    ],
+    "modes": [
+      "bar"
+    ],
+    "domain": "business",
+    "features": [],
+    "datasets": [
+      "synthetic"
+    ],
+    "milestone": "v0.7.0",
+    "feed": null
+  },
+  {
+    "slug": "energy-mix",
+    "title": "An energy mix",
+    "what": "Generation by source, stacked by month",
+    "types": [
+      "bar"
+    ],
+    "modes": [
+      "bar"
+    ],
+    "domain": "energy",
+    "features": [],
+    "datasets": [
+      "synthetic"
+    ],
+    "milestone": "v0.7.0",
+    "feed": null
+  },
+  {
+    "slug": "k-index",
+    "title": "Geomagnetic storms",
+    "what": "The K-index coloured by storm level; the past week from NOAA SWPC on request",
+    "types": [
+      "bar"
+    ],
+    "modes": [
+      "bar"
+    ],
+    "domain": "space weather",
+    "features": [],
+    "datasets": [
+      "synthetic",
+      "noaa-swpc-kp"
+    ],
+    "milestone": "v0.7.0",
+    "feed": {
+      "source": "NOAA Space Weather Prediction Center, planetary K-index",
+      "url": "https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json",
+      "licence": "Public domain (U.S. government work)"
+    }
+  },
+  {
+    "slug": "quakes",
+    "title": "Earthquakes by the hour and the day",
+    "what": "A day of USGS events by hour; the past month by day on request",
+    "types": [
+      "bar"
+    ],
+    "modes": [
+      "bar"
+    ],
+    "domain": "geoscience",
+    "features": [],
+    "datasets": [
+      "usgs-earthquakes-day",
+      "usgs-earthquakes-month"
+    ],
+    "milestone": "v0.7.0",
+    "feed": {
+      "source": "USGS Earthquake Hazards Program, all events of the past 30 days",
+      "url": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_month.csv",
+      "licence": "Public domain (U.S. government work); credit USGS"
+    }
+  },
+  {
+    "slug": "loan",
+    "title": "A loan, paid down",
+    "what": "Principal and interest stacked by year",
+    "types": [
+      "bar"
+    ],
+    "modes": [
+      "bar"
+    ],
+    "domain": "finance",
+    "features": [],
+    "datasets": [
+      "synthetic"
+    ],
+    "milestone": "v0.7.0",
+    "feed": null
+  },
+  {
+    "slug": "burn-down",
+    "title": "A burn-down",
+    "what": "Remaining budget as bars with a target line",
+    "types": [
+      "bar"
+    ],
+    "modes": [
+      "bar"
+    ],
+    "domain": "business",
+    "features": [
+      "annotations (lines, bands, labels, markers)"
+    ],
+    "datasets": [
+      "synthetic"
+    ],
+    "milestone": "v0.7.0",
+    "feed": null
+  },
+  {
+    "slug": "telemetry-1khz",
+    "title": "1 kHz telemetry",
+    "what": "A sample a millisecond, following the live end, Space to pause",
+    "types": [
+      "line"
+    ],
+    "modes": [
+      "line"
+    ],
+    "domain": "engineering",
+    "features": [
+      "streaming",
+      "pause",
+      "follow the live end",
+      "retention"
+    ],
+    "datasets": [
+      "synthetic"
+    ],
+    "milestone": "v0.7.0",
+    "feed": null
+  },
+  {
+    "slug": "late-duplicate",
+    "title": "Late and duplicate rows",
+    "what": "What plot-data counts when rows repeat or arrive late",
+    "types": [
+      "line"
+    ],
+    "modes": [
+      "line"
+    ],
+    "domain": "engineering",
+    "features": [
+      "streaming",
+      "late and duplicate rows"
+    ],
+    "datasets": [
+      "synthetic"
+    ],
+    "milestone": "v0.7.0",
+    "feed": null
+  },
+  {
+    "slug": "last-hour",
+    "title": "The last hour",
+    "what": "Retention by age on a fast simulated clock",
+    "types": [
+      "line"
+    ],
+    "modes": [
+      "area"
+    ],
+    "domain": "operations",
+    "features": [
+      "streaming",
+      "retention"
+    ],
+    "datasets": [
+      "synthetic"
+    ],
+    "milestone": "v0.7.0",
+    "feed": null
+  },
+  {
+    "slug": "throughput",
+    "title": "Network throughput",
+    "what": "In above the axis, out below, live",
+    "types": [
+      "line"
+    ],
+    "modes": [
+      "area"
+    ],
+    "domain": "networks",
+    "features": [
+      "streaming",
+      "follow the live end"
+    ],
+    "datasets": [
+      "synthetic"
+    ],
+    "milestone": "v0.7.0",
+    "feed": null
+  },
+  {
+    "slug": "service-dashboard",
+    "title": "A service dashboard",
+    "what": "Rate and p99 in linked charts, errors as bars",
+    "types": [
+      "line",
+      "bar"
+    ],
+    "modes": [
+      "line",
+      "bar"
+    ],
+    "domain": "operations",
+    "features": [
+      "linking"
+    ],
+    "datasets": [
+      "synthetic"
+    ],
+    "milestone": "v0.7.0",
+    "feed": null
+  },
+  {
+    "slug": "yield-curve",
+    "title": "Today's yield curve",
+    "what": "Treasury par yields by maturity on the latest day held",
+    "types": [
+      "line"
+    ],
+    "modes": [
+      "line"
+    ],
+    "domain": "finance",
+    "features": [],
+    "datasets": [
+      "treasury-par-yield-2026"
+    ],
+    "milestone": "v0.7.0",
+    "feed": null
+  },
+  {
+    "slug": "yield-curve-year",
+    "title": "The yield curve through the year",
+    "what": "Scrubbing the date redraws the curve",
+    "types": [
+      "line"
+    ],
+    "modes": [
+      "line"
+    ],
+    "domain": "finance",
+    "features": [],
+    "datasets": [
+      "treasury-par-yield-2026"
+    ],
+    "milestone": "v0.7.0",
+    "feed": null
+  }
+]

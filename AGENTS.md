@@ -25,10 +25,10 @@ TypeScript shell, and in the terminal by a CLI. Every chart draws data the page
 or the terminal gives it. It is the sibling of unicel (`../animate-unicode`)
 and follows its architecture (ADR-003), sharing no code with it (ADR-013).
 
-**Status: v0.6.0, streaming.** Three chart families (`line` with
-`sparkline`, `candles`, `bar`) work end to end and stream into a ring, held
-by the chart contract, time budgets and `signoff`. The next session builds
-Phase 6: the site.
+**Status: v0.7.0, the site.** Three chart families (`line` with
+`sparkline`, `candles`, `bar`) work end to end and stream, and the Elm site
+documents them with a gallery of 60 live examples. The next session builds
+Phase 7: the CLI.
 
 | Path | What |
 |---|---|
@@ -67,6 +67,10 @@ mise is the only entry point (`mise tasks` lists them all).
   phone), `mise run bench:render`.
 - `mise run bench` (native, exits 1 over budget), `bench:web`, `bench:load`,
   `test:budgets`, `size --charts`.
+- `mise run examples:check` (the gallery's coverage), `examples:stills` (the
+  cards' build-time first frames), `examples:browser` (every example in
+  headless Chromium), `datasets:check`, `datasets:fetch` (HYG, once, into
+  target/).
 - `mise run signoff` checks every open PR's head and posts a `signoff`
   status (`-- <rev>` checks a local revision and posts nothing).
 

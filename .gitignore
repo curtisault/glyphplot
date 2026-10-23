@@ -21,3 +21,5 @@ elm-stuff/
 .DS_Store
 # git worktrees Claude Code makes for its agents
 /.claude/worktrees/
+# datasets fetched at build time, never committed (mise run datasets:fetch, ADR-137)
+/site/public/data/hyg/

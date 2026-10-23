@@ -119,11 +119,12 @@ test.describe("on the bare page", () => {
     expect(now).toBeLessThanOrEqual(d[1]);
   });
 
-  test("a control row shown on focus and hover, with five named buttons", async ({ page }) => {
+  test("a control row shown on focus and hover, with five named buttons and the Show data toggle", async ({ page }) => {
     const el = await addChart(page);
     const group = el.getByRole("group", { name: "Chart controls" });
     const names = await group.getByRole("button").evaluateAll((bs) => bs.map((b) => b.getAttribute("aria-label")));
-    expect(names).toEqual(["Zoom out", "Zoom in", "Reset view", "Step back", "Step forward"]);
+    // The five of REQ-A11Y-040, then the toggle of REQ-A11Y-110 (site/e2e/show-data.spec.ts).
+    expect(names).toEqual(["Zoom out", "Zoom in", "Reset view", "Step back", "Step forward", "Show data"]);
     const opacity = (): Promise<string> => group.evaluate((g) => getComputedStyle(g).opacity);
     expect(await opacity()).toBe("0");
     await el.getByRole("slider").focus();

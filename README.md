@@ -21,8 +21,9 @@ tail -f metrics.csv | glyphplot line
 in Rust, in wasm and in `<glyph-plot>`: streamed into a ring at 1 kHz, read
 from CSV, JSON, NDJSON or Arrow, with pointer, keyboard and touch input,
 linked charts, time zones, a hidden table and a slider cursor. Each is held
-to the full chart contract and to time budgets. The CLI does not draw yet,
-and nothing is published. The next phase builds the site.
+to the full chart contract and to time budgets. The site (`mise run serve`)
+documents them, with a gallery of 60 live examples. The CLI does not draw
+yet, and nothing is published. The next phase builds the CLI.
 
 glyphplot is the sibling of [unicel](../animate-unicode) (animated Unicode
 art) and follows its architecture, but it is a separate, independent

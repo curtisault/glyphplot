@@ -4,7 +4,9 @@
 // stop, a slider cursor whose `aria-valuetext` reads the cursor's x and up to
 // four series' values; a visually hidden light-DOM table of the view, at most
 // 500 rows; a control row (zoom out, zoom in, reset, step back, step on) shown
-// on focus and hover; reduced motion; a 2 px focus ring in the accent.
+// on focus and hover; reduced motion; a 2 px focus ring in the accent. From
+// v0.7.0 a "Show data" toggle in the control row, `T` on the cursor and the
+// `show-data` attribute make the table visible (REQ-A11Y-110).
 
 import type { TableJson } from "./api.ts";
 import type { DataObject } from "./data.ts";
@@ -12,7 +14,13 @@ import { xColumnOf } from "./stream.ts";
 
 /** The keys of the plan's keys table, as `aria-keyshortcuts` lists them (REQ-A11Y-030). */
 export const KEY_SHORTCUTS =
-  "ArrowLeft ArrowRight ArrowUp ArrowDown Home End PageUp PageDown Shift+ArrowLeft Shift+ArrowRight + = - 0 Enter Shift+Enter Escape Space 1 2 3 4 5 6 7 8 9 ?";
+  "ArrowLeft ArrowRight ArrowUp ArrowDown Home End PageUp PageDown Shift+ArrowLeft Shift+ArrowRight + = - 0 Enter Shift+Enter Escape Space 1 2 3 4 5 6 7 8 9 ? T";
+
+/** The key on the cursor that shows or hides the table (REQ-A11Y-110); the shell's, the core never sees it. */
+export const SHOW_DATA_KEY = "t";
+
+/** The "Show data" toggle's label and glyph (REQ-A11Y-110); `aria-pressed` says whether the table is shown. */
+export const SHOW_DATA = { label: "Show data", glyph: "▦" } as const;
 
 /** The control row (REQ-A11Y-040): label, glyph, and the key it sends. */
 export const CONTROLS: readonly { label: string; glyph: string; key: string }[] = [
@@ -178,11 +186,15 @@ export interface A11yParts {
   frame: HTMLDivElement;
   cursor: HTMLDivElement;
   controls: HTMLDivElement;
+  /** The control row's "Show data" toggle (REQ-A11Y-110). */
+  showData: HTMLButtonElement;
   tableBox: HTMLDivElement;
 }
 
-/** Makes the frame, the slider cursor, the control row and the hidden table box. */
-export function makeParts(doc: Document, onControl: (key: string) => void): A11yParts {
+let boxes = 0;
+
+/** Makes the frame, the slider cursor, the control row with its "Show data" toggle, and the hidden table box. */
+export function makeParts(doc: Document, onControl: (key: string) => void, onShowData: () => void = () => {}): A11yParts {
   const frame = doc.createElement("div");
   frame.className = "gp-frame";
   const cursor = doc.createElement("div");
@@ -214,7 +226,41 @@ export function makeParts(doc: Document, onControl: (key: string) => void): A11y
   }
   const tableBox = doc.createElement("div");
   tableBox.className = "gp-sr";
-  return { frame, cursor, controls, tableBox };
+  tableBox.id = `gp-table-${++boxes}`;
+  const showData = doc.createElement("button");
+  showData.type = "button";
+  showData.tabIndex = -1; // one tab stop: T on the cursor does the same (REQ-A11Y-030)
+  showData.className = "gp-show-data";
+  showData.textContent = SHOW_DATA.glyph;
+  showData.setAttribute("aria-label", SHOW_DATA.label);
+  showData.setAttribute("aria-pressed", "false");
+  showData.setAttribute("aria-controls", tableBox.id);
+  showData.title = `${SHOW_DATA.label} (T)`;
+  showData.addEventListener("pointerdown", (e) => e.preventDefault());
+  showData.addEventListener("click", () => onShowData());
+  controls.append(showData);
+  return { frame, cursor, controls, showData, tableBox };
+}
+
+/**
+ * Shows or hides the table (REQ-A11Y-110): shown, the box is a labelled
+ * region over the drawing that scrolls and takes focus (so the keyboard can
+ * scroll it); hidden, it is visually hidden again, still read by screen
+ * readers (REQ-A11Y-020). The toggle's `aria-pressed` follows.
+ */
+export function showTable(parts: Pick<A11yParts, "tableBox" | "showData">, on: boolean): void {
+  const box = parts.tableBox;
+  box.className = on ? "gp-table" : "gp-sr";
+  if (on) {
+    box.setAttribute("role", "region");
+    box.setAttribute("aria-label", "Chart data");
+    box.tabIndex = 0;
+  } else {
+    box.removeAttribute("role");
+    box.removeAttribute("aria-label");
+    box.removeAttribute("tabindex");
+  }
+  parts.showData.setAttribute("aria-pressed", String(on));
 }
 
 /** Writes the hidden table: a caption, `th scope="col"` headers and a row header a row (REQ-A11Y-020). */

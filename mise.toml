@@ -67,13 +67,13 @@ dir = "site"
 run = "npx playwright install chromium"
 
 [tasks."build:site"]
-description = "site/ built by Vite into site/dist over the release wasm in web/pkg: test.html, blank.html, the bench pages (bench/render.html, web.html, load.html)"
-depends = ["install:site", "build:wasm"]
+description = "site/ built by Vite into site/dist over the release wasm in web/pkg: the Elm site (index.html, compiled by `elm make --optimize`; GLYPHPLOT_BASE=/folder/ for a site served from a folder), test.html, live.html, blank.html, the bench pages (bench/render.html, web.html, load.html); the gallery's stills and HYG's subset made first"
+depends = ["install:site", "build:wasm", "examples:stills", "datasets:fetch"]
 dir = "site"
 run = "npx vite build --logLevel warn"
 
 [tasks.serve]
-description = "The release build of site/ served for a person to open (http://localhost:4311/test.html, /live.html), one wasm module a chart family as a page meets them; `-- --host` to open it from a phone on the same network"
+description = "The release build of site/ served for a person to open (the site at http://localhost:4311/, the checklist at /test.html, /live.html), one wasm module a chart family as a page meets them; `-- --host` to open it from a phone on the same network"
 depends = ["build:site"]
 dir = "site"
 raw = true
@@ -112,6 +112,30 @@ run = "uv run --no-project --with 'fonttools[woff]==4.60.1' --with 'brotli==1.2.
 description = "Capture the pinned d3 packages' output into crates/glyphplot/tests/fixtures (REQ-REF-010)"
 run = ["npm ci --ignore-scripts --prefix scripts/fixtures", "node scripts/fixtures.mjs"]
 
+[tasks."datasets:check"]
+description = "The dataset manifest (datasets/manifest.json) against the files: every file under datasets/, site/public/data/ and crates/glyphplot/tests/data/ has an entry with its size and SHA-256, no committed dataset over 1 MB or off the licence allow-list, no ShareAlike data committed or in a published crate or the npm package (cargo package --list, npm pack --dry-run), the test datasets' README agreeing; the check's own tests first (REQ-DATASET-010, 020, 030)"
+depends = ["install:web"]
+run = ["node --test scripts/datasets.test.mjs", "node scripts/datasets.mjs check"]
+
+[tasks."datasets:fetch"]
+description = "The build-time datasets: HYG v4.4 from Codeberg into target/datasets/ and its naked-eye subset into site/public/data/hyg/ (gitignored), each SHA-256 checked against datasets/manifest.json; skipped when present and matching (ADR-137)"
+run = "node scripts/datasets.mjs fetch"
+
+[tasks."examples:stills"]
+description = "The gallery's build-time stills: each example's first frame drawn through the JS API in Node at a card's and a page's size, into site/examples/stills.json and stills-full.json (gitignored; REQ-SITE-120)"
+depends = ["build:wasm", "install:web"]
+run = ["npm run build --prefix web", "node scripts/examples-stills.mjs"]
+
+[tasks."examples:check"]
+description = "The gallery's coverage from site/examples/manifest.json: three examples a built type, one a built mode and feature, every dataset in datasets/manifest.json, every example a module, at least 50 at v0.7.0 (REQ-SITE-080, 090, 110, 050)"
+depends = ["build:wasm"]
+run = "node scripts/examples-check.mjs"
+
+[tasks."examples:browser"]
+description = "Every example in headless Chromium over Vite's dev server, as a card and as a page, third-party requests refused: a first frame and no console error each; then the gallery, no wasm before a scroll and each module once after (`-- <slug>…` for some; `-- --live` lets the feeds through)"
+depends = ["build:wasm", "install:chromium"]
+run = "node scripts/examples-browser.mjs"
+
 [tasks.snap]
 description = "Rewrite the snapshots of every chart, or of the types given (REQ-SNAP-030)"
 usage = 'arg "[type]..." help="chart types; every chart when none"'
@@ -134,7 +158,7 @@ description = "Format the Rust code (rustfmt.toml)"
 run = "cargo fmt --all"
 
 [tasks.lint]
-description = "rustfmt, clippy (host and wasm32, with and without debug), rustdoc, each family alone, tsc on web and site, the octant table, the dependency rules, no generated output in git"
+description = "rustfmt, clippy (host and wasm32, with and without debug), rustdoc, each family alone, tsc on web and site, elm-format on the Elm site (REQ-LINT-020), the octant table, the dependency rules, no generated output in git"
 depends = ["install:web", "install:site"]
 run = [
   "cargo fmt --all --check",
@@ -145,6 +169,8 @@ run = [
   "for f in $(cargo run -q -p glyphplot --example manifest -- families); do cargo check -q -p glyphplot --no-default-features --features $f || exit 1; done",
   "web/node_modules/.bin/tsc --noEmit -p web",
   "web/node_modules/.bin/tsc --noEmit -p site",
+  "web/node_modules/.bin/tsc --noEmit -p site/examples",
+  "elm-format --validate site/src site/tests",
   "python3 scripts/octants.py --check",
   "bash scripts/deps.sh",
   "bash scripts/generated.sh",
@@ -171,7 +197,7 @@ description = "The browser tests: Playwright in headless Chromium against vite p
 depends = ["build:site", "install:chromium"]
 wait_for = ["test:rust"]
 dir = "site"
-usage = 'flag "--smoke" help="only the smoke set: a first frame, a hover, a drag, a wheel, a key and the axe scans"'
+usage = 'flag "--smoke" help="only the smoke set: a first frame, a hover, a drag, a wheel, a key, the axe scans, and on the site the line page, the first example, the theme button, the gallery loading and a filter"'
 run = 'if [ "${usage_smoke:-false}" = true ]; then npx playwright test --grep @smoke; else npx playwright test; fi'
 
 [tasks."test:site:smoke"]
@@ -181,9 +207,14 @@ wait_for = ["test:rust"]
 dir = "site"
 run = 'if [ "${GLYPHPLOT_SIGNOFF:-}" = 1 ]; then npx playwright test; else npx playwright test --grep @smoke; fi'
 
+[tasks."test:elm"]
+description = "The Elm site's tests (site/tests, elm-test): routes, option controls, generated data"
+dir = "site"
+run = "elm-test"
+
 [tasks.test]
-description = "Every test: Rust, the shell's Node tests, and the browser tests' smoke set (all of them under signoff)"
-depends = ["test:rust", "test:web", "test:site:smoke"]
+description = "Every test: Rust, the shell's Node tests, the Elm site's tests, and the browser tests' smoke set (all of them under signoff)"
+depends = ["test:rust", "test:web", "test:elm", "test:site:smoke"]
 
 [tasks.size]
 description = "Each module's wasm and JS, raw and gzip -9, against its budget; WASM_GZ_LIMIT overrides it; `--charts`: each module by owner (REQ-SIZE-050)"
@@ -191,8 +222,8 @@ depends = ["build:wasm"]
 run = "node scripts/size.mjs"
 
 [tasks.check]
-description = "lint, test, build and size: green before every commit"
-depends = ["lint", "test", "build", "size"]
+description = "lint, test, build and size, the gallery's coverage and the dataset manifest: green before every commit"
+depends = ["lint", "test", "build", "size", "examples:check", "datasets:check"]
 
 [tasks.signoff]
 description = "The CI, run locally (REQ-CI-020): each open pull request's head (or the PRs named, `-- 5 6`) checked out under target/ci, npm ci, check (all of test:site), bench:web, bench:load and test:budgets with PROPTEST_CASES=4096, a `signoff` commit status posted; `-- <rev>` checks a local revision and posts nothing; `-- --list` shows the queue"
