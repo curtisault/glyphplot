@@ -3,16 +3,15 @@
 //! columns; each band may end in the series' label, its latest value and its
 //! least and greatest.
 //!
-//! The chart holds its rows in a ring of `capacity` rows: a replace keeps the
-//! last `capacity` rows of the data sorted by x, and an append adds its rows
-//! (a late row dropped, an equal x replacing the last row, as the line chart
-//! appends) and then drops the oldest past the capacity. Rows with a missing
-//! x are never drawn and are not kept. A datum's row (`Hit::index`, the
-//! cursor's `index`, the events' `index`) counts every row given since the
-//! data was last replaced, kept or dropped, so a row keeps its number while
-//! it is held. This ring is the sparkline's own until the streaming ring
-//! (`retain.rows`, REQ-STREAM-020) arrives in v0.6.0; its default capacity is
-//! that ring's, 1,000,000 rows.
+//! The chart holds its rows in the core's ring of `retain.rows` rows
+//! (`ring.rs`, REQ-STREAM-020), as the line chart does: a replace keeps the
+//! last `retain.rows` rows of the data sorted by x, and an append adds its
+//! rows (a late row dropped, an equal x replacing the last row,
+//! REQ-STREAM-040) and then drops the oldest past the capacity and past
+//! `retain.age`. Rows with a missing x are never drawn and are not kept. A
+//! datum's row (`Hit::index`, the cursor's `index`, the events' `index`)
+//! counts every row given since the data was last replaced, kept or
+//! dropped, so a row keeps its number while it is held.
 //!
 //! Layout, from the grid's size and the data alone: the rows are split among
 //! the series in order, the first `rows % n` taking one more, so a grid of
@@ -47,11 +46,11 @@ use std::ops::Range;
 use super::draw::{self, path, walk, x_dot, Pt};
 use super::readout;
 use super::series::Prepared;
-use super::{appended, Mode, StepAt};
+use super::{Mode, StepAt};
 use crate::canvas::{ColorCanvas, Glyphs};
 use crate::cells::Axis;
 use crate::chart::{Accepted, Appended, CellPos, Changes, Charset, Chart, Env, Hit, MakeError, Meta, Mono, Size, Table};
-use crate::data::{Column, Data, DataError, Encode, Shape, Values};
+use crate::data::{Data, DataError, Encode, Shape};
 use crate::downsample::{m4_into, view_rows, Cache, CacheKey, Edges, M4};
 use crate::events::Value;
 use crate::format::{Display, Kind as FormatKind, Locale, NumberFormat, Specifier};
@@ -63,6 +62,7 @@ use crate::locale::{LocalePack, ZoneTable};
 use crate::options::Options;
 use crate::palette::{GROUND, INK, MUTED};
 use crate::reduce::{reduce, DragMode, Gesture, Interaction, Plot, Scene, WheelMode};
+use crate::ring::{Retain, Seq};
 use crate::scale::{resolve_domain, Extents, Kind, ScaleOptions};
 use crate::table::pick_rows;
 use crate::text::{self, stage, Frame};
@@ -82,7 +82,7 @@ pub static META: Meta = Meta {
     modes: &["line", "area", "column"],
     shapes: &[Shape::Series],
     options: Some(
-        r#"{"mode":"line","capacity":1000000,"encode":{},"label":true,"latest":true,"extent":true,"sample":"m4","drag":"pan","wheel":"scroll","motion":false}"#,
+        r#"{"mode":"line","retain":{"rows":1000000},"encode":{},"label":true,"latest":true,"extent":true,"sample":"m4","drag":"pan","wheel":"scroll","motion":false}"#,
     ),
     min: Size { cols: 8, rows: 1 },
     drop: &[],
@@ -90,13 +90,6 @@ pub static META: Meta = Meta {
     charset: Charset::Extended,
     budget: Budget::DEFAULT,
 };
-
-/// The ring's capacity when the `capacity` option is not a whole number of
-/// at least one: the streaming ring's default (REQ-STREAM-020).
-pub const CAPACITY: usize = 1_000_000;
-
-/// The most rows the `capacity` option may ask for.
-pub const MAX_CAPACITY: usize = 100_000_000;
 
 /// The fewest columns the text beside the plot leaves it: the type's
 /// minimum width.
@@ -126,7 +119,7 @@ enum SparkMode {
 #[derive(Clone, Debug, PartialEq)]
 struct Config {
     mode: SparkMode,
-    capacity: usize,
+    retain: Retain,
     encode: Encode,
     label: bool,
     latest: bool,
@@ -142,12 +135,10 @@ fn config(o: &Options) -> Result<Config, MakeError> {
         "column" => SparkMode::Column,
         _ => SparkMode::Line,
     };
-    let c = o.f64("capacity");
-    let capacity = if c.is_finite() && c >= 1.0 && c.fract() == 0.0 { c.min(MAX_CAPACITY as f64) as usize } else { CAPACITY };
     let encode = o.object("encode").and_then(|m| serde_json::from_value::<Encode>(serde_json::Value::Object(m.clone())).ok()).unwrap_or_default();
     Ok(Config {
         mode,
-        capacity,
+        retain: Retain::from_options(o),
         encode,
         label: o.bool("label"),
         latest: o.bool("latest"),
@@ -163,63 +154,6 @@ fn config(o: &Options) -> Result<Config, MakeError> {
             motion: o.bool("motion"),
         },
     })
-}
-
-/// `table`'s rows as the ring keeps them: sorted by x, the rows with a
-/// missing x left out, the last `capacity` of the rest; with the number of
-/// rows dropped before the first kept.
-fn ring(table: crate::data::Table, encode: &Encode, capacity: usize) -> (Prepared, usize) {
-    let p = Prepared::new(table, encode);
-    let xs = p.table_xs();
-    let len = p.rows();
-    if xs.len() != len {
-        // No x column: nothing is drawn, nothing to keep in order.
-        return (p, 0);
-    }
-    let end = xs.iter().position(|x| x.is_nan()).unwrap_or(len);
-    let start = end.saturating_sub(capacity);
-    if start == 0 && end == len {
-        return (p, 0);
-    }
-    let warnings = p.warnings.clone();
-    let Some(t) = p.into_table() else { return (Prepared::empty(), 0) };
-    let Ok(rows) = rows_of(&t, start..end) else { return (Prepared::new(t, encode), 0) };
-    let mut kept = Prepared::new(rows, encode);
-    for w in warnings.as_slice() {
-        if !kept.warnings.as_slice().contains(w) {
-            kept.warnings.push(w.clone());
-        }
-    }
-    (kept, start)
-}
-
-/// The rows `range` of `t`, its columns' types, roles, units and categories
-/// kept.
-fn rows_of(t: &crate::data::Table, range: Range<usize>) -> Result<crate::data::Table, DataError> {
-    let columns = t
-        .columns()
-        .iter()
-        .map(|c| Column {
-            name: c.name.clone(),
-            kind: c.kind,
-            role: c.role,
-            unit: c.unit.clone(),
-            scale: c.scale,
-            offset: c.offset,
-            time_unit: c.time_unit,
-            origin: c.origin,
-            zone: c.zone.clone(),
-            categories: c.categories.clone(),
-            values: match &c.values {
-                Values::Num(v) => Values::Num(v[range.clone()].to_vec()),
-                Values::Codes(v) => Values::Codes(v[range.clone()].to_vec()),
-                Values::Text(v) => Values::Text(v[range.clone()].to_vec()),
-            },
-        })
-        .collect();
-    let mut out = crate::data::Table::from_columns(columns)?;
-    out.sorted = t.sorted.clone();
-    Ok(out)
 }
 
 /// One series' band of rows.
@@ -445,7 +379,7 @@ fn widened(ext: &[Option<[f64; 2]>], gap: &[bool]) -> Vec<Option<usize>> {
 
 /// The least and greatest finite y of `xs`/`ys` in the dot columns `2c` and
 /// `2c + 1` of `edges`, as M4 and the drawing assign rows to dot columns.
-fn cell_extent(xs: &[f64], ys: &[f64], edges: &Edges, c: usize) -> Option<[f64; 2]> {
+fn cell_extent(xs: Seq<f64>, ys: Seq<f64>, edges: &Edges, c: usize) -> Option<[f64; 2]> {
     let e = edges.values();
     let dots = edges.dots();
     if 2 * c >= dots {
@@ -475,8 +409,9 @@ pub struct SparkChart {
     opts_version: u64,
     data: Prepared,
     /// The rows dropped before the first held, so a held row's number is
-    /// `row0` and its position.
-    row0: usize,
+    /// `row0` and its position, less the rows the ring dropped: the rows
+    /// dropped by data prepared again under new options.
+    row_base: usize,
     data_version: u64,
     view: View,
     gesture: Gesture,
@@ -507,7 +442,7 @@ impl SparkChart {
             cfg,
             opts_version: 0,
             data: Prepared::empty(),
-            row0: 0,
+            row_base: 0,
             data_version: 0,
             view: View::default(),
             gesture: Gesture::default(),
@@ -714,7 +649,7 @@ impl SparkChart {
                 }
             }
         }
-        Hit { series: self.data.series[s].name.clone(), series_index: s, index: self.row0 + self.data.row(s, i), x, y, col, row, aggregate }
+        Hit { series: self.data.series[s].name.clone(), series_index: s, index: self.row0() + self.data.row(s, i), x, y, col, row, aggregate }
     }
 
     /// The datum the cursor snaps to at `at` (REQ-HIT-010, REQ-HIT-020): in
@@ -742,7 +677,7 @@ impl SparkChart {
 
     /// The position in series `s` of datum row `index`, if it is held.
     fn pos_of(&self, s: usize, index: u64) -> Option<usize> {
-        let row = usize::try_from(index).ok()?.checked_sub(self.row0)?;
+        let row = usize::try_from(index).ok()?.checked_sub(self.row0())?;
         self.data.pos(s, row)
     }
 
@@ -756,29 +691,45 @@ impl SparkChart {
         });
         self.view.cursor =
             hit.map(|h| Cursor { x: Some(h.x), y: h.y.is_finite().then_some(h.y), series: Some(h.series), index: Some(h.index as u64), locked: c.locked });
-        let (lo, hi) = (self.row0 as u64, (self.row0 + self.data.rows()) as u64);
+        let (lo, hi) = (self.row0() as u64, (self.row0() + self.data.rows()) as u64);
         if let Some(sel) = &mut self.view.selection {
             sel.points.retain(|p| p.index >= lo && p.index < hi);
         }
     }
 
-    /// Takes `prepared` as the held data, `row0` rows dropped before it.
-    fn take(&mut self, prepared: Prepared, row0: usize) -> Accepted {
+    /// The number of the first row held: the rows given since the data was
+    /// last replaced and dropped since.
+    fn row0(&self) -> usize {
+        self.row_base + self.data.first() as usize
+    }
+
+    /// Takes `prepared` as the held data, `base` rows dropped before its
+    /// ring was made.
+    fn take(&mut self, prepared: Prepared, base: usize) -> Accepted {
+        self.data = prepared;
+        self.row_base = base;
+        self.changed();
+        Accepted { rows: self.data.rows(), version: self.data_version, warnings: self.data.warnings.as_slice().to_vec() }
+    }
+
+    /// After the data changed: a new version, the caches dropped, a
+    /// following view moved to end at the newest datum (REQ-VIEW-060), the
+    /// cursor snapped again.
+    fn changed(&mut self) {
         self.geom = None;
         self.m4.invalidate();
         self.base_key = None;
-        self.data = prepared;
-        self.row0 = row0;
         self.data_version += 1;
+        let end = self.data.x_extent().map(|[_, b]| b);
+        self.view.follow_to(end);
         self.resnap();
-        Accepted { rows: self.data.rows(), version: self.data_version, warnings: self.data.warnings.as_slice().to_vec() }
     }
 
     fn take_data(&mut self, data: Data) -> Result<Accepted, DataError> {
         data.shape(META.shapes, &self.cfg.encode)?;
         let table = data.into_tables().into_iter().next().map(|(_, t)| t);
-        let (prepared, row0) = table.map_or_else(|| (Prepared::empty(), 0), |t| ring(t, &self.cfg.encode, self.cfg.capacity));
-        Ok(self.take(prepared, row0))
+        let prepared = table.map_or_else(Prepared::empty, |t| Prepared::new(t, &self.cfg.encode, self.cfg.retain).0);
+        Ok(self.take(prepared, 0))
     }
 
     /// The cursor's value text: its x, then each shown series' value at the
@@ -986,31 +937,30 @@ impl Chart for SparkChart {
     }
 
     fn append(&mut self, batch: Data) -> Result<Appended, DataError> {
-        let Some(old) = self.data.table.as_ref() else {
+        if self.data.ring.is_none() {
             let a = self.take_data(batch)?;
-            return Ok(Appended { rows: a.rows, dropped: 0, late: 0, version: a.version });
-        };
+            return Ok(Appended { rows: a.rows, dropped: self.data.first() as usize, late: 0, version: a.version });
+        }
         let Some(new) = batch.first_table() else { return Err(DataError::Shape { expected: META.shapes.to_vec() }) };
-        let x = old.find(&self.data.x_name);
-        let (table, late) = appended(old, new, x)?;
-        let (prepared, dropped) = ring(table, &self.cfg.encode, self.cfg.capacity);
-        let row0 = self.row0 + dropped;
-        let a = self.take(prepared, row0);
-        Ok(Appended { rows: a.rows, dropped, late, version: a.version })
+        let counts = self.data.append(new)?;
+        self.changed();
+        Ok(Appended { rows: self.data.rows(), dropped: counts.dropped, late: counts.late, version: self.data_version })
     }
 
     fn set_options(&mut self, options: &Options) -> Result<(), MakeError> {
         let layered = options.for_meta(&META);
         let cfg = config(&layered)?;
-        let reprepare = cfg.encode != self.cfg.encode || cfg.capacity < self.data.rows();
+        let reprepare = cfg.encode != self.cfg.encode;
         self.options = layered;
         self.cfg = cfg;
         self.opts_version += 1;
         if reprepare {
+            let base = self.row0();
             let table = std::mem::replace(&mut self.data, Prepared::empty()).into_table();
-            let (prepared, dropped) = table.map_or_else(|| (Prepared::empty(), 0), |t| ring(t, &self.cfg.encode, self.cfg.capacity));
-            let row0 = self.row0 + dropped;
-            self.take(prepared, row0);
+            let prepared = table.map_or_else(Prepared::empty, |t| Prepared::new(t, &self.cfg.encode, self.cfg.retain).0);
+            self.take(prepared, base);
+        } else if self.data.set_retain(self.cfg.retain) > 0 {
+            self.changed();
         }
         Ok(())
     }
@@ -1091,7 +1041,7 @@ impl Chart for SparkChart {
             None => crate::overlay::crosshair(&mut f, plot, xd, None),
         }
         let y_step = band.map_or(1.0, |b| b.y_step);
-        let place = readout::Place { x: &g.x, x_step: g.x_step, y_step, zone: &self.zone, row0: self.row0 };
+        let place = readout::Place { x: &g.x, x_step: g.x_step, y_step, zone: &self.zone, row0: self.row0() };
         if let Some(text) = readout::text(&self.data, &self.view, place, &self.locale, &mut self.formats) {
             // Across the whole width, over the text column too: a sparkline's
             // plot is often narrower than its readout.
@@ -1207,7 +1157,7 @@ impl Scene for SparkChart {
     }
 
     fn datum(&self, hit: &Hit) -> BTreeMap<String, Value> {
-        hit.index.checked_sub(self.row0).map(|r| self.data.datum(r)).unwrap_or_default()
+        hit.index.checked_sub(self.row0()).map(|r| self.data.datum(r)).unwrap_or_default()
     }
 
     fn count(&self, view: &View, range: [f64; 2]) -> u64 {

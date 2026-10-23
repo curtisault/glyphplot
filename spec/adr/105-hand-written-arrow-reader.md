@@ -33,7 +33,7 @@ modules through `gzip -9`):
   gzipped to a chart module (REQ-DATA-140).
 - The element's `data` property and the CLI accept it (REQ-DATA-140).
 - No wasm module's dependency tree holds arrow or arrow2 (REQ-SIZE-060).
-- Its test fixtures are written by arrow-rs in a dev-only test.
+- Its test fixtures are written by pyarrow 26.0.0, pinned, from `scripts/arrow-fixtures.py` (changed from arrow-rs in v0.6.0: a script needs no Rust dependency, even a dev-only one), with the values it wrote recorded beside them.
 - It ships in v0.6.0, after typed arrays and JSON.
 
 ## Consequences

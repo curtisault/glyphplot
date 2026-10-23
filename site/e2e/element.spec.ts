@@ -43,8 +43,8 @@ test("the element is defined once with one style, observes the plan's attributes
       props: ["data", "options", "view"].every((p) => p in fresh),
     };
   });
-  // REQ-EL-020: the plan's element table as of v0.5.0, and timeZone (REQ-TZ-020).
-  expect(r.observed.sort()).toEqual(["cols", "data", "fit", "label", "link", "loading", "locale", "mono", "motion", "options", "rows", "theme", "time", "timezone", "type", "view"]);
+  // REQ-EL-020: the plan's element table as of v0.6.0 (src, paused, announce), and timeZone (REQ-TZ-020).
+  expect(r.observed.sort()).toEqual(["announce", "cols", "data", "fit", "label", "link", "loading", "locale", "mono", "motion", "options", "paused", "rows", "src", "theme", "time", "timezone", "type", "view"]);
   expect(r.formAssociated).toBe(false); // REQ-EL-150
   expect(r.styles).toBe(1); // REQ-EL-010
   expect(r.fontFace).toBe(true);

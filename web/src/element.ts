@@ -8,6 +8,11 @@
 // chart takes the data's shape (REQ-EL-050); `fit` scales a fixed grid
 // (REQ-EL-110); charts sharing a `link` share `x.domain` and `cursor.x`
 // (REQ-LINK-010); `timeZone` gives the core its zone table (REQ-TZ-020, 050).
+// From v0.6.0: `src` fetches the data (REQ-DATA-150); each commit of data
+// fires `plot-data` (REQ-STREAM-070); `paused` and Space hold a stream
+// (REQ-A11Y-080); the hidden table is rebuilt at most once a second and
+// never under focus (REQ-A11Y-090); `announce` reads the latest value in a
+// polite live region (REQ-A11Y-100).
 
 import { InputKind } from "./api.ts";
 import {
@@ -15,19 +20,22 @@ import {
   Formats,
   REWRITE_MS,
   TABLE_ROWS,
+  announceSeconds,
   figureName,
+  latestText,
   makeParts,
   throttle,
   valueText,
   writeTable,
 } from "./a11y.ts";
-import { chart, type Chart, type View } from "./chart.ts";
-import { describe, emptyLike, prepare, type AppendInput, type DataInput, type DataObject, type Prepared } from "./data.ts";
+import { chart, type Chart, type ChartData, type View } from "./chart.ts";
+import { describe, emptyLike, prepare, type AppendInput, type DataObject, type Prepared } from "./data.ts";
 import { fontFace } from "./font.ts";
 import { keyCode } from "./input.ts";
 import { localeOf, localePack } from "./locale.ts";
 import { mount, type Mount } from "./mount.ts";
 import { FONT_STACK, type RendererName } from "./render.ts";
+import { loadSource } from "./source.ts";
 import { encodeOf, shapeOf } from "./shape.ts";
 import {
   browserColor,
@@ -49,8 +57,8 @@ import type { Overlay } from "./debug.ts";
 /** The tag. */
 export const TAG = "glyph-plot";
 
-/** The attributes the element observes: the plan's element table, as of v0.5.0 (REQ-EL-020), and `timeZone` (REQ-TZ-020), lower-cased as HTML gives attribute names. */
-export const OBSERVED = ["type", "data", "options", "view", "theme", "locale", "mono", "motion", "label", "cols", "rows", "fit", "loading", "link", "time", "timezone"] as const;
+/** The attributes the element observes: the plan's element table, as of v0.6.0 (REQ-EL-020), and `timeZone` (REQ-TZ-020), lower-cased as HTML gives attribute names. */
+export const OBSERVED = ["type", "data", "src", "options", "view", "theme", "locale", "mono", "motion", "label", "cols", "rows", "fit", "loading", "link", "paused", "announce", "time", "timezone"] as const;
 
 /** Rows without a height of the element's own or a `rows` attribute (REQ-EL-100). */
 export const DEFAULT_ROWS = 12;
@@ -195,7 +203,7 @@ export class GlyphPlot extends Base {
   #laid = "";
   #still: Node[] = [];
   #ready = deferred();
-  #data: DataInput | null = null;
+  #data: ChartData | null = null;
   #prepared: Prepared | null = null;
   #appends: AppendInput[] = [];
   #options: Record<string, unknown> = {};
@@ -221,6 +229,16 @@ export class GlyphPlot extends Base {
   #extent: { of: unknown; span: [number, number] | null } | null = null;
   /** The debug overlay, in a debug build only. */
   #overlay: Overlay | null = null;
+  /** The `src` value last fetched, and the fetch's generation (a later change wins). */
+  #srcFetched: string | null = null;
+  #srcGen = 0;
+  /** The `announce` live region and its throttle (REQ-A11Y-100). */
+  #live: HTMLElement | null = null;
+  #liveSaid = "";
+  #liveLast = -Infinity;
+  #liveTimer: ReturnType<typeof setTimeout> | null = null;
+  /** The table was due while focus was inside it (REQ-A11Y-090). */
+  #tableDue = false;
 
   // ------------------------------------------------------------ properties (REQ-EL-060)
 
@@ -236,14 +254,31 @@ export class GlyphPlot extends Base {
   get data(): DataObject | null {
     if (this.#chart) return this.#chart.data;
     try {
-      const p = this.#prepared ?? (this.#data !== null ? prepare(this.#data) : null);
+      const d = this.#data;
+      const p = this.#prepared ?? (d !== null && !(d instanceof ArrayBuffer) && !(d instanceof Uint8Array) ? prepare(d) : null);
       return p ? describe(p) : null;
     } catch {
       return null;
     }
   }
-  set data(v: DataInput | null) {
+  set data(v: ChartData | null) {
     this.#setData(v);
+  }
+
+  /** The `src` attribute: a URL of CSV, JSON, NDJSON or Arrow, fetched once per change (REQ-DATA-150). */
+  get src(): string {
+    return this.getAttribute("src") ?? "";
+  }
+  set src(v: string) {
+    this.setAttribute("src", v);
+  }
+
+  /** Streamed data is kept, not drawn (REQ-A11Y-080); the `paused` attribute. Space on the cursor toggles it. */
+  get paused(): boolean {
+    return this.hasAttribute("paused");
+  }
+  set paused(on: boolean) {
+    this.toggleAttribute("paused", !!on);
   }
 
   /** The options given, as an object. Setting them keeps the chart, its data and its view (REQ-EL-040). */
@@ -396,11 +431,21 @@ export class GlyphPlot extends Base {
       case "data":
         if (value !== null) {
           try {
-            this.#setData(JSON.parse(value) as DataInput);
+            this.#setData(JSON.parse(value) as ChartData);
           } catch (e) {
             console.error(`glyphplot: the data attribute is not JSON: ${messageOf(e)}`);
           }
         }
+        break;
+      case "src":
+        if (this.#started) this.#fetchSrc();
+        break;
+      case "paused":
+        if (this.#chart) this.#chart.paused = value !== null;
+        if (value === null) this.#announceSoon();
+        break;
+      case "announce":
+        this.#setLive();
         break;
       case "options":
         this.options = value;
@@ -450,7 +495,7 @@ export class GlyphPlot extends Base {
 
   // ------------------------------------------------------------ data, options, view
 
-  #setData(v: DataInput | null): void {
+  #setData(v: ChartData | null): void {
     this.#data = v;
     this.#prepared = null;
     this.#carriedShape = null;
@@ -547,6 +592,8 @@ export class GlyphPlot extends Base {
 
   /** The data's time extent in epoch ms: its first table's first timestamp column, null when it has none. */
   #timeExtent(c: Chart): [number, number] | null {
+    const streamed = c.streamSpan();
+    if (streamed !== undefined) return streamed; // the tail's x, oldest to newest: no scan a frame
     const p = c.prepared();
     if (!p) return null;
     if (this.#extent?.of === p) return this.#extent.span;
@@ -655,9 +702,11 @@ export class GlyphPlot extends Base {
       if (Object.keys(this.#view).length > 0) c.view = this.#view;
     }
     this.#data = null;
+    c.paused = this.hasAttribute("paused");
     this.#zoneName = this.#resolveZone();
     this.#zone = null;
     this.#chart = c;
+    if (this.getAttribute("src") !== this.#srcFetched) this.#fetchSrc();
     c.ready.then(
       () => {
         if (gen !== this.#gen) {
@@ -724,7 +773,20 @@ export class GlyphPlot extends Base {
     this.#unsubscribe = c.subscribe((what) => {
       if (what === "data" || what === "view") this.#updateZone(false);
       if (what === "data" || what === "options" || what === "locale" || what === "zone" || what === "view") this.#a11y.run();
+      if (what === "data") this.#committed(c);
     });
+    // Space on the cursor pauses or resumes a stream (REQ-A11Y-080, WCAG 2.2.2).
+    parts.cursor.addEventListener("keydown", (e) => {
+      if (e.key !== " " || e.isComposing || e.repeat) return;
+      this.paused = !this.paused;
+    });
+    parts.cursor.addEventListener("blur", () => this.#announceSoon());
+    // The table waits while focus is inside it, and is written when focus leaves (REQ-A11Y-090).
+    parts.tableBox.addEventListener("focusout", (e) => {
+      if (this.#tableDue && !parts.tableBox.contains(e.relatedTarget as Node | null)) this.#a11y.run();
+    });
+    this.#setLive();
+    if (c.lastCommit) this.#committed(c);
     this.#remount();
     this.#ro = new ResizeObserver((entries) => {
       const e = entries[entries.length - 1];
@@ -818,7 +880,7 @@ export class GlyphPlot extends Base {
     this.#parts?.frame.classList.remove("gp-loading");
     this.#parts?.controls.classList.remove("gp-loading");
     this.#joinLink();
-    this.#writeA11y();
+    this.#a11y.run(); // now, and the once-a-second clock starts here (REQ-A11Y-090)
     const c = this.#chart;
     this.dispatchEvent(new CustomEvent("plot-ready", { detail: { type: c?.type ?? this.type, cols: this.cols, rows: this.rows }, bubbles: true, composed: true }));
     this.#ready.resolve(this);
@@ -846,7 +908,12 @@ export class GlyphPlot extends Base {
       const summary = c.summary();
       this.#drawing?.setAttribute("aria-label", summary);
       const table = c.table(TABLE_ROWS);
-      writeTable(parts.tableBox, table, this.#fmt);
+      const focused = this.ownerDocument.activeElement;
+      if (focused && parts.tableBox.contains(focused)) this.#tableDue = true; // never under focus (REQ-A11Y-090)
+      else {
+        this.#tableDue = false;
+        writeTable(parts.tableBox, table, this.#fmt);
+      }
       if (!this.getAttribute("label")) this.setAttribute("aria-label", figureName(c.type, table.columns.slice(1)));
       // The slider's range is the view's x domain in data units: the view's own when set, else the fitted one the table reports.
       const set = (c.view["x"] as { domain?: unknown } | null | undefined)?.domain;
@@ -862,6 +929,118 @@ export class GlyphPlot extends Base {
     } catch (e) {
       console.error(`glyphplot: accessible text: ${messageOf(e)}`);
     }
+  }
+
+  // ------------------------------------------------------------ streaming (REQ-STREAM-070, REQ-DATA-150, REQ-A11Y-100)
+
+  /** After each commit of data: `plot-data` (REQ-STREAM-070), and the live region's next word. */
+  #committed(c: Chart): void {
+    const detail = c.lastCommit;
+    if (!detail) return;
+    this.dispatchEvent(new CustomEvent("plot-data", { detail, bubbles: true, composed: true }));
+    this.#announceSoon();
+  }
+
+  /** Fetches `src` and gives what it holds as the data; a failure fires `plot-error` and keeps the data there was. */
+  #fetchSrc(): void {
+    const url = this.getAttribute("src");
+    this.#srcFetched = url;
+    const gen = ++this.#srcGen;
+    if (url === null || url === "") return;
+    const fail = (m: string): void => {
+      console.error(`glyphplot: ${m}`);
+      this.dispatchEvent(new CustomEvent("plot-error", { detail: { type: this.type, message: m }, bubbles: true, composed: true }));
+    };
+    loadSource(url, this.ownerDocument.baseURI).then(
+      async (got) => {
+        if (gen !== this.#srcGen) return; // a later src won
+        if (got.format !== "arrow") {
+          this.#setData(got.data as ChartData);
+          return;
+        }
+        // Arrow goes to the module's set_arrow, which the chart must have loaded to have.
+        const c = this.#chart;
+        if (!c) {
+          this.#setData(got.bytes);
+          return;
+        }
+        try {
+          await c.ready;
+        } catch {
+          return; // the load's own plot-error said why
+        }
+        if (gen !== this.#srcGen || c !== this.#chart) return;
+        try {
+          this.#data = null;
+          this.#prepared = null;
+          this.#appends = [];
+          c.data = got.bytes;
+        } catch (e) {
+          fail(`src "${url}": ${messageOf(e)}`);
+        }
+      },
+      (e: unknown) => {
+        if (gen === this.#srcGen) fail(messageOf(e));
+      },
+    );
+  }
+
+  /** Makes or removes the live region as `announce` says: none without the attribute (REQ-A11Y-100). */
+  #setLive(): void {
+    const on = this.hasAttribute("announce") && this.#parts !== null;
+    if (!on) {
+      this.#live?.remove();
+      this.#live = null;
+      if (this.#liveTimer !== null) clearTimeout(this.#liveTimer);
+      this.#liveTimer = null;
+      return;
+    }
+    if (!this.#live) {
+      const live = this.ownerDocument.createElement("div");
+      live.className = "gp-sr gp-live";
+      live.setAttribute("role", "status");
+      live.setAttribute("aria-live", "polite");
+      live.setAttribute("aria-atomic", "true");
+      this.#live = live;
+      this.#liveSaid = "";
+      super.append(live);
+    }
+    this.#announceSoon();
+  }
+
+  /** The live region's interval in ms: the attribute's seconds, at least 5 (ANNOUNCE_MIN_S). */
+  #liveMs(): number {
+    return announceSeconds(this.getAttribute("announce")) * 1000;
+  }
+
+  /** Announces the latest value now, or when the interval since the last allows (REQ-A11Y-100). */
+  #announceSoon(): void {
+    if (!this.#live || this.#liveTimer !== null) return;
+    const wait = this.#liveLast + this.#liveMs() - Date.now();
+    if (wait <= 0) this.#announce();
+    else
+      this.#liveTimer = setTimeout(() => {
+        this.#liveTimer = null;
+        this.#announce();
+      }, wait);
+  }
+
+  /** Writes the latest value into the live region: silent while paused or while the cursor has focus, and when nothing new has come. */
+  #announce(): void {
+    const live = this.#live;
+    const c = this.#chart;
+    if (!live || !c || !this.#made || c.dead) return;
+    if (this.paused || this.ownerDocument.activeElement === this.#parts?.cursor) return; // the cursor's blur and the resume ask again
+    let text = "";
+    try {
+      text = latestText(c.latest(), c.data, this.#fmt, encodeOf(this.#options));
+    } catch (e) {
+      console.error(`glyphplot: announce: ${messageOf(e)}`);
+    }
+    if (text === "" || text === this.#liveSaid) return;
+    this.#liveSaid = text;
+    this.#liveLast = Date.now();
+    live.textContent = text;
   }
 
   // ------------------------------------------------------------ size (REQ-EL-080 to 100)
@@ -1009,6 +1188,10 @@ export class GlyphPlot extends Base {
     this.#stopTheme = null;
     this.#stopDpr?.();
     this.#stopDpr = null;
+    if (this.#liveTimer !== null) clearTimeout(this.#liveTimer);
+    this.#liveTimer = null;
+    this.#live?.remove();
+    this.#live = null;
     const c = this.#chart;
     if (c) {
       try {
@@ -1016,6 +1199,7 @@ export class GlyphPlot extends Base {
           this.#view = c.view;
           delete this.#view["motion"];
         }
+        if (c.arrow) this.#data = c.arrow;
         const p = c.prepared();
         if (p) {
           this.#prepared = p;

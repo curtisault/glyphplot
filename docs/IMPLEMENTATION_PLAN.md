@@ -344,7 +344,7 @@ testing.md, with the milestone each rule lands in.
 | 11 | one ink tells series apart | In `multi-4`, each series draws a glyph or pattern the others do not | v0.4.0 |
 | 12 | paper | `paper` frames keep rules 3–6 | v0.4.0 |
 | 13 | resize | A chart drawn at A, then B, then A draws its first A frame again; its B frame equals a fresh chart's; its view is unchanged in data units | v0.4.0 |
-| 14 | streaming equals replace | Appending in batches of 1, 7, ⌊n/3⌋ and the rest ends on the frame and view of a replace; with ring capacity c < n, of the last c rows | v0.6.0 |
+| 14 | streaming equals replace | Appending in batches of 1, 7, ⌊n/3⌋ and the rest ends on the frame and view of a replace with the rows the append rules keep (the same rows for sorted, distinct x); with ring capacity c < n, of the last c of them | v0.6.0 |
 | 15 | replace is whole | Replacing with a, then b, draws what b alone draws | v0.4.0 |
 | 16 | view round trip | `set_view(view())` changes nothing; a view through JSON onto a fresh chart draws the same frame | v0.4.0 |
 | 17 | input is deterministic | A scripted input list on two fresh charts gives the same events, views and frames; the resulting view on a third gives that frame | v0.4.0 |
@@ -476,7 +476,7 @@ Built by `crates/wasm` once per family. The shell is its only consumer
 | `text()` | string | The frame as text | v0.3.0 |
 | `summary()`, `table_json(max_rows)` | string | The drawing's label, and the hidden table as `{caption, columns, rows, total, domain}`: cells are the core's formatted strings, `domain` the x domain drawn (the slider's min and max) | v0.3.0 |
 | `meta_json()` | string | The type's `Meta` | v0.3.0 |
-| `staging(n)`, `append(n)` | pointer, integer | Streaming: a staging buffer of `n` rows, then commit it; returns rows, dropped, late | v0.6.0 |
+| `staging(n)`, `append(n)` | pointer, `Float64Array` | Streaming: `staging(n)` returns the address of `k × n` `f64`s, `k` the columns last committed, column after column (column `j` at byte `ptr + 8·j·n`), each written as a `reserve_column` kind-0 buffer holds it; `append(n)` appends them by the append rules and returns `[rows, dropped, late, version]` | v0.6.0 |
 | `set_arrow(bytes)` | integer | An Arrow IPC stream as the new data | v0.6.0 |
 | `svg(theme_json)`, `ansi(theme_json)` | string | The exports, in Rust (ADR-135) | v0.8.0 |
 | `free()` | — | Releases the chart | v0.3.0 |
@@ -1439,6 +1439,42 @@ Acceptance:
 
 <a id="phase-5"></a>
 ### Phase 5 · Streaming (v0.6.0)
+
+Done 2026-10-22. Every acceptance command passes: rule 14 for every chart,
+`test:site` with `streaming.spec.ts`, and `bench:web`'s streaming row at
+301.7 ms of CPU a second against 500 (headless Chromium 156, load 4.2).
+`mise run check` takes 37 s. Built in three parts at once:
+- the core ring with rule 14;
+- the Arrow reader;
+- the shell, written against the boundary table with a fallback.
+An integration pass then moved the shell onto the module's members.
+Differences from the tasks:
+- **The ring grows to `retain.rows` and is never reallocated after,** rather
+  than being allocated once: 1M rows up front would cost 8 MB a column for
+  every streaming chart. REQ-STREAM-020 and ADR-107 now say so.
+- **Rule 14's reference** is a replace with the rows the append rules keep:
+  `unsorted-x` and `duplicate-x` cannot otherwise hold. It also runs into a
+  ring of n/2 and with a following view.
+- **A replace now drops rows with a missing x** (REQ-DATA-030).
+- **The Arrow reader** adds 6,911 B gzipped; its fixtures are written by
+  pinned pyarrow (ADR-105 updated). It refuses the file format, so the shell
+  sends a file's stream part.
+- **Integration found two shell faults:** appended us and ns timestamps
+  landed decades late (the shell staged absolute values against the module's
+  origin), and the Arrow file format was sent whole.
+- **REQ-STREAM-050** holds with a thin margin: 0.75 µs a row against 1 µs,
+  after 20,000 warm rows, since V8 optimises wasm only once it is hot.
+- **Module sizes:** line 223,792 B, candles 207,925 B, bar 191,021 B
+  gzipped, past half the budget. JSON through serde is still the largest
+  part (v0.4.0's proposal).
+- **Partly covered:**
+  - DATA-140 (the CLI half waits for Phase 7);
+  - A11Y-080 (resuming with nothing appended does not move the domain until
+    the next append);
+  - A11Y-100 (the screen-reader check is the owner's).
+- **Left for the owner:** the one-line test on `site/live.html` (a
+  simulated feed) on a phone over a throttled network, scrubbed with a
+  finger, with only the `candles` module fetched; and checklist cases 30–32.
 
 Tasks:
 1. The ring (`retain.rows`, `retain.age`), `staging`/`append`, the equal-x

@@ -10,9 +10,9 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { BUILD, DEBUG, PKG, debugOnly, releaseOnly, manifest, types, moduleFor, instantiate, moduleOfType, shell, views, textOf, series, commitColumns } from "./support/wasm.mjs";
 
-/** The plan's boundary table, v0.3.0 members, plus set_zone (v0.5.0, exported early). */
+/** The plan's boundary table: v0.3.0's members, set_zone (v0.5.0), and staging, append and set_arrow (v0.6.0). */
 const CHART_MEMBERS = [
-  "set_options", "reserve_column", "set_column", "commit", "set_locale", "set_zone", "view_json", "set_view", "input", "events_json",
+  "set_options", "reserve_column", "set_column", "commit", "set_arrow", "staging", "append", "set_locale", "set_zone", "view_json", "set_view", "input", "events_json",
   "resize", "set_mono", "frame", "cols", "rows", "cells_ptr", "colors_ptr", "backs_ptr", "text", "summary", "table_json", "meta_json", "free",
 ];
 /** wasm-bindgen's own members of every exported class. */

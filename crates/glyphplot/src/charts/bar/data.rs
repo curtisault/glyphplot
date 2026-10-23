@@ -15,12 +15,20 @@
 //! drawn and ticked as displayed (stored × `scale` + `offset`, an affine map,
 //! so the bars stand where the stored values would) and read out with the
 //! unit, while the stored values never change (REQ-DATA-100).
+//!
+//! The rows live in the core's ring of `retain.rows` (`ring.rs`,
+//! REQ-STREAM-020), read in place. A band chart has no x to order its rows
+//! by, so an append adds every row as a new category after the others, new
+//! labels after the old ones, and the oldest categories go past
+//! `retain.rows`.
 
+use std::cell::OnceCell;
 use std::collections::BTreeMap;
 
-use crate::data::{ColumnType, Encode, Table, Values, Warning, Warnings};
+use crate::data::{ColumnType, DataError, Encode, Table, Warning, Warnings};
 use crate::events::Value;
 use crate::format::{Display, Locale, NumberFormat, Specifier};
+use crate::ring::{Counts, Retain, Ring, Seq};
 
 /// Where the categories' labels come from.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -44,15 +52,13 @@ pub(super) struct Series {
     col: usize,
     /// The column's display transform (REQ-DATA-100).
     pub display: Display,
-    /// The least finite value as displayed; NaN when none is finite.
-    pub least: f64,
 }
 
 /// The data as the bar chart draws it.
 #[derive(Clone, Debug)]
 pub(super) struct Prepared {
-    /// The table, in its own row order.
-    pub table: Option<Table>,
+    /// The rows, in their own order, in a ring (REQ-STREAM-020).
+    pub ring: Option<Ring>,
     /// Where the labels come from.
     labels: Labels,
     /// The category column's name, the table's first header.
@@ -61,6 +67,10 @@ pub(super) struct Prepared {
     pub series: Vec<Series>,
     /// The categories: one a row.
     n: usize,
+    /// Each series' least finite value as displayed (NaN when none is),
+    /// found when first asked after the rows changed: only `signed: auto`
+    /// asks, so an append reads no row it does not add.
+    least: OnceCell<Vec<f64>>,
     /// What the data says once.
     pub warnings: Warnings,
 }
@@ -68,20 +78,20 @@ pub(super) struct Prepared {
 impl Prepared {
     /// No data.
     pub fn empty() -> Prepared {
-        Prepared { table: None, labels: Labels::Rows, cat_name: "category".into(), series: Vec::new(), n: 0, warnings: Warnings::new() }
+        Prepared { ring: None, labels: Labels::Rows, cat_name: "category".into(), series: Vec::new(), n: 0, least: OnceCell::new(), warnings: Warnings::new() }
     }
 
     /// The table's categories and series by the channels `encode` and the
-    /// columns give (REQ-DATA-080).
-    pub fn new(table: Table, encode: &Encode) -> Prepared {
+    /// columns give (REQ-DATA-080), its rows in a ring that keeps `retain`
+    /// (REQ-STREAM-020); with the rows the ring dropped.
+    pub fn new(table: Table, encode: &Encode, retain: Retain) -> (Prepared, usize) {
         let mut p = Prepared::empty();
         let cols = table.columns();
         let labels = match table.channel("category", encode) {
             Ok(i) => Some(i),
             Err(w @ Warning::UnknownColumn { .. }) => {
                 p.warnings.push(w);
-                p.table = Some(table);
-                return p;
+                return p.held(table, retain);
             }
             Err(_) => cols.iter().position(|c| c.kind == ColumnType::Category).or_else(|| cols.iter().position(|c| c.kind == ColumnType::String)),
         };
@@ -89,15 +99,13 @@ impl Prepared {
             Ok(v) => v.into_iter().filter(|&i| cols[i].kind.is_numeric() && Some(i) != labels).collect::<Vec<_>>(),
             Err(w @ Warning::UnknownColumn { .. }) => {
                 p.warnings.push(w);
-                p.table = Some(table);
-                return p;
+                return p.held(table, retain);
             }
             Err(_) => (0..cols.len()).filter(|&i| Some(i) != labels && cols[i].kind.is_numeric() && cols[i].kind != ColumnType::Timestamp).collect(),
         };
         if values.is_empty() {
             p.warnings.push(Warning::NoChannel { channel: "value".into() });
-            p.table = Some(table);
-            return p;
+            return p.held(table, retain);
         }
         p.labels = match labels {
             None => Labels::Rows,
@@ -108,22 +116,61 @@ impl Prepared {
             },
         };
         p.cat_name = labels.map_or_else(|| "row".to_string(), |i| cols[i].name.clone());
-        p.series = values
-            .into_iter()
-            .map(|i| {
-                let display = Display::of(&cols[i]);
-                let least = cols[i].nums().unwrap_or(&[]).iter().map(|&v| display.shown(v)).filter(|v| v.is_finite()).fold(f64::NAN, f64::min);
-                Series { name: cols[i].name.clone(), col: i, display, least }
-            })
-            .collect();
-        p.n = table.len();
-        p.table = Some(table);
-        p
+        p.series = values.into_iter().map(|i| Series { name: cols[i].name.clone(), col: i, display: Display::of(&cols[i]) }).collect();
+        let (ring, dropped) = Ring::new(table, retain, None);
+        p.ring = Some(ring);
+        p.derive();
+        (p, dropped)
+    }
+
+    /// The table held as it is, with nothing to draw.
+    fn held(mut self, table: Table, retain: Retain) -> (Prepared, usize) {
+        let (ring, dropped) = Ring::new(table, retain, None);
+        self.ring = Some(ring);
+        (self, dropped)
+    }
+
+    /// What is derived from the rows: the categories; each series' least
+    /// value is found again when asked.
+    fn derive(&mut self) {
+        let Some(ring) = &self.ring else { return };
+        self.least = OnceCell::new();
+        self.n = if self.series.is_empty() { 0 } else { ring.len() };
+    }
+
+    /// Series `s`'s least finite value as displayed; NaN when none is.
+    pub fn least(&self, s: usize) -> f64 {
+        let all = self.least.get_or_init(|| {
+            (0..self.series.len())
+                .map(|s| self.values(s).iter().map(|&v| self.series[s].display.shown(v)).filter(|v| v.is_finite()).fold(f64::NAN, f64::min))
+                .collect()
+        });
+        all.get(s).copied().unwrap_or(f64::NAN)
+    }
+
+    /// Appends `batch`'s rows, each a category after the others
+    /// (REQ-STREAM-020).
+    pub fn append(&mut self, batch: &Table) -> Result<Counts, DataError> {
+        let Some(ring) = &mut self.ring else { return Ok(Counts::default()) };
+        let counts = ring.append(batch, None, None)?;
+        self.derive();
+        Ok(counts)
+    }
+
+    /// New retention, the rows past it dropped now; how many.
+    pub fn set_retain(&mut self, retain: Retain) -> usize {
+        let Some(ring) = &mut self.ring else { return 0 };
+        if ring.retain() == retain {
+            return 0;
+        }
+        let dropped = ring.set_retain(retain, None);
+        self.derive();
+        dropped
     }
 
     /// The table back, for preparing again under new options.
     pub fn into_table(self) -> Option<Table> {
-        self.table
+        self.ring.map(Ring::into_table)
     }
 
     /// The categories: the table's rows when it has a value column, else 0.
@@ -131,15 +178,15 @@ impl Prepared {
         self.n
     }
 
-    /// The rows the table holds.
+    /// The rows held.
     pub fn rows(&self) -> usize {
-        self.table.as_ref().map_or(0, Table::len)
+        self.ring.as_ref().map_or(0, Ring::len)
     }
 
-    /// Series `s`'s stored values, one a category.
-    pub fn values(&self, s: usize) -> &[f64] {
+    /// Series `s`'s stored values, one a category, in place.
+    pub fn values(&self, s: usize) -> Seq<'_, f64> {
         let col = self.series[s].col;
-        self.table.as_ref().and_then(|t| t.column(col)).and_then(|c| c.nums()).unwrap_or(&[])
+        self.ring.as_ref().and_then(|r| r.nums(col)).unwrap_or_default()
     }
 
     /// Series `s`'s stored value in category `i`; NaN when missing.
@@ -154,21 +201,21 @@ impl Prepared {
 
     /// The label of category `i`, written into `out`.
     pub fn label_into(&self, i: usize, locale: &Locale, out: &mut String) {
-        let Some(t) = &self.table else { return };
+        let Some(t) = &self.ring else { return };
         match self.labels {
             Labels::Column(c) => {
-                if let Some(l) = t.column(c).and_then(|c| c.label(i)) {
+                if let Some(l) = t.label(c, i) {
                     out.push_str(l);
                 }
             }
             Labels::Numbers(c) => {
-                let v = t.column(c).map_or(f64::NAN, |c| c.get(i));
+                let v = t.get(c, i);
                 if v.is_finite() {
                     NumberFormat::new(&Specifier::default(), locale).format_into(v, out);
                 }
             }
             Labels::Dates(c) => {
-                let v = t.column(c).map_or(f64::NAN, |c| c.to_ms(c.get(i)));
+                let v = t.column(c).map_or(f64::NAN, |col| col.to_ms(t.get(c, i)));
                 if v.is_finite() {
                     crate::time::strftime("%Y-%m-%d", v, &locale.time, out);
                 }
@@ -197,19 +244,7 @@ impl Prepared {
     /// held, timestamps in epoch ms, categories and strings as labels,
     /// missing as null.
     pub fn datum(&self, row: usize) -> BTreeMap<String, Value> {
-        let mut out = BTreeMap::new();
-        let Some(t) = &self.table else { return out };
-        for c in t.columns() {
-            let v = match &c.values {
-                Values::Num(v) => match v.get(row) {
-                    Some(&h) if !h.is_nan() => Value::Number(c.to_ms(h)),
-                    _ => Value::Null,
-                },
-                _ => c.label(row).map_or(Value::Null, |l| Value::Text(l.to_string())),
-            };
-            out.insert(c.name.clone(), v);
-        }
-        out
+        self.ring.as_ref().map(|r| r.datum(row)).unwrap_or_default()
     }
 }
 
@@ -220,7 +255,7 @@ mod tests {
     use crate::fixtures::generate;
 
     fn prep(data: Data) -> Prepared {
-        Prepared::new(data.into_tables().remove(0).1, &Encode::default())
+        Prepared::new(data.into_tables().remove(0).1, &Encode::default(), Retain::default()).0
     }
 
     /// REQ-DATA-080: categories and values by role, by fallback and by row.

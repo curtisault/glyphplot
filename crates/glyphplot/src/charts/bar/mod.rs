@@ -46,7 +46,7 @@ use std::collections::BTreeMap;
 use crate::annotate::{self, Annotation};
 use crate::cells::Axis;
 use crate::chart::{Accepted, Appended, CellPos, Changes, Charset, Chart, Env, Hit, MakeError, Meta, Mono, Part, Size, Table};
-use crate::data::{Column, Data, DataError, Encode, Shape, Table as DataTable, Values};
+use crate::data::{Data, DataError, Encode, Shape};
 use crate::events::Value;
 use crate::format::{Locale, NumberFormat, Specifier};
 use crate::grid::{Grid, NO_BACK};
@@ -58,6 +58,7 @@ use crate::options::Options;
 use crate::palette::GROUND;
 use crate::reduce::{reduce, DragMode, Gesture, Interaction, Plot, Scene, WheelMode};
 use crate::registry::{Entry, Family};
+use crate::ring::Retain;
 use crate::table::pick_rows;
 use crate::text;
 use crate::view::{clean_domain, Cursor, Fit, View, ViewPatch};
@@ -80,7 +81,7 @@ pub static META: Meta = Meta {
     modes: &["bar"],
     shapes: &[Shape::Counts, Shape::Values],
     options: Some(
-        r#"{"mode":"bar","orient":"vertical","stack":false,"padding":0.2,"baseline":0,"signed":"auto","title":"","encode":{},"legend":{"position":"auto"},"drag":"pan","wheel":"scroll","patterns":"auto","motion":false,"annotations":[]}"#,
+        r#"{"mode":"bar","orient":"vertical","stack":false,"padding":0.2,"baseline":0,"signed":"auto","title":"","encode":{},"legend":{"position":"auto"},"drag":"pan","wheel":"scroll","patterns":"auto","motion":false,"annotations":[],"retain":{"rows":1000000}}"#,
     ),
     min: Size { cols: 30, rows: 6 },
     drop: &[Part::Title, Part::Legend, Part::Axes],
@@ -133,6 +134,8 @@ pub(crate) struct Config {
     patterns: Patterns,
     /// The `annotations` option (REQ-ANNOT-010).
     annotations: Vec<Annotation>,
+    /// The `retain` option: the ring's rows (REQ-STREAM-020).
+    retain: Retain,
 }
 
 /// The options read: every key has a default in [`META`]'s (REQ-OPT-010).
@@ -166,6 +169,7 @@ fn config(o: &Options) -> Result<Config, MakeError> {
         },
         patterns: Patterns::from_option(o.choice("patterns", &["auto", "on", "off"])),
         annotations: annotate::parse(o.get("annotations"))?,
+        retain: Retain::from_options(o),
     })
 }
 
@@ -514,13 +518,22 @@ impl BarChart {
     fn take_data(&mut self, data: Data) -> Result<Accepted, DataError> {
         data.shape(META.shapes, &self.cfg.encode)?;
         let table = data.into_tables().into_iter().next().map(|(_, t)| t);
-        self.data = table.map_or_else(Prepared::empty, |t| Prepared::new(t, &self.cfg.encode));
+        self.data = table.map_or_else(Prepared::empty, |t| Prepared::new(t, &self.cfg.encode, self.cfg.retain).0);
+        self.changed();
+        Ok(Accepted { rows: self.data.rows(), version: self.data_version, warnings: self.data.warnings.as_slice().to_vec() })
+    }
+
+    /// After the data changed: a new version, the caches dropped, a
+    /// following view moved to end at the last category with its span kept
+    /// (REQ-VIEW-060), and the cursor snapped again.
+    fn changed(&mut self) {
         self.geom = None;
         *self.extent.get_mut() = None;
         self.base_key = None;
         self.data_version += 1;
+        let n = self.data.len();
+        self.view.follow_to((n > 0).then_some(n as f64 - 0.5));
         self.resnap();
-        Ok(Accepted { rows: self.data.rows(), version: self.data_version, warnings: self.data.warnings.as_slice().to_vec() })
     }
 }
 
@@ -532,64 +545,20 @@ fn count(n: usize, locale: &Locale) -> String {
     }
 }
 
-/// `table`'s rows with `batch`'s after them: the same columns by name and
-/// type, numbers held without an origin, category labels merged (new labels
-/// after the old ones).
-fn appended(table: &DataTable, batch: &DataTable) -> Result<DataTable, DataError> {
-    let cols = table.columns();
-    if batch.columns().len() != cols.len() {
-        return Err(DataError::Append(format!("rows have {} columns; the data has {}", batch.columns().len(), cols.len())));
-    }
-    let mut out = Vec::with_capacity(cols.len());
-    for c in cols {
-        let Some(b) = batch.by_name(&c.name).filter(|b| b.kind == c.kind && b.origin == 0 && c.origin == 0) else {
-            return Err(DataError::Append(format!("column `{}` is missing, of another type or held from an origin", c.name)));
-        };
-        let values = match (&c.values, &b.values) {
-            (Values::Num(a), Values::Num(v)) => Values::Num(a.iter().chain(v).copied().collect()),
-            (Values::Text(a), Values::Text(v)) => Values::Text(a.iter().chain(v).cloned().collect()),
-            (Values::Codes(a), Values::Codes(v)) => {
-                let mut labels = c.categories.clone();
-                let mut codes = a.clone();
-                for (r, &code) in v.iter().enumerate() {
-                    let Some(l) = b.categories.get(code as usize).filter(|_| !b.is_missing(r)) else {
-                        codes.push(u32::MAX);
-                        continue;
-                    };
-                    let at = labels.iter().position(|x| x == l).unwrap_or_else(|| {
-                        labels.push(l.clone());
-                        labels.len() - 1
-                    });
-                    codes.push(at as u32);
-                }
-                let mut n = Column::categories(&c.name, labels, codes);
-                n.role = c.role;
-                out.push(n);
-                continue;
-            }
-            _ => return Err(DataError::Append(format!("column `{}` holds values of another kind", c.name))),
-        };
-        let mut n = c.clone();
-        n.values = values;
-        out.push(n);
-    }
-    DataTable::from_columns(out)
-}
-
 impl Chart for BarChart {
     fn set_data(&mut self, data: Data) -> Result<Accepted, DataError> {
         self.take_data(data)
     }
 
     fn append(&mut self, batch: Data) -> Result<Appended, DataError> {
-        let Some(old) = self.data.table.as_ref() else {
+        if self.data.ring.is_none() {
             let a = self.take_data(batch)?;
-            return Ok(Appended { rows: a.rows, dropped: 0, late: 0, version: a.version });
-        };
+            return Ok(Appended { rows: a.rows, dropped: self.data.ring.as_ref().map_or(0, |r| r.first() as usize), late: 0, version: a.version });
+        }
         let Some(new) = batch.first_table() else { return Err(DataError::Shape { expected: META.shapes.to_vec() }) };
-        let table = appended(old, new)?;
-        let a = self.take_data(Data::from_table(table))?;
-        Ok(Appended { rows: a.rows, dropped: 0, late: 0, version: a.version })
+        let counts = self.data.append(new)?;
+        self.changed();
+        Ok(Appended { rows: self.data.rows(), dropped: counts.dropped, late: counts.late, version: self.data_version })
     }
 
     fn set_options(&mut self, options: &Options) -> Result<(), MakeError> {
@@ -602,9 +571,10 @@ impl Chart for BarChart {
         *self.extent.get_mut() = None;
         if encode_changed {
             let table = std::mem::replace(&mut self.data, Prepared::empty()).into_table();
-            self.data = table.map_or_else(Prepared::empty, |t| Prepared::new(t, &self.cfg.encode));
-            self.data_version += 1;
-            self.resnap();
+            self.data = table.map_or_else(Prepared::empty, |t| Prepared::new(t, &self.cfg.encode, self.cfg.retain).0);
+            self.changed();
+        } else if self.data.set_retain(self.cfg.retain) > 0 {
+            self.changed();
         }
         Ok(())
     }

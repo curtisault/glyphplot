@@ -424,14 +424,78 @@ fn daily_closes_resample_into_weekly_candles() {
     let (lv, price) = (&gm.level, c.data.price(3));
     assert!(gm.shown.len() >= 50);
     for k in 0..lv.len() {
-        let rows = lv.rows[k][0]..=lv.rows[k][1];
-        let week = &price[rows.clone()];
+        let rows = lv.rows[k][0]..lv.rows[k][1] + 1;
+        let week = price.slice(rows.clone());
         assert_eq!((lv.ohlc[0][k], lv.ohlc[3][k]), (week[0], week[week.len() - 1]));
         assert_eq!(lv.ohlc[1][k], week.iter().copied().fold(f64::MIN, f64::max));
         assert_eq!(lv.ohlc[2][k], week.iter().copied().fold(f64::MAX, f64::min));
     }
     let t = c.table(5);
     assert_eq!(t.columns, ["date", "price", "price", "price", "price"]);
+}
+
+/// REQ-CANDLE-060, REQ-STREAM-040: a streamed row of the last candle's time
+/// updates that candle in place (no candle added, its prices the row's, the
+/// frame a replace's); a tick whose time falls inside the last resampled
+/// candle updates that candle's high, low and close; a row before it is late.
+#[test]
+fn append_updates_the_last_candle() {
+    let bar = |t: Vec<f64>, o: Vec<f64>, h: Vec<f64>, l: Vec<f64>, c: Vec<f64>| {
+        Data::from_table(
+            DataTable::from_columns(vec![
+                Column::timestamps_ms("t", t).role(Role::X),
+                Column::f64("open", o),
+                Column::f64("high", h),
+                Column::f64("low", l),
+                Column::f64("close", c),
+            ])
+            .unwrap(),
+        )
+    };
+    let day = 86_400_000.0;
+    let t: Vec<f64> = (0..20).map(|i| f64::from(i) * day).collect();
+    let p: Vec<f64> = (0..20).map(|i| 100.0 + f64::from(i)).collect();
+    let mut c = CandlesChart::new(&Options::new()).unwrap();
+    c.set_data(bar(t.clone(), p.clone(), p.iter().map(|v| v + 2.0).collect(), p.iter().map(|v| v - 2.0).collect(), p.clone())).unwrap();
+    draw(&mut c, 80, 24, &Env::plain());
+    let candles = geom(&c).level.len();
+    // The forming candle, sent again with its time: it is replaced.
+    let a = c.append(bar(vec![19.0 * day], vec![119.0], vec![130.0], vec![110.0], vec![125.0])).unwrap();
+    assert_eq!((a.rows, a.late, a.dropped), (20, 0, 0));
+    draw(&mut c, 80, 24, &Env::plain());
+    let lv = &geom(&c).level;
+    assert_eq!(lv.len(), candles, "no candle added");
+    assert_eq!(lv.ohlc.iter().map(|col| col[candles - 1]).collect::<Vec<_>>(), [119.0, 130.0, 110.0, 125.0]);
+    let mut hp: Vec<f64> = p.iter().map(|v| v + 2.0).collect();
+    let mut lp: Vec<f64> = p.iter().map(|v| v - 2.0).collect();
+    let mut cp = p.clone();
+    (hp[19], lp[19], cp[19]) = (130.0, 110.0, 125.0);
+    let mut whole = CandlesChart::new(&Options::new()).unwrap();
+    whole.set_data(bar(t.clone(), p.clone(), hp, lp, cp)).unwrap();
+    assert_eq!(draw(&mut c, 80, 24, &Env::plain()), draw(&mut whole, 80, 24, &Env::plain()));
+    assert_eq!(c.append(bar(vec![3.0 * day], vec![1.0], vec![1.0], vec![1.0], vec![1.0])).unwrap().late, 1);
+
+    // Ticks resampled into hourly candles: a tick inside the last hour
+    // updates that candle.
+    let minute = 60_000.0;
+    let ticks = |t: Vec<f64>, v: Vec<f64>| {
+        Data::from_table(DataTable::from_columns(vec![Column::timestamps_ms("t", t).role(Role::X), Column::f64("close", v).role(Role::Close)]).unwrap())
+    };
+    let n = 20 * 60;
+    let tt: Vec<f64> = (0..n).map(|i| f64::from(i) * minute).collect();
+    let tv: Vec<f64> = (0..n).map(|i| 50.0 + (f64::from(i) / 30.0).sin()).collect();
+    let mut c = CandlesChart::new(&Options::new()).unwrap();
+    c.set_data(ticks(tt.clone(), tv.clone())).unwrap();
+    draw(&mut c, 40, 12, &Env::plain());
+    let (interval, candles) = (c.spacing().unwrap().2, geom(&c).level.len());
+    assert!(interval.is_some(), "the minutes are resampled at 40 × 12");
+    let at = tt[n as usize - 1] + 30_000.0;
+    c.append(ticks(vec![at], vec![99.0])).unwrap();
+    draw(&mut c, 40, 12, &Env::plain());
+    let lv = &geom(&c).level;
+    assert_eq!((c.spacing().unwrap().2, lv.len()), (interval, candles), "the tick falls in the last candle");
+    let k = lv.len() - 1;
+    assert_eq!((lv.ohlc[1][k], lv.ohlc[3][k]), (99.0, 99.0), "its high and close are the tick's");
 }
 
 /// REQ-CANDLE-010: the three modes draw three frames.

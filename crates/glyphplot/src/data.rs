@@ -16,10 +16,12 @@
 //! history, and nothing in this module keeps an earlier version or eases
 //! between two.
 //!
-//! The JSON form ([`Data::from_json`]) is in [`desc`]. The CSV reader and the
-//! Arrow reader arrive in later phases (REQ-DATA-030's empty CSV field and
-//! cleared validity bit, REQ-DATA-140).
+//! The JSON form ([`Data::from_json`]) is in [`desc`], and the Arrow IPC
+//! stream reader ([`Table::from_arrow_ipc`]) in [`arrow`] (REQ-DATA-140): a
+//! cleared validity bit reads as missing. CSV is read by the shell, and by
+//! the CLI's `text` feature when it lands (REQ-DATA-030's empty field).
 
+pub mod arrow;
 pub mod desc;
 #[cfg(feature = "text")]
 pub(crate) mod rfc3339;
@@ -452,6 +454,24 @@ impl Column {
         Column::with(name, ColumnType::String, Values::Text(values))
     }
 
+    /// A column of this one's name, type, role, unit, origin and labels with
+    /// `values`; this one's values are not copied.
+    pub fn with_values(&self, values: Values) -> Column {
+        Column {
+            name: self.name.clone(),
+            kind: self.kind,
+            role: self.role,
+            unit: self.unit.clone(),
+            scale: self.scale,
+            offset: self.offset,
+            time_unit: self.time_unit,
+            origin: self.origin,
+            zone: self.zone.clone(),
+            categories: self.categories.clone(),
+            values,
+        }
+    }
+
     /// The column with `role`.
     pub fn role(mut self, role: Role) -> Column {
         self.role = Some(role);
@@ -802,6 +822,18 @@ impl Table {
             }
             None => self,
         }
+    }
+
+    /// The columns and the row count, by value: how a ring takes a table's
+    /// buffers without a copy (`ring.rs`).
+    pub(crate) fn into_parts(self) -> (Vec<Column>, usize) {
+        (self.columns, self.len)
+    }
+
+    /// A table of `columns`, each of `len` values, already checked: a ring's
+    /// rows given back (`ring.rs`).
+    pub(crate) fn from_parts(columns: Vec<Column>, len: usize) -> Table {
+        Table { len, columns, sorted: None, frame: None, epoch: None }
     }
 
     /// The table with its rows in the order `order` gives; `order` must be a

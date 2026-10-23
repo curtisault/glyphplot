@@ -15,7 +15,13 @@
 // best run counts, as contract rule 30 does natively (the plan, "Contract
 // rules"): a slow chart is slow every time, a loaded machine only now and then.
 //
-//   node bench/web.mjs [type …]
+// The streaming row (REQ-PERF-070): `line` holding random-walk-1m (a full
+// ring of 1,000,000), one sample a simulated ms appended, drawn at 60 Hz at
+// 320 × 120 for 10 simulated seconds; the summed CPU of the appends, the
+// writes and the frames, a second, against 500 ms; 3 runs, min and median.
+// The writes go through the module's `staging(n)` and `append(n)`.
+//
+//   node bench/web.mjs [type …]      (`stream` among them for the streaming row alone)
 import { chromium } from "@playwright/test";
 import { ensureFixtures, load, machine, needBuild, stats, table } from "./common.mjs";
 import { serve } from "./serve.mjs";
@@ -24,6 +30,9 @@ import { serve } from "./serve.mjs";
 const FRAME = { avg: 8, worst: 16 };
 /** REQ-PERF-050: a pointer move in wasm, 1M points. */
 const MOVE = { avg: 0.5, worst: 2 };
+/** REQ-PERF-070: CPU ms a second, streaming 1 kHz into a full 1M ring at 60 Hz. */
+const STREAM_MS = 500;
+const STREAM = { type: "line", fixture: "random-walk-1m", cols: 320, rows: 120, seconds: 10, runs: 3 };
 const SIZES = [
   [80, 24],
   [320, 120],
@@ -38,6 +47,7 @@ const server = await serve();
 const browser = await chromium.launch({ headless: true });
 const rows = [];
 const notes = [];
+let streamRow = null;
 let over = false;
 let isolated = null;
 const started = Date.now();
@@ -51,7 +61,7 @@ try {
   await page.goto(`${server.url}/bench/web.html`);
   await page.waitForFunction(() => window.benchReady === true);
   const charts = (await page.evaluate(() => window.bench.charts())).filter((c) => only.length === 0 || only.includes(c.slug));
-  if (charts.length === 0) throw new Error(only.length ? `no chart named ${only.join(", ")}` : "the manifest lists no chart");
+  if (charts.length === 0 && !only.includes("stream")) throw new Error(only.length ? `no chart named ${only.join(", ")}` : "the manifest lists no chart");
   for (const c of charts) {
     const fixtures = await page.evaluate((shapes) => window.bench.fixturesFor(shapes), c.shapes);
     if (fixtures.length === 0) {
@@ -81,22 +91,64 @@ try {
       }
     }
   }
+  if (only.length === 0 || only.includes("stream")) streamRow = await streaming(page);
 } finally {
   await browser.close();
   await server.close();
 }
 
-console.log(
-  table(["chart", "fixture", "cells", "measure", "avg ms", "worst ms", "budget avg / worst", "wasm avg / worst", "draw avg / worst", ""], rows),
-);
-console.log(
-  `frame = chart.frame in wasm + the canvas draw (text renderer), 300 display frames panning the fixture; pointer = chart.input + the overlay frame in wasm, 300 moves, its draw not gated. performance.now() in the page, cross-origin isolated: ${isolated}.`,
-);
+if (rows.length > 0) {
+  console.log(
+    table(["chart", "fixture", "cells", "measure", "avg ms", "worst ms", "budget avg / worst", "wasm avg / worst", "draw avg / worst", ""], rows),
+  );
+  console.log(
+    `frame = chart.frame in wasm + the canvas draw (text renderer), 300 display frames panning the fixture; pointer = chart.input + the overlay frame in wasm, 300 moves, its draw not gated. performance.now() in the page, cross-origin isolated: ${isolated}.`,
+  );
+}
+if (streamRow) {
+  console.log("");
+  console.log(table(["chart", "fixture", "cells", "writes", "samples", "append ms/s", "write ms/s", "frame ms/s", "CPU ms/s min / median", "budget", ""], [streamRow.cells]));
+  console.log(
+    `streaming = ${STREAM.seconds} simulated s of 1 sample/ms (each its own append()) into a full ring of 1,000,000 with 60 Hz frames, run back to back; append = the shell's append() calls, write = the frame's write to wasm (chart.flush), frame = chart.frame in wasm + the canvas draw; summed and divided by ${STREAM.seconds}; ${STREAM.runs} runs, the median gated; performance.now() in the page, cross-origin isolated: ${streamRow.isolated}.`,
+  );
+  if (streamRow.note) console.log(`note: ${streamRow.note}`);
+}
 for (const n of notes) console.log(`note: ${n}`);
 console.log(`bench:web: ${((Date.now() - started) / 1000).toFixed(1)} s, load averages after ${load()}`);
 if (over) {
   console.log("bench:web: OVER budget");
   process.exit(1);
+}
+
+/** The streaming row: three runs, the median gated (REQ-PERF-070). */
+async function streaming(page) {
+  const runs = [];
+  for (let k = 0; k < STREAM.runs; k++) {
+    runs.push(await page.evaluate(([t, f, w, h, sec]) => window.bench.stream(t, f, w, h, sec), [STREAM.type, STREAM.fixture, STREAM.cols, STREAM.rows, STREAM.seconds]));
+  }
+  const per = (r) => (r.append + r.write + r.frame) / r.seconds;
+  const sorted = [...runs].sort((a, b) => per(a) - per(b));
+  const mid = sorted[Math.floor(sorted.length / 2)];
+  const best = sorted[0];
+  const isOver = per(mid) > STREAM_MS;
+  if (isOver) over = true;
+  return {
+    isolated: mid.isolated,
+    cells: [
+      STREAM.type,
+      STREAM.fixture,
+      `${STREAM.cols} × ${STREAM.rows}`,
+      "staging + append",
+      String(mid.samples),
+      ms(mid.append / mid.seconds),
+      ms(mid.write / mid.seconds),
+      ms(mid.frame / mid.seconds),
+      `${ms(per(best))} / ${ms(per(mid))}`,
+      String(STREAM_MS),
+      isOver ? "OVER" : "",
+    ],
+    note: null,
+  };
 }
 
 function measure(r) {

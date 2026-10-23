@@ -729,3 +729,94 @@ function roundedOrMissing(v: ValuesInput, length: number): (number | null)[] {
 function missingSource(kind: 0 | 1, length: number): Source {
   return { kind, length, write: (dst) => dst.fill(kind === ColumnKind.U32 ? MISSING_CODE : NaN, 0, length) };
 }
+
+// ---------------------------------------------------------------- appends encoded (v0.6.0)
+
+/** Whether `batch` is columns (each value array-like), not one row. */
+export function isColumnar(batch: Row | Record<string, ValuesInput>): boolean {
+  const vals = Object.values(batch);
+  return vals.length > 0 && vals.every((x) => x !== null && typeof x === "object" && !(x instanceof Date) && typeof (x as ArrayLike<unknown>).length === "number");
+}
+
+/** An append as columns by name: rows turned to columns, columns kept as given. */
+export function batchColumns(batch: AppendInput): Record<string, ValuesInput> {
+  if (Array.isArray(batch)) return rowsToColumns(batch);
+  return isColumnar(batch as Row) ? (batch as Record<string, ValuesInput>) : rowsToColumns([batch as Row]);
+}
+
+/** A category column's labels and their codes, grown as appends bring new labels. */
+export class Labels {
+  readonly list: string[];
+  readonly #index: Map<string, number>;
+  constructor(list: readonly string[] = []) {
+    this.list = list.slice();
+    this.#index = new Map(this.list.map((l, j) => [l, j] as const));
+  }
+  /** The code of `label`, NFC-normalised, added when new. */
+  code(label: string): number {
+    const l = nfc(label);
+    let c = this.#index.get(l);
+    if (c === undefined) {
+      c = this.list.length;
+      if (c >= MAX_CATEGORIES) throw new DataError(`append: more than ${MAX_CATEGORIES} categories`);
+      this.list.push(l);
+      this.#index.set(l, c);
+    }
+    return c;
+  }
+}
+
+/** One append encoded as a table's columns hold it: f64 values, u32 codes, or a string column's labels. */
+export type EncodedColumn = Float64Array | Uint32Array | (string | null)[];
+
+/**
+ * `values` (`n` of them) encoded as column `c` holds them: numbers in its
+ * `time_unit`, a `us` or `ns` timestamp as offsets from its `origin`
+ * (REQ-DATA-020), category labels as codes through `labels` (new ones added),
+ * a string column's text NFC-normalised. Throws naming the column at fault.
+ */
+export function encodeColumn(c: ColumnDesc, values: ValuesInput, n: number, labels: Labels | null): EncodedColumn {
+  if (c.type === "string") {
+    return Array.from({ length: n }, (_, r) => {
+      const s = (values as ArrayLike<unknown>)[r];
+      return s === null || s === undefined ? null : nfc(String(s));
+    });
+  }
+  if (c.type === "category") {
+    const codes = new Uint32Array(n);
+    for (let r = 0; r < n; r++) {
+      const s = (values as ArrayLike<unknown>)[r];
+      if (s === null || s === undefined) codes[r] = MISSING_CODE;
+      else if (typeof s === "number") codes[r] = s;
+      else codes[r] = (labels as Labels).code(String(s));
+    }
+    return codes;
+  }
+  const out = new Float64Array(n);
+  if (c.type === "timestamp" && hasOrigin(c.time_unit) && c.origin !== undefined) {
+    offsetSource(exactValues(c.name, c.time_unit, wantsExact(values, n) ? values : roundedOrMissing(values, n), n, 0n), originOf(c)).write(out);
+  } else if (isTyped(values)) {
+    typedSource(ColumnKind.F64, values, n).write(out);
+  } else {
+    jsonF64(c.name, c.type, c.time_unit ?? "ms", values as ArrayLike<unknown>, n).write(out);
+  }
+  return out;
+}
+
+/**
+ * One value of a row as column `c` holds it, without allocating: the fast path
+ * of a one-row append. Returns undefined where only {@link encodeColumn} can
+ * read it (a `us` or `ns` timestamp with an origin, a string, a label).
+ */
+export function scalarOf(c: ColumnDesc, v: unknown): number | undefined {
+  if (v === null || v === undefined) return c.type === "category" ? MISSING_CODE : c.type === "string" ? undefined : NaN;
+  if (c.type === "string" || c.type === "category") return undefined;
+  if (c.type === "timestamp" && hasOrigin(c.time_unit) && c.origin !== undefined) return undefined;
+  if (typeof v === "number") {
+    if (c.type === "bool") throw bad(c.name, 0, "a boolean or null");
+    return v;
+  }
+  if (typeof v === "boolean" && c.type === "bool") return v ? 1 : 0;
+  if (v instanceof Date && c.type === "timestamp") return v.getTime() / UNIT_MS[c.time_unit ?? "ms"];
+  return undefined;
+}

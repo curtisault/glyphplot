@@ -151,18 +151,19 @@ fn modes_draw_lines_areas_and_columns() {
     assert!(g.text().lines().last().unwrap().chars().filter(|&ch| ch == '█').count() >= 2, "{}", g.text());
 }
 
-/// REQ-SPARK-010: the ring keeps the last `capacity` rows: a replace of more
+/// REQ-SPARK-010, REQ-STREAM-020: the ring keeps the last `retain.rows` rows: a replace of more
 /// draws what a chart given only those rows draws, and appends past the
-/// capacity drop the oldest; rows keep their numbers while held.
+/// capacity drop the oldest; rows keep their numbers while held. The ring is
+/// the core's (`ring.rs`), shared with the line chart.
 #[test]
 fn the_ring_keeps_the_last_capacity_rows() {
     let n = 300;
     let x: Vec<f64> = (0..n).map(f64::from).collect();
     let y: Vec<f64> = x.iter().map(|v| (v / 17.0).sin()).collect();
-    let mut c = SparkChart::new(&Options::parse(r#"{"capacity":100}"#).unwrap()).unwrap();
+    let mut c = SparkChart::new(&Options::parse(r#"{"retain":{"rows":100}}"#).unwrap()).unwrap();
     let a = c.set_data(xy(x.clone(), y.clone())).unwrap();
     assert_eq!((a.rows, c.held()), (100, 100));
-    let mut last = SparkChart::new(&Options::parse(r#"{"capacity":100}"#).unwrap()).unwrap();
+    let mut last = SparkChart::new(&Options::parse(r#"{"retain":{"rows":100}}"#).unwrap()).unwrap();
     last.set_data(xy(x[200..].to_vec(), y[200..].to_vec())).unwrap();
     assert_eq!(draw(&mut c, 60, 4, 0.0), draw(&mut last, 60, 4, 0.0));
     let first = |c: &SparkChart| Scene::edge(c, c.view(), c.domain_now(), false).unwrap();
@@ -170,7 +171,7 @@ fn the_ring_keeps_the_last_capacity_rows() {
     assert_eq!((h.index, h.x), (200, 200.0), "the first held row is row 200 of the data");
     assert_eq!(c.datum(&h).get("x"), Some(&Value::Number(200.0)));
     // Appends: 30 rows, then 40, one late and one replacing the last.
-    let mut r = SparkChart::new(&Options::parse(r#"{"capacity":50}"#).unwrap()).unwrap();
+    let mut r = SparkChart::new(&Options::parse(r#"{"retain":{"rows":50}}"#).unwrap()).unwrap();
     r.set_data(xy(x[..30].to_vec(), y[..30].to_vec())).unwrap();
     let mut bx = x[30..70].to_vec();
     let mut by = y[30..70].to_vec();
@@ -180,7 +181,7 @@ fn the_ring_keeps_the_last_capacity_rows() {
     by.insert(1, 9.0);
     let app = r.append(xy(bx, by)).unwrap();
     assert_eq!((app.rows, app.dropped, app.late), (50, 20, 1));
-    let mut want = SparkChart::new(&Options::parse(r#"{"capacity":50}"#).unwrap()).unwrap();
+    let mut want = SparkChart::new(&Options::parse(r#"{"retain":{"rows":50}}"#).unwrap()).unwrap();
     let mut wy = y[20..70].to_vec();
     wy[9] = 9.0; // x 29, replaced by the append's row of equal x
     want.set_data(xy(x[20..70].to_vec(), wy)).unwrap();
@@ -188,7 +189,7 @@ fn the_ring_keeps_the_last_capacity_rows() {
     let h = first(&r);
     assert_eq!((h.index, h.x), (20, 20.0));
     // A smaller capacity set on a live chart drops the oldest held.
-    r.set_options(&Options::parse(r#"{"capacity":10}"#).unwrap()).unwrap();
+    r.set_options(&Options::parse(r#"{"retain":{"rows":10}}"#).unwrap()).unwrap();
     assert_eq!(r.held(), 10);
     assert_eq!(first(&r).index, 60);
 }

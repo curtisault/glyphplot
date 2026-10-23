@@ -1,6 +1,6 @@
 # glyphplot — Specification
 
-Version 0.5.0 · 2026-10-21 · License: MIT
+Version 0.6.0 · 2026-10-22 · License: MIT
 
 glyphplot is an interactive charting library whose charts are drawn in
 Unicode glyphs, one code point and one colour a cell. Charts are Rust,
@@ -9,7 +9,7 @@ by a `<glyph-plot>` custom element over a small TypeScript shell and in the
 terminal by a CLI; every chart draws data the page or the terminal gives it.
 
 This document describes the application exactly as it stands. On
-2026-10-21 v0.5.0, candles, bar and the sparkline, is built: a section with nothing
+2026-10-22 v0.6.0, streaming, is built: a section with nothing
 built
 holds only its heading and the words "nothing is built". Requirements arrive
 from
@@ -161,7 +161,9 @@ self-test, the time budgets, the native and browser benches, the size
 breakdown and `signoff` as CI. v0.5.0 (Phase 4) was built on 2026-10-21:
 the `candles` and `bar` families, the sparkline, log, symlog, band and index
 time scales, zones, units, panes, dual axes, annotations and linked charts.
-Phase 5, streaming, is next (`docs/IMPLEMENTATION_PLAN.md`).
+v0.6.0 (Phase 5) was built on 2026-10-22: the ring, appends through
+staging, `x.follow`, rule 14, the Arrow reader, `src`, `paused` and
+`announce`. Phase 6, the site, is next (`docs/IMPLEMENTATION_PLAN.md`).
 
 ---
 
@@ -291,12 +293,31 @@ bitwise equal natively and in wasm32 (checked once by hand in Node 26 on
 
 - REQ-DATA-100: `unit`, `scale` and `offset` MUST apply to ticks, readouts and the data table and MUST NOT change stored values: a readout of stored 18240 with `scale: 0.01` shows `182.40`. Note: (v0.5.0)
 
+- REQ-DATA-140: The core MUST read an Arrow IPC stream (uncompressed; Float64, Float32, Int32, Int64, UInt32, Timestamp, Bool, Utf8 and Dictionary<Int32, Utf8> columns with validity bitmaps) with its own reader, adding at most 8 KB gzipped to a chart module; the element's `data` property and the CLI MUST accept it. [ADR-105](adr/105-hand-written-arrow-reader.md) Note: (v0.6.0)
+- REQ-DATA-150: The element MUST take `src`, a URL of CSV, JSON, NDJSON or Arrow, fetched once per change and parsed in the shell (type from `Content-Type` or the extension), and given as `data`. Note: (v0.6.0)
+
 ### 4.2 Streaming
 
 `append` concatenates numeric columns, dropping late rows and replacing an
 equal x; the ring buffer comes in v0.6.0.
 
 - REQ-STREAM-060: After `data` is replaced, a chart's frame MUST equal the frame of a new chart given the same data, options, view and `t`. Note: (v0.3.0)
+
+`ring.rs` holds every chart's rows: it takes a replace's buffers with no
+copy, grows by doubling to `retain.rows`, then overwrites the oldest rows
+and never reallocates; frames read its two slices in place. The wasm
+`Chart` takes appends through `staging(n)` (column-major `f64`, column `j`
+at byte `8·j·n`) and `append(n)`, which returns `[rows, dropped, late,
+version]`. The shell coalesces a frame's appends into one write. Measured:
+0.75 µs a row and 20.5 µs per 1,000 in Node 26.5.1 through the shell; 3M
+rows into a 1M ring grew wasm memory not at all after the first 1M.
+
+- REQ-STREAM-010: `append()` MUST accept one row object, an array of row objects, or columns of typed arrays, and the shell MUST coalesce every append made within one animation frame into one write to wasm (a Node test counts one commit for 1,000 appends in a frame). Note: (v0.6.0)
+- REQ-STREAM-020: A streaming chart MUST keep its rows in a ring of capacity `retain.rows` (default 1,000,000), whose buffers grow only until they hold `retain.rows` rows and are never reallocated after; appending 3,000,000 rows to a ring of 1,000,000 MUST NOT grow wasm memory after the first 1,000,000. [ADR-107](adr/107-a-ring-allocated-once.md) Note: (v0.6.0)
+- REQ-STREAM-030: `retain.age` SHOULD drop rows older than the newest x minus that duration; the oldest kept row MUST be the first with x ≥ newest − age. Note: (v0.6.0)
+- REQ-STREAM-040: An appended row whose x equals the last row's MUST replace it; a row whose x is less MUST be dropped and counted in the `late` field of the next `plot-data` event. Note: (v0.6.0)
+- REQ-STREAM-050: In Node on the reference machine, appending one row MUST take at most 1 µs and a batch of 1,000 at most 50 µs (median). Note: (v0.6.0)
+- REQ-STREAM-070: After each commit of data the element MUST fire `plot-data` with `{rows, dropped, late, version}`. Note: (v0.6.0)
 
 ### 4.3 Downsampling
 
@@ -443,6 +464,8 @@ must reject. The whole contract binary runs in about 5.6 s for `line`.
 - REQ-CONTRACT-050: Time budgets (rule 30) MUST be checked in `tests/budgets.rs`, a test binary of its own, only without debug assertions; a chart over budget MUST be timed twice more, and the lowest average and the lowest worst count. [ADR-126](adr/126-correctness-and-timing-apart.md) Note: (v0.4.0)
 - REQ-CONTRACT-060: A `contract-selftest` feature MUST register three broken charts (non-deterministic, outside its charset, keeping state across appends), and a test MUST assert that the contract rejects each with the matching message. Note: (v0.4.0)
 
+- REQ-CONTRACT-040: Appending a fixture in the batches 1, 7, ⌊n/3⌋ and the rest, with frames drawn between, MUST end on the frame and view that replacing with the rows the append rules keep gives (REQ-STREAM-040: the same rows, for x sorted and distinct); with a ring of capacity c < n, on replacing with the last c of them (rule 14). Note: (v0.6.0)
+
 ### 6.5 Fixtures, snapshots, references and properties
 
 The properties run at proptest's default 256 cases in `check` and passed at
@@ -477,7 +500,8 @@ frame over 1k of 1M points takes 0.034 ms at 80 × 24 against 2.47 ms for all
 From v0.5.0 the folder also plays `sparkline` (`spark.rs`, REQ-SPARK-010 in
 the roadmap): modes `line`, `area` and `column`, a band of rows a series and
 no axes, a text column of each series' label, latest value and extent, and
-a ring of `capacity` rows (1,000,000 by default). The line chart ticks and
+a ring of `retain.rows` rows (1,000,000 by default; the option was `capacity`
+until v0.6.0 shared the core's ring, `ring.rs`). The line chart ticks and
 labels time in `Env.zone`'s table, draws the date context row under a time
 span of under two days, and writes ticks, readouts and table cells under a
 column's `scale`, `offset` and `unit`.
@@ -503,6 +527,8 @@ frame over 1M rows takes 0.18 ms at 320 × 120 (`test:budgets`).
 - REQ-CANDLE-030: In one ink it MUST draw rising candles hollow and falling candles solid, and MUST NOT draw candles narrower than four cells, resampling instead (REQ-SAMPLE-040). Note: (v0.5.0)
 - REQ-CANDLE-040: It MUST draw volume in a second pane sharing the x axis when the data has a `volume` column, on the index time scale by default (REQ-SCALE-060). Note: (v0.5.0)
 - REQ-CANDLE-050: Its crosshair MUST snap to the nearest of open, high, low and close, and its readout MUST show `o h l c`, volume and the signed change. Note: (v0.5.0)
+
+- REQ-CANDLE-060: Streaming into a candlestick chart MUST update the last candle in place when a row's time falls in it (REQ-STREAM-040). Note: (v0.6.0)
 
 ### 7.3 Bar
 
@@ -538,6 +564,8 @@ makes the frame at any `t` a function of the view.
 - REQ-VIEW-030: The element MUST expose `view` as a property (get: the current view; set: a whole or partial view, merged, a key set to `null` returning to its default) and as an attribute of JSON text; setting `JSON.parse(JSON.stringify(el.view))` back MUST draw the same frame. Note: (v0.3.0)
 - REQ-VIEW-040: Setting `view`, `data`, `options` or `time` from script MUST NOT fire `plot-hover`, `plot-select`, `plot-brush`, `plot-view`, `plot-legend` or `plot-cursor`. Note: (v0.3.0)
 - REQ-VIEW-050: A view animation (an eased zoom, a kinetic pan, a reset) MUST be a `motion` record in the view state stamped with play time, so the frame at any `t` is determined without replaying input; with reduced motion and no `motion` attribute there MUST be none. Note: (v0.3.0)
+
+- REQ-VIEW-060: With `x.follow` true, an append MUST keep the x span and move the domain to end at the newest datum; a pan away from the end MUST set it false, and `End` MUST set it true. Note: (v0.6.0)
 
 ### 8.2 Input
 
@@ -708,6 +736,10 @@ or dark.
 - REQ-A11Y-060: The focused chart MUST show a `:focus-visible` outline at least 2 px wide in `accent`, at least 3:1 against the ground. Note: (v0.3.0)
 - REQ-A11Y-070: An axe-core scan of a page holding every chart, in light and dark, MUST find no violation of impact serious or critical. Note: (v0.3.0)
 
+- REQ-A11Y-080: A chart receiving streamed data MUST support `paused` (property and attribute) and Space on the cursor: while paused it MUST keep appended data without drawing it, and on resume MUST show the live view. Note: (v0.6.0)
+- REQ-A11Y-090: While data streams, the table MUST be rebuilt at most once a second and never while focus is inside it. Note: (v0.6.0)
+- REQ-A11Y-100: With `announce="<seconds>"` (at least 5), a polite live region MUST announce the latest value at most once per interval, silent while paused or while the cursor has focus; without it there MUST be no live region. Note: (v0.6.0)
+
 ---
 
 ## 12. The CLI
@@ -840,6 +872,8 @@ Measured on 2026-10-20 for `line`:
 - REQ-BENCH-010: `mise run bench [type …]` MUST print the load average, then a row per type, fixture size (1k, 100k, 1M) and grid size (80 × 24, 320 × 120) with average, worst, budget and `OVER`, and exit 1 when any row is over. Note: (v0.4.0)
 - REQ-BENCH-020: `mise run bench:web`, `bench:load` and `bench:render` MUST run the discovery harnesses' successors in headless Chromium against the release build and print their tables with the load average. Note: (v0.4.0)
 
+- REQ-PERF-070: Appending one sample at 1 kHz to a full ring of 1,000,000 points while redrawing at 60 Hz MUST cost at most 500 ms of CPU a second in headless Chromium, the summed time of appends and frames over 10 simulated seconds. Note: (v0.6.0)
+
 ### 16.5 Local CI (signoff)
 
 `mise run signoff [rev]` checks a commit (HEAD by default) out into
@@ -875,6 +909,8 @@ The tests are the core's unit tests and properties, `tests/reference.rs`
 - REQ-E2E-030: `site/e2e/element.spec.ts` MUST cover attributes and properties, `view` set and read, a module fetched once for many tags, calls queued before load, and teardown and freeing on attribute changes and removal. Note: (v0.3.0)
 - REQ-E2E-040: `site/e2e/resize.spec.ts` MUST show that a change of container width changes `cols`, keeps the view in data units and logs no console error. Note: (v0.3.0)
 - REQ-E2E-070: `mise run check` MUST run `test:site --smoke` (a chart's first frame, a hover, a drag, a wheel, a key and the axe scans, under 60 s); `signoff` MUST run all of `test:site`. Note: (v0.3.0)
+
+- REQ-E2E-050: `site/e2e/streaming.spec.ts` MUST append at 1 kHz for a second and then find the frame equal to a replace of the same rows. Note: (v0.6.0)
 
 ---
 

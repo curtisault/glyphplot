@@ -6,7 +6,7 @@ This document holds every requirement of glyphplot not yet built, grouped by
 area, each naming the milestone that ships it. When a milestone lands, its
 requirements move into [SPEC.md](SPEC.md) with their IDs unchanged, a line
 in their old section says where they went, and the milestone's row in §20
-says when it was built. v0.1.0 to v0.5.0 have shipped. IDs go up in tens within an area so a requirement
+says when it was built. v0.1.0 to v0.6.0 have shipped. IDs go up in tens within an area so a requirement
 can be added between two others (`REQ-DATA-045`); an ID is never reused,
 even after its requirement is removed.
 
@@ -111,20 +111,14 @@ REQ-VENDOR-010 and REQ-VENDOR-020 were withdrawn on 2026-10-18 by ADR-013, befor
 - Shipped in v0.2.0 and moved to [SPEC.md](SPEC.md) §4.1: REQ-DATA-010, REQ-DATA-020, REQ-DATA-030, REQ-DATA-040, REQ-DATA-080, REQ-DATA-090, REQ-DATA-110, REQ-DATA-130.
 - Shipped in v0.3.0 and moved to [SPEC.md](SPEC.md) §4.1: REQ-DATA-050, REQ-DATA-060, REQ-DATA-070, REQ-DATA-120.
 - Shipped in v0.5.0 and moved to [SPEC.md](SPEC.md) §4.1: REQ-DATA-100.
-- REQ-DATA-140: The core MUST read an Arrow IPC stream (uncompressed; Float64, Float32, Int32, Int64, UInt32, Timestamp, Bool, Utf8 and Dictionary<Int32, Utf8> columns with validity bitmaps) with its own reader, adding at most 8 KB gzipped to a chart module; the element's `data` property and the CLI MUST accept it. [ADR-105](adr/105-hand-written-arrow-reader.md) (v0.6.0)
-- REQ-DATA-150: The element MUST take `src`, a URL of CSV, JSON, NDJSON or Arrow, fetched once per change and parsed in the shell (type from `Content-Type` or the extension), and given as `data`. (v0.6.0)
+- Shipped in v0.6.0 and moved to [SPEC.md](SPEC.md) §4.1: REQ-DATA-140, REQ-DATA-150.
 - REQ-DATA-160: Graph data MUST be `nodes` and `edges` tables whose `source` and `target` are `u32` indices into `nodes` or strings equal to `nodes.id`, and matrices MUST be row-major `rows × cols`; an edge naming no node MUST be dropped with one warning. (v0.9.0)
 - REQ-DATA-170: A timestamp column MUST be able to declare a Julian-date epoch with an offset (`BJD - 2457000` days) as well as the Unix epoch; a TESS fixture in that unit MUST draw calendar ticks at the right dates. (v0.12.0)
 
 ### 3.2 Streaming (STREAM)
 
-- REQ-STREAM-010: `append()` MUST accept one row object, an array of row objects, or columns of typed arrays, and the shell MUST coalesce every append made within one animation frame into one write to wasm (a Node test counts one commit for 1,000 appends in a frame). (v0.6.0)
-- REQ-STREAM-020: A streaming chart MUST keep its rows in a ring allocated once with capacity `retain.rows` (default 1,000,000); appending 3,000,000 rows to a ring of 1,000,000 MUST NOT grow wasm memory after the first 1,000,000. [ADR-107](adr/107-a-ring-allocated-once.md) (v0.6.0)
-- REQ-STREAM-030: `retain.age` SHOULD drop rows older than the newest x minus that duration; the oldest kept row MUST be the first with x ≥ newest − age. (v0.6.0)
-- REQ-STREAM-040: An appended row whose x equals the last row's MUST replace it; a row whose x is less MUST be dropped and counted in the `late` field of the next `plot-data` event. (v0.6.0)
-- REQ-STREAM-050: In Node on the reference machine, appending one row MUST take at most 1 µs and a batch of 1,000 at most 50 µs (median). (v0.6.0)
+- Shipped in v0.6.0 and moved to [SPEC.md](SPEC.md) §4.2: REQ-STREAM-010, REQ-STREAM-020, REQ-STREAM-030, REQ-STREAM-040, REQ-STREAM-050, REQ-STREAM-070.
 - Shipped in v0.3.0 and moved to [SPEC.md](SPEC.md) §4.2: REQ-STREAM-060.
-- REQ-STREAM-070: After each commit of data the element MUST fire `plot-data` with `{rows, dropped, late, version}`. (v0.6.0)
 
 ### 3.3 Downsampling (SAMPLE)
 
@@ -181,7 +175,7 @@ REQ-VENDOR-010 and REQ-VENDOR-020 were withdrawn on 2026-10-18 by ADR-013, befor
 ### 5.1 View state (VIEW)
 
 - Shipped in v0.3.0 and moved to [SPEC.md](SPEC.md) §8.1: REQ-VIEW-010, REQ-VIEW-020, REQ-VIEW-030, REQ-VIEW-040, REQ-VIEW-050.
-- REQ-VIEW-060: With `x.follow` true, an append MUST keep the x span and move the domain to end at the newest datum; a pan away from the end MUST set it false, and `End` MUST set it true. (v0.6.0)
+- Shipped in v0.6.0 and moved to [SPEC.md](SPEC.md) §8.1: REQ-VIEW-060.
 
 ### 5.2 Input (INPUT)
 
@@ -218,7 +212,7 @@ REQ-VENDOR-010 and REQ-VENDOR-020 were withdrawn on 2026-10-18 by ADR-013, befor
 
 - Shipped in v0.3.0 and moved to [SPEC.md](SPEC.md) §6.4: REQ-CONTRACT-010, REQ-CONTRACT-020.
 - Shipped in v0.4.0 and moved to [SPEC.md](SPEC.md) §6.4: REQ-CONTRACT-030, REQ-CONTRACT-050, REQ-CONTRACT-060.
-- REQ-CONTRACT-040: Appending a fixture in the batches 1, 7, ⌊n/3⌋ and the rest, with frames drawn between, MUST end on the frame and view that replacing with the same rows gives; with a ring of capacity c < n, on replacing with the last c rows (rule 14). (v0.6.0)
+- Shipped in v0.6.0 and moved to [SPEC.md](SPEC.md) §6.4: REQ-CONTRACT-040.
 - Shipped in v0.2.0 and moved to [SPEC.md](SPEC.md) §6.5: REQ-FIX-010, REQ-REF-010, REQ-PROP-010.
 - Shipped in v0.5.0 and moved to [SPEC.md](SPEC.md) §6.5: REQ-FIX-020.
 
@@ -251,7 +245,7 @@ element's `type` names.
 ### 7.2 Candles (CANDLE)
 
 - Shipped in v0.5.0 and moved to [SPEC.md](SPEC.md) §7.2: REQ-CANDLE-010, REQ-CANDLE-020, REQ-CANDLE-030, REQ-CANDLE-040, REQ-CANDLE-050.
-- REQ-CANDLE-060: Streaming into a candlestick chart MUST update the last candle in place when a row's time falls in it (REQ-STREAM-040). (v0.6.0)
+- Shipped in v0.6.0 and moved to [SPEC.md](SPEC.md) §7.2: REQ-CANDLE-060.
 - REQ-CANDLE-070: The `candles` type MUST draw the mode `heikin-ashi`. (v0.9.0)
 
 ### 7.3 Bar (BAR)
@@ -331,9 +325,7 @@ element's `type` names.
 ## 11. Accessibility
 
 - Shipped in v0.3.0 and moved to [SPEC.md](SPEC.md) §11.3: REQ-A11Y-010, REQ-A11Y-020, REQ-A11Y-030, REQ-A11Y-040, REQ-A11Y-050, REQ-A11Y-060, REQ-A11Y-070.
-- REQ-A11Y-080: A chart receiving streamed data MUST support `paused` (property and attribute) and Space on the cursor: while paused it MUST keep appended data without drawing it, and on resume MUST show the live view. (v0.6.0)
-- REQ-A11Y-090: While data streams, the table MUST be rebuilt at most once a second and never while focus is inside it. (v0.6.0)
-- REQ-A11Y-100: With `announce="<seconds>"` (at least 5), a polite live region MUST announce the latest value at most once per interval, silent while paused or while the cursor has focus; without it there MUST be no live region. (v0.6.0)
+- Shipped in v0.6.0 and moved to [SPEC.md](SPEC.md) §11.3: REQ-A11Y-080, REQ-A11Y-090, REQ-A11Y-100.
 - REQ-A11Y-110: A "show data" control MUST make the table visible. (v0.7.0)
 - REQ-A11Y-120: `glyphplot <type> --table` MUST print the data table as text. (v0.8.0)
 
@@ -356,7 +348,7 @@ default), and reaches `mise run size`, the contract and the benches through
 
 - Shipped in v0.3.0 and moved to [SPEC.md](SPEC.md) §16.4: REQ-PERF-010, REQ-PERF-020.
 - Shipped in v0.4.0 and moved to [SPEC.md](SPEC.md) §16.4: REQ-PERF-030, REQ-PERF-040, REQ-PERF-050, REQ-PERF-060, REQ-PERF-080.
-- REQ-PERF-070: Appending one sample at 1 kHz to a full ring of 1,000,000 points while redrawing at 60 Hz MUST cost at most 500 ms of CPU a second in headless Chromium, the summed time of appends and frames over 10 simulated seconds. (v0.6.0)
+- Shipped in v0.6.0 and moved to [SPEC.md](SPEC.md) §16.4: REQ-PERF-070.
 
 ### 12.3 Memory (MEM)
 
@@ -373,7 +365,7 @@ default), and reaches `mise run size`, the contract and the benches through
 - Shipped in v0.1.0 and moved to [SPEC.md](SPEC.md) §17: REQ-TEST-010.
 - Shipped in v0.3.0 and moved to [SPEC.md](SPEC.md) §17: REQ-TEST-020, REQ-TEST-030, REQ-TEST-040.
 - Shipped in v0.3.0 and moved to [SPEC.md](SPEC.md) §17: REQ-E2E-010, REQ-E2E-020, REQ-E2E-030, REQ-E2E-040, REQ-E2E-070.
-- REQ-E2E-050: `site/e2e/streaming.spec.ts` MUST append at 1 kHz for a second and then find the frame equal to a replace of the same rows. (v0.6.0)
+- Shipped in v0.6.0 and moved to [SPEC.md](SPEC.md) §17: REQ-E2E-050.
 - REQ-E2E-060: Every chart type's page on the site MUST draw a first frame with nothing on the console. (v0.7.0)
 
 ---
@@ -480,7 +472,7 @@ command verifies; real-browser checks are the owner's (REQ-TEST-030).
 | v0.3.0 (built 2026-10-19) | 2 · Line end to end | the `line` type; VIEW-010–050; INPUT; HIT-010–020; OVERLAY; EVENT-010–030; KEY; TOUCH; CHART; OPT; REG; CONTRACT-010–020; SNAP; WASM; MANIFEST; LOAD; EL (most); MOUNT; JS; RENDER-010–030, 050; FONT-030; THEME-010–050, 070; MONO-010, 040; A11Y-010–070; PERF-010–020; MEM; DATA-050–070, 120; STREAM-060; SAMPLE-010–030; I18N-010–020, 050; FMT-060; CANVAS-040; EL-085; LAYOUT-040, 070; CHAR; TEST-020–040; E2E-010–040, 070; BUILD-040, 080; LINT-020; ARCH-020–050 | `mise run check`; `mise run test:site` (interaction, element, resize, axe) |
 | v0.4.0 (built 2026-10-20) | 3 · Contract and budgets | CONTRACT-030, 050, 060; PERF-030–060, 080; SIZE-050; BENCH; CI-020; BUILD-090 | `cargo test --profile contract --test contract --test budgets`; `mise run bench`; `mise run signoff` on the branch |
 | v0.5.0 (built 2026-10-21) | 4 · Candles, bar, sparkline | CANDLE-010–050; BAR-010–020; SPARK-010; SCALE-040–060; TICK-050–070; FMT-040–050; TZ-020–030, 050; LAYOUT-050–060; AXIS; ANNOT; LINK; EL-030, 050, 110; EVENT-010 (`plot-brush`, `plot-legend`); SAMPLE-040, 060; DATA-100; THEME-060, 065; MONO-020–030; RENDER-040; FONT-020; FIX-020 | contract and snapshots for the three types; the owner's candlestick on the checklist page |
-| v0.6.0 | 5 · Streaming | STREAM-010–050, 070; VIEW-060; CANDLE-060; CONTRACT-040; DATA-140–150; A11Y-080–100; PERF-070; E2E-050; EVENT-010 (`plot-data`) | `streaming.spec.ts`; `bench:web` streaming row; the owner's one-line test on a phone |
+| v0.6.0 (built 2026-10-22) | 5 · Streaming | STREAM-010–050, 070; VIEW-060; CANDLE-060; CONTRACT-040; DATA-140–150; A11Y-080–100; PERF-070; E2E-050; EVENT-010 (`plot-data`) | `streaming.spec.ts`; `bench:web` streaming row; the owner's one-line test on a phone |
 | v0.7.0 | 6 · The site | SITE (all but 100); DATASET; A11Y-110; THEME-100; E2E-060; LINT-020 (site); PKG-060 | `mise run build:site`; `test:site` in full; `datasets:check` |
 | v0.8.0 | 7 · The CLI | SITE-100; CLI; TERM; CRATE-010; EXPORT; SSR; TZ-040; I18N-070; COLOR-050; THEME-090; A11Y-120; ARCH-080 | `cargo test -p glyphplot-cli`; `glyphplot candles --from feed.csv` by the owner |
 | v0.9.0 | 8 · The next tier | SCATTER; HEAT; BAR-030; LINE-050; CANDLE-070; SCALE-070; SAMPLE-050; HIT-030; THEME-080; MONO-050; I18N-060; DATA-160 | contract and snapshots for the new types and modes |

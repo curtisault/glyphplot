@@ -776,6 +776,52 @@ impl Column {
 }
 
 impl Table {
+    /// A table of no rows with this one's columns, types, roles, units,
+    /// origins and labels: what a staging buffer's rows are read by
+    /// ([`Table::staged`]).
+    pub fn empty_like(&self) -> Table {
+        let columns = self
+            .columns
+            .iter()
+            .map(|c| {
+                let values = match &c.values {
+                    Values::Num(_) => Values::Num(Vec::new()),
+                    Values::Codes(_) => Values::Codes(Vec::new()),
+                    Values::Text(_) => Values::Text(Vec::new()),
+                };
+                c.with_values(values)
+            })
+            .collect();
+        Table { len: 0, columns, sorted: self.sorted.clone(), frame: self.frame, epoch: self.epoch.clone() }
+    }
+
+    /// `n` rows of this table's columns from a staging buffer (REQ-STREAM-010,
+    /// the boundary's `staging(n)` and `append(n)`): column `j`'s values are
+    /// `values[j·n .. (j+1)·n]`, in the columns' order, each as a reserved
+    /// buffer of kind 0 holds it ([`Data::from_typed`]): numbers; booleans 1
+    /// and 0; durations in the column's time unit; timestamps in theirs, a
+    /// `us` or `ns` column's as offsets from the column's `origin`; a
+    /// category column's codes into its labels; NaN missing. A string
+    /// column's rows are missing (its labels do not cross as numbers).
+    pub fn staged(&self, values: &[f64], n: usize) -> Result<Table, DataError> {
+        let k = self.columns.len();
+        let need = k.checked_mul(n).ok_or(DataError::TooLarge { rows: n })?;
+        if values.len() < need {
+            return Err(DataError::Append(format!("{n} rows of {k} columns need {need} staged values; {} are staged", values.len())));
+        }
+        let mut columns = Vec::with_capacity(k);
+        for (j, c) in self.columns.iter().enumerate() {
+            let mut column = c.with_values(Values::Num(Vec::new()));
+            if c.kind == ColumnType::String {
+                column.values = Values::Text(vec![String::new(); n]);
+            } else {
+                column.take(super::SHORTHAND_TABLE, Buffer::F64(values[j * n..(j + 1) * n].to_vec()), Some(c.origin))?;
+            }
+            columns.push(column);
+        }
+        Ok(Table { len: n, columns, sorted: self.sorted.clone(), frame: self.frame, epoch: self.epoch.clone() })
+    }
+
     /// A table from its description, `name` naming it in errors: 1 to 256
     /// columns of one length, `length` when no column carries values.
     pub fn from_desc(name: &str, d: &TableDesc) -> Result<Table, DataError> {
@@ -1008,5 +1054,28 @@ mod buffer_tests {
         assert_eq!(Data::from_typed(no_length, vec![Some(Buffer::F64(vec![1.0, 2.0, 3.0]))]).unwrap().first_table().unwrap().len(), 3);
         let numbers_in_json = r#"{"tables":{"t":{"columns":[{"name":"x","type":"string","values":[1]}]}}}"#;
         assert!(Data::from_descriptor(numbers_in_json).is_err());
+
+        // Staged rows read as these buffers do, a column after another, a
+        // `us` column's as offsets from the origin the commit gave it
+        // (REQ-STREAM-010).
+        let template = t.empty_like();
+        assert_eq!((template.len(), template.columns().len()), (0, 6));
+        let staged = [
+            [3.0, 5.5],      // s
+            [5.0, 6.0],      // ns, past the origin
+            [4.0, f64::NAN], // us, past the commit's origin
+            [1.0, 0.5],      // d, seconds
+            [0.0, 2.0],      // c: a, then past the labels
+            [0.0, 0.0],      // note: not read
+        ]
+        .concat();
+        let b = template.staged(&staged, 2).unwrap();
+        assert_eq!(b.by_name("s").unwrap().nums().unwrap(), [3000.0, 5500.0]);
+        assert_eq!(b.by_name("ns").unwrap().exact(0), Some(1_792_281_600_000_000_005));
+        assert_eq!((b.by_name("us").unwrap().exact(0), b.by_name("us").unwrap().is_missing(1)), (Some(1_792_281_600_000_005), true));
+        assert_eq!(b.by_name("d").unwrap().nums().unwrap(), [1000.0, 500.0]);
+        assert_eq!((b.by_name("c").unwrap().label(0), b.by_name("c").unwrap().is_missing(1)), (Some("a"), true));
+        assert!(b.by_name("note").unwrap().is_missing(0));
+        assert!(matches!(template.staged(&staged[..11], 2), Err(DataError::Append(_))));
     }
 }

@@ -2,7 +2,10 @@
 // element is made of. `glyphplot/element` defines `<glyph-plot>` on import.
 // Full packaging is v0.11.0.
 
-export { chart, Chart, VIEW_RESET, type ChartInit, type Change, type View } from "./chart.ts";
+export { chart, Chart, VIEW_RESET, type ChartInit, type ChartData, type ArrowBytes, type Change, type View } from "./chart.ts";
+export { Tail, DEFAULT_RETAIN_ROWS, type DataCommit, type Retain } from "./stream.ts";
+export { formatOf, parseCsv, parseNdjson, loadSource, type SourceFormat, type SourceData } from "./source.ts";
+export { arrowRows } from "./arrow.ts";
 export { mount, prefersReducedMotion, type FrameTiming, type Mount, type MountOptions } from "./mount.ts";
 export { manifest, moduleOf, setManifest, loadModule, loadFor, instantiations, type GridViews, type Loaded } from "./wasm.ts";
 export {

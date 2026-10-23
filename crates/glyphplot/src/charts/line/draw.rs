@@ -31,6 +31,7 @@ use crate::layout::{Layout, Rect};
 use crate::mono;
 use crate::overlay;
 use crate::palette::{self, INK, MUTED};
+use crate::ring::Seq;
 use crate::scale::Kind;
 use crate::text::{stage, Frame, LegendEntry};
 use crate::time::Zone;
@@ -78,7 +79,7 @@ pub(super) fn x_dot(axis: &Axis, edges: &Edges, x: f64) -> Option<i64> {
 
 /// The row before `rows` to join the path from, and the row after it to
 /// join it to: the neighbours, or with `span` the nearest rows with a y.
-fn neighbours(xs: &[f64], ys: &[f64], rows: &Range<usize>, span: bool) -> (Option<usize>, Option<usize>) {
+fn neighbours(xs: Seq<f64>, ys: Seq<f64>, rows: &Range<usize>, span: bool) -> (Option<usize>, Option<usize>) {
     let ok = |i: usize| xs[i].is_finite() && ys[i].is_finite();
     let before = if span { (0..rows.start).rev().find(|&i| ok(i)) } else { rows.start.checked_sub(1).filter(|&i| ok(i)) };
     let after = if span { (rows.end..xs.len()).find(|&i| ok(i)) } else { Some(rows.end).filter(|&i| i < xs.len() && ok(i)) };

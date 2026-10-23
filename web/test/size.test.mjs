@@ -20,8 +20,8 @@ test("whole cells that fit the box, within a pixel of rounding", () => {
   assert.equal(DEFAULT_ROWS, 12);
 });
 
-test("the observed attributes are the plan's v0.5.0 attributes and timeZone", () => {
-  assert.deepEqual([...OBSERVED].sort(), ["cols", "data", "fit", "label", "link", "loading", "locale", "mono", "motion", "options", "rows", "theme", "time", "timezone", "type", "view"]);
+test("the observed attributes are the plan's v0.6.0 attributes and timeZone", () => {
+  assert.deepEqual([...OBSERVED].sort(), ["announce", "cols", "data", "fit", "label", "link", "loading", "locale", "mono", "motion", "options", "paused", "rows", "src", "theme", "time", "timezone", "type", "view"]);
 });
 
 test("fit: width makes the cell W / cols; contain the largest 1:2 cell inside W × H, centred, as width when H is 0", () => {

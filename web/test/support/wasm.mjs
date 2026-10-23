@@ -45,6 +45,9 @@ export const shell = {
   chart: await import(pathToFileURL(join(DIST, "chart.js")).href),
   data: await import(pathToFileURL(join(DIST, "data.js")).href),
   input: await import(pathToFileURL(join(DIST, "input.js")).href),
+  stream: await import(pathToFileURL(join(DIST, "stream.js")).href),
+  source: await import(pathToFileURL(join(DIST, "source.js")).href),
+  arrow: await import(pathToFileURL(join(DIST, "arrow.js")).href),
 };
 
 /** The chart types of the build: the manifest's, the debug charts left out. */
@@ -242,6 +245,21 @@ export function check(validate, value, what) {
 // ---------------------------------------------------------------- timing
 
 /** The median of `xs`. */
+/**
+ * The best of up to `tries` runs of `measure` (async, returning a number), stopping at the first at or under
+ * `limit`: a timing over its limit is timed twice more and the best counts, as the native time budgets are
+ * (REQ-CONTRACT-050). A slow build is slow every time; a machine loaded by the tests running beside it only now
+ * and then. Returns the best value and every run's.
+ */
+export async function retimed(measure, limit, tries = 3) {
+  const runs = [];
+  for (let i = 0; i < tries; i++) {
+    runs.push(await measure());
+    if (runs[runs.length - 1] <= limit) break;
+  }
+  return { best: Math.min(...runs), runs };
+}
+
 export function median(xs) {
   const s = [...xs].sort((a, b) => a - b);
   const m = s.length >> 1;

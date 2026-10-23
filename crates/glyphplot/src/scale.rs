@@ -690,7 +690,7 @@ impl Scale {
         let times = self.zone.ticks(stamps[i0], stamps[i1], count);
         let mut out: Vec<(f64, f64)> = Vec::new();
         for (k, &tau) in times.iter().enumerate() {
-            let i = lower_bound(stamps, i0, i1 + 1, tau);
+            let i = lower_bound(&stamps[..], i0, i1 + 1, tau);
             if i > i1 {
                 break;
             }

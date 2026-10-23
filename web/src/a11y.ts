@@ -8,6 +8,7 @@
 
 import type { TableJson } from "./api.ts";
 import type { DataObject } from "./data.ts";
+import { xColumnOf } from "./stream.ts";
 
 /** The keys of the plan's keys table, as `aria-keyshortcuts` lists them (REQ-A11Y-030). */
 export const KEY_SHORTCUTS =
@@ -26,6 +27,35 @@ export const CONTROLS: readonly { label: string; glyph: string; key: string }[] 
 export const TABLE_ROWS = 500;
 /** The least time between rewrites of the summary and the table, ms (REQ-A11Y-010). */
 export const REWRITE_MS = 1000;
+
+/** The least interval of the `announce` live region, seconds (REQ-A11Y-100). */
+export const ANNOUNCE_MIN_S = 5;
+
+/** The `announce` attribute's interval in seconds: its number, at least {@link ANNOUNCE_MIN_S}; the least for a value that is not a number. */
+export function announceSeconds(v: string | null): number {
+  const n = Number(v);
+  return v !== null && v.trim() !== "" && Number.isFinite(n) ? Math.max(ANNOUNCE_MIN_S, n) : ANNOUNCE_MIN_S;
+}
+
+/**
+ * What the live region says of the newest row (REQ-A11Y-100): "Latest: ",
+ * the x, then up to four other columns' values, as the slider reads them;
+ * "" without a row.
+ */
+export function latestText(row: Record<string, unknown> | null, desc: DataObject | null, fmt: Formats, encode: Record<string, unknown> = {}): string {
+  if (!row) return "";
+  const types = columnTypes(desc);
+  const table = desc ? Object.values(desc.tables)[0] : undefined;
+  const xi = table ? xColumnOf(table, encode) : -1;
+  const xName = xi >= 0 ? table?.columns[xi]?.name : undefined;
+  const values = Object.entries(row)
+    .filter(([k]) => k !== xName)
+    .map(([k, v]) => `${k} ${fmt.value(v, types.get(k))}`);
+  const shown = values.slice(0, 4);
+  if (values.length > 4) shown.push(`and ${values.length - 4} more`);
+  const x = xName !== undefined ? fmt.value(row[xName], types.get(xName)) : "";
+  return `Latest: ${[x, ...shown].filter((s) => s !== "").join(", ")}`;
+}
 
 /** The type of every column by name, from a descriptor. */
 function columnTypes(desc: DataObject | null): Map<string, { type: string; zone?: string }> {

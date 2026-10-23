@@ -72,6 +72,13 @@ depends = ["install:site", "build:wasm"]
 dir = "site"
 run = "npx vite build --logLevel warn"
 
+[tasks.serve]
+description = "The release build of site/ served for a person to open (http://localhost:4311/test.html, /live.html), one wasm module a chart family as a page meets them; `-- --host` to open it from a phone on the same network"
+depends = ["build:site"]
+dir = "site"
+raw = true
+run = "npx vite preview --port 4311 --strictPort"
+
 [tasks.dev]
 description = "The debug build served with the checklist page (localhost:5310/test.html), the debug wasm rebuilt into web/pkg on a change under crates/ and the page reloaded (REQ-BUILD-080); `-- --host` for a phone. It shares web/pkg with build:wasm: test, test:site and check swap the release build in, and the pages play it until the next change under crates/"
 depends = ["install:site", "install:web"]
@@ -86,7 +93,7 @@ raw = true
 run = "node bench/run.mjs"
 
 [tasks."bench:web"]
-description = "Frames and pointer moves in headless Chromium over the release build: every chart, 300 frames panning a 1M-point fixture at 80 × 24 and 320 × 120 against 8 / 16 ms, 300 moves against 0.5 / 2 ms; prints the load average and exits 1 over budget (REQ-PERF-050, 060, REQ-BENCH-020); `-- <type>…` for some charts"
+description = "Frames and pointer moves in headless Chromium over the release build: every chart, 300 frames panning a 1M-point fixture at 80 × 24 and 320 × 120 against 8 / 16 ms, 300 moves against 0.5 / 2 ms; the streaming row, 1 sample/ms appended to a full 1M ring drawn at 60 Hz for 10 simulated s, against 500 ms of CPU a second; prints the load average and exits 1 over budget (REQ-PERF-050, 060, 070, REQ-BENCH-020); `-- <type>…` for some charts, `-- stream` for the streaming row alone"
 depends = ["build:site", "install:chromium"]
 dir = "site"
 run = "node bench/web.mjs"

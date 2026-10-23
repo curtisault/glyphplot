@@ -9,6 +9,7 @@
 //! for [`column_aggregate`].
 
 use crate::events::Aggregate;
+use crate::ring::Seq;
 
 /// The datum a position snaps to (REQ-HIT-010).
 #[derive(Clone, Debug, PartialEq)]
@@ -34,16 +35,18 @@ pub struct Hit {
 }
 
 /// The first row of `xs[lo..hi]` whose x is at least `v`; `hi` when none.
-/// Missing x (NaN) sorts last, so it counts as past every value.
-pub fn lower_bound(xs: &[f64], lo: usize, hi: usize, v: f64) -> usize {
-    lo + xs[lo..hi].partition_point(|&x| x < v)
+/// Missing x (NaN) sorts last, so it counts as past every value. `xs` is a
+/// slice or a ring's rows in place ([`Seq`]).
+pub fn lower_bound<'a>(xs: impl Into<Seq<'a, f64>>, lo: usize, hi: usize, v: f64) -> usize {
+    lo + xs.into().slice(lo..hi).partition_point(|&x| x < v)
 }
 
 /// The row of `xs[lo..hi]` whose x is nearest `target`, by binary search on
 /// x sorted non-decreasing with missing x last; of two equally near, the
 /// earlier. `None` when the range holds no finite x or the target is NaN
 /// (REQ-HIT-010).
-pub fn nearest(xs: &[f64], lo: usize, hi: usize, target: f64) -> Option<usize> {
+pub fn nearest<'a>(xs: impl Into<Seq<'a, f64>>, lo: usize, hi: usize, target: f64) -> Option<usize> {
+    let xs = xs.into();
     if target.is_nan() || lo >= hi {
         return None;
     }
@@ -67,10 +70,11 @@ pub fn nearest(xs: &[f64], lo: usize, hi: usize, target: f64) -> Option<usize> {
 /// The summary of the finite `ys` of the rows whose x lies in
 /// `[from, to)`, found by binary search in `xs[lo..hi]`; `None` unless the
 /// column holds two or more data (REQ-HIT-020).
-pub fn column_aggregate(xs: &[f64], ys: &[f64], lo: usize, hi: usize, from: f64, to: f64) -> Option<Aggregate> {
+pub fn column_aggregate<'a>(xs: impl Into<Seq<'a, f64>>, ys: impl Into<Seq<'a, f64>>, lo: usize, hi: usize, from: f64, to: f64) -> Option<Aggregate> {
+    let (xs, ys) = (xs.into(), ys.into());
     let (a, b) = (lower_bound(xs, lo, hi, from), lower_bound(xs, lo, hi, to));
     let mut agg: Option<Aggregate> = None;
-    for &y in ys[a..b].iter().filter(|y| y.is_finite()) {
+    for &y in ys.slice(a..b).iter().filter(|y| y.is_finite()) {
         match &mut agg {
             None => agg = Some(Aggregate { count: 1, first: y, last: y, min: y, max: y }),
             Some(g) => {

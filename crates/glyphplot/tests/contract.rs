@@ -1,12 +1,13 @@
-//! The chart contract: every registered chart against rules 1–13 and 15–29
-//! of the plan's contract rules (`docs/IMPLEMENTATION_PLAN.md`, "Contract
-//! rules"; REQ-CONTRACT-010, REQ-CONTRACT-030), with no test of the chart's
-//! own. Rule 14 (streaming) is v0.6.0's and rule 30 (budgets) is
-//! `tests/budgets.rs`'s (ADR-126).
+//! The chart contract: every registered chart against rules 1–29 of the
+//! plan's contract rules (`docs/IMPLEMENTATION_PLAN.md`, "Contract rules";
+//! REQ-CONTRACT-010, REQ-CONTRACT-030), with no test of the chart's own.
+//! Rule 30 (budgets) is `tests/budgets.rs`'s (ADR-126).
 //!
 //! - `every_chart_keeps_the_contract`: rules 1–13, 21–26 and 28 over every
 //!   case of the chart (below) × every mode × plain, mono and paper × size
 //!   set S × t = 0, 1, 2.5, 6.
+//! - `streaming_equals_replace`: rule 14 (REQ-CONTRACT-040), against the
+//!   rows `common/stream.rs` works out from the append rules' words.
 //! - `replace_is_whole`: rule 15.
 //! - `view_round_trips`: rule 16.
 //! - `input_is_deterministic`: rules 17 and 18.
@@ -16,7 +17,8 @@
 //!   `SNAP=write` rewrites the files instead (`mise run snap [type …]`).
 //! - `every_size_draws_without_panic`: REQ-LAYOUT-040.
 //! - `selftest_rejects_broken_charts` (feature `contract-selftest`): the
-//!   contract rejects the three broken charts (REQ-CONTRACT-060).
+//!   contract rejects the three broken charts (REQ-CONTRACT-060), the
+//!   stateful one by rules 14 and 15.
 //! - `rules_as_worded` (ignored): rules 10, 19 and 24 as the plan first
 //!   worded them, which fail on right frames; the plan took the wordings the
 //!   tests above check in v0.4.0, and this one stays as the record of why.
@@ -59,7 +61,7 @@ use unicode_width::UnicodeWidthChar;
 use common::form::{cases, Case};
 use common::probe::{self, Held, Plot};
 use common::schema::Schemas;
-use common::{accepted, envs, guarded, mode_options, parallel, report, sizes, snap, Font, Tally, TIMES};
+use common::{accepted, envs, guarded, mode_options, parallel, report, sizes, snap, stream, Font, Tally, TIMES};
 
 /// A fresh chart of `entry` for `options`, given `data`; the data's refusal
 /// is not a failure here (rule 28 checks refusals).
@@ -1089,6 +1091,123 @@ fn replace_is_whole() {
     report("replace, rule 15", &[4, 15], &tallies, start.elapsed());
 }
 
+/// One unit of `streaming_equals_replace`: a chart, a case and a mode, and
+/// whether to run the capacity and follow variants too (the default mode
+/// only).
+struct StreamJob {
+    entry: &'static Entry,
+    case: Case,
+    mode: &'static str,
+    variants: bool,
+}
+
+/// `mode`'s options with `retain.rows` set to `rows`.
+fn with_retain(entry: &Entry, mode: &str, rows: usize) -> Options {
+    let mut v: serde_json::Value = serde_json::from_str(&mode_options(entry, mode)).expect("mode options are JSON");
+    v["retain"] = serde_json::json!({ "rows": rows });
+    Options::parse(&v.to_string()).expect("options")
+}
+
+/// Rule 14 for one chart, case and mode (REQ-CONTRACT-040): a fresh chart
+/// given the case's rows by `append` in the batches 1, 7, ⌊n/3⌋ and the
+/// rest, a frame drawn after each, ends on the frame (at 80 × 24 and 40 × 12)
+/// and the view of a fresh chart given by replace the rows the append rules
+/// keep (`common/stream.rs`: the same rows, for sorted distinct x); and its
+/// appends report the rows held and the rows late (REQ-STREAM-070). In the
+/// default mode, twice more: with `retain.rows` c, half the rows, ending on a
+/// replace with the last c kept rows and reporting the rest dropped; and
+/// with a view following a domain half the fitted one, ending on that view
+/// moved to the newest datum (REQ-VIEW-060).
+fn stream_job(job: &StreamJob) -> Tally {
+    let began = Instant::now();
+    let mut t = Tally::default();
+    let (entry, mode) = (job.entry, job.mode);
+    let data = job.case.generate();
+    let Some(table) = data.first_table() else {
+        t.skip(14, "a case of no table");
+        return t;
+    };
+    let n = table.len();
+    let cuts = stream::batches(n);
+    let kept = stream::kept(table, cuts[0].end);
+    let env = Env::plain();
+    let base = Options::parse(&mode_options(entry, mode)).expect("options");
+    // (name, options, view patch, rows of the reference)
+    let mut variants: Vec<(String, Options, Option<ViewPatch>, Vec<usize>)> = vec![("appended".into(), base.clone(), None, kept.rows.clone())];
+    if job.variants && n >= 2 {
+        let c = (n / 2).max(1);
+        let last = kept.rows[kept.rows.len().saturating_sub(c)..].to_vec();
+        variants.push((format!("into a ring of {c}"), with_retain(entry, mode, c), None, last));
+        let follow = fresh(entry, &base, &stream::rows_of(table, &kept.rows)).ok().and_then(|mut b| {
+            let _ = draw(b.as_mut(), 0.0, &env, 80, 24);
+            let [a, z] = domain_of(b.as_ref())?;
+            ViewPatch::from_json(&serde_json::json!({"x": {"domain": [a, a + (z - a) / 2.0], "follow": true}}).to_string()).ok()
+        });
+        if let Some(p) = follow {
+            variants.push(("following".into(), base.clone(), Some(p), kept.rows.clone()));
+        }
+    }
+    for (name, options, patch, rows) in variants {
+        let case = format!("{} · mode {mode} · {name}", job.case.name);
+        let run = guarded(|| -> Result<(), String> {
+            let (_, mut a) = registry::make_with(entry.meta.slug, &options).map_err(|e| format!("make: {e}"))?;
+            if let Some(p) = &patch {
+                a.set_view(p);
+            }
+            let (mut late, mut dropped, mut held) = (0, 0, 0);
+            for r in &cuts {
+                let got = a.append(stream::range_of(table, r.clone())).map_err(|e| format!("append {r:?}: {e}"))?;
+                (late, dropped, held) = (late + got.late, dropped + got.dropped, got.rows);
+                let _ = draw(a.as_mut(), 0.0, &env, 80, 24);
+            }
+            let (_, mut b) = registry::make_with(entry.meta.slug, &options).map_err(|e| format!("make: {e}"))?;
+            if let Some(p) = &patch {
+                b.set_view(p);
+            }
+            let accepted = b.set_data(stream::rows_of(table, &rows)).map_err(|e| format!("replace: {e}"))?;
+            for (cols, rows) in [(80, 24), (40, 12)] {
+                let (got, want) = (draw(a.as_mut(), 0.0, &env, cols, rows), draw(b.as_mut(), 0.0, &env, cols, rows));
+                t.frames += 2;
+                t.check(14, got == want, || format!("{case} at {cols}×{rows}: {}", common::first_difference(&want, &got)));
+            }
+            t.check(14, a.view() == b.view(), || format!("{case}: the view {} against the replace's {}", a.view().to_json(), b.view().to_json()));
+            t.check(14, held == accepted.rows, || format!("{case}: {held} rows held after the appends, {} after the replace", accepted.rows));
+            t.check(14, late == kept.late, || format!("{case}: {late} rows late, the rules make {}", kept.late));
+            let evicted = kept.rows.len() - rows.len();
+            t.check(14, dropped == evicted, || format!("{case}: {dropped} rows dropped, the ring of {} drops {evicted}", rows.len()));
+            Ok(())
+        });
+        match run {
+            Err(p) => t.check(4, false, || format!("{case}: panicked: {p}")),
+            Ok(Err(e)) => t.check(14, false, || format!("{case}: {e}")),
+            Ok(Ok(())) => {}
+        }
+    }
+    t.time = began.elapsed();
+    t
+}
+
+/// Rule 14 (REQ-CONTRACT-040, REQ-STREAM-040, REQ-STREAM-070,
+/// REQ-CANDLE-060, REQ-SPARK-010, REQ-VIEW-060): streaming equals replace,
+/// for every chart, every case in its shape and every mode; the capacity and
+/// follow variants in the default mode.
+#[test]
+fn streaming_equals_replace() {
+    let start = Instant::now();
+    let charts = common::charts();
+    let mut jobs = Vec::new();
+    for &entry in &charts {
+        for case in cases(entry) {
+            for &mode in entry.meta.modes {
+                jobs.push(StreamJob { entry, case, mode, variants: mode == entry.meta.modes[0] });
+            }
+        }
+    }
+    let results = parallel(&jobs, |j| j.case.rows * j.case.series * (1 + 2 * usize::from(j.variants)), stream_job);
+    let tallies = by_chart(&charts, &jobs, |j| j.entry, results);
+    report("streaming, rule 14", &[4, 14], &tallies, start.elapsed());
+}
+
 /// The fixtures the interaction rules (16, 19, 20) play on: every accepted
 /// fixture of at most 100,000 rows a series, and the 1M one in the default
 /// mode only.
@@ -1992,26 +2111,6 @@ fn the_matrix_is_the_plans() {
     }
 }
 
-/// The rows `range` of `data`'s first table, as data of their own.
-#[cfg(feature = "contract-selftest")]
-fn rows_of(data: &Data, range: std::ops::Range<usize>) -> Data {
-    let t = data.first_table().expect("a table");
-    let columns = t
-        .columns()
-        .iter()
-        .map(|c| {
-            let mut n = c.clone();
-            n.values = match &c.values {
-                glyphplot::data::Values::Num(v) => glyphplot::data::Values::Num(v[range.clone()].to_vec()),
-                glyphplot::data::Values::Codes(v) => glyphplot::data::Values::Codes(v[range.clone()].to_vec()),
-                glyphplot::data::Values::Text(v) => glyphplot::data::Values::Text(v[range.clone()].to_vec()),
-            };
-            n
-        })
-        .collect();
-    Data::from_table(Table::from_columns(columns).expect("rows of a valid table"))
-}
-
 /// REQ-CONTRACT-060: the contract rejects each broken chart the
 /// `contract-selftest` feature registers, with the matching rule's message,
 /// and passes the `line` chart they are built on under the same checks:
@@ -2019,9 +2118,9 @@ fn rows_of(data: &Data, range: std::ops::Range<usize>) -> Data {
 /// - `selftest-random` draws a different frame on each fresh chart: rule 8;
 /// - `selftest-charset` draws U+0416 Ж, outside the font: rule 5;
 /// - `selftest-stateful` keeps a count of the data it was given across
-///   replaces and appends. Appending in batches ends on a frame other than a
-///   replace's, which is rule 14's case (v0.6.0, not checked yet); the same
-///   state survives a replace, so rule 15 rejects it now.
+///   replaces and appends: appending in batches ends on a frame other than a
+///   replace's, so rule 14 rejects it, and the same state survives a
+///   replace, so rule 15 does too.
 #[cfg(feature = "contract-selftest")]
 #[test]
 fn selftest_rejects_broken_charts() {
@@ -2045,23 +2144,11 @@ fn selftest_rejects_broken_charts() {
     let stateful = entry("selftest-stateful");
     let t = replace_job(&ReplaceJob { entry: stateful, mode: "line", from: Case::native(sine) }, &onto, &datas);
     assert!(rejects(&t, 15, "then two"), "selftest-stateful is not rejected by rule 15: fails {:?}, {:?}", t.fails, t.examples);
-    // Rule 14's case, shown directly: batches of 1, 7, ⌊n/3⌋ and the rest
-    // against a replace.
-    let data = sine.generate();
-    let n = sine.rows;
-    let cuts = [0, 1, 8, 8 + n / 3, n];
-    let frame_after = |slug: &str, batches: bool| {
-        let (_, mut c) = registry::make(slug, "").expect("made");
-        if batches {
-            for w in cuts.windows(2) {
-                c.append(rows_of(&data, w[0]..w[1])).expect("appended");
-                let _ = draw(c.as_mut(), 0.0, &Env::plain(), 80, 24);
-            }
-        } else {
-            c.set_data(data.clone()).expect("replaced");
-        }
-        draw(c.as_mut(), 0.0, &Env::plain(), 80, 24)
-    };
-    assert_eq!(frame_after("line", true), frame_after("line", false), "the line chart's appends end on the replace's frame");
-    assert_ne!(frame_after("selftest-stateful", true), frame_after("selftest-stateful", false), "selftest-stateful keeps state across appends");
+    // Rule 14: the line chart's appends end on its replace's frame and view;
+    // the stateful one's do not.
+    let job = |entry: &'static Entry| StreamJob { entry, case: Case::native(sine), mode: "line", variants: true };
+    let control = stream_job(&job(line));
+    assert!(control.ok() && control.checks.get(&14).copied().unwrap_or(0) > 0, "the line chart passes rule 14: {:?}", control.examples);
+    let t = stream_job(&job(stateful));
+    assert!(rejects(&t, 14, "sine-1k · mode line · appended at 80×24"), "selftest-stateful is not rejected by rule 14: fails {:?}, {:?}", t.fails, t.examples);
 }

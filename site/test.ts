@@ -5,6 +5,7 @@
 
 import * as gp from "glyphplot";
 import { config, define, type GlyphPlot } from "glyphplot/element";
+import { Feed } from "./feed.ts";
 
 declare global {
   interface Window {
@@ -126,7 +127,7 @@ function ohlcvDays(n = 500): { t: Date[]; open: number[]; high: number[]; low: n
 
 // ------------------------------------------------------------ the environment and the pass
 
-const STORE = "glyphplot-checklist-v0.5.0";
+const STORE = "glyphplot-checklist-v0.6.0";
 type Mark = { state: "" | "pass" | "fail" | "na"; note: string };
 const marks: Record<string, Mark> = (() => {
   try {
@@ -210,7 +211,7 @@ function addMarks(): void {
 /** The pass as Markdown (REQ-TEST-040). */
 export function markdown(): string {
   const cell = (s: string): string => s.replace(/\|/g, "\\|").replace(/\n/g, " ");
-  const lines = [`### glyphplot v0.5.0 checklist, ${new Date().toISOString().slice(0, 10)}`, ""];
+  const lines = [`### glyphplot v0.6.0 checklist, ${new Date().toISOString().slice(0, 10)}`, ""];
   for (const [k, v] of env()) lines.push(`- ${k}: ${cell(v)}`);
   lines.push("", "| # | Case | Result | Note |", "|---|---|---|---|");
   let i = 0;
@@ -748,6 +749,90 @@ function sparklines(): void {
   });
 }
 
+/** `plot-data`'s detail (REQ-STREAM-070). */
+interface DataDetail {
+  rows: number;
+  dropped: number;
+  late: number;
+  version: number;
+}
+
+/** Case 31: a live line on the simulated walk, following its newest sample. */
+function liveLine(): void {
+  const el = plot("live-line-chart");
+  const status = $("#live-line-status");
+  const feed = new Feed(31, 20);
+  const t0 = Date.now() - 1500 * 20;
+  const t: Date[] = [];
+  const price: number[] = [];
+  for (let i = 0; i < 1500; i++) {
+    t.push(new Date(t0 + i * 20));
+    price.push(feed.sample());
+  }
+  el.data = { t, price };
+  const last = t[t.length - 1]?.getTime() ?? 0;
+  el.view = { x: { domain: [last - 30_000, last], follow: true } };
+  let dropped = 0;
+  let late = 0;
+  el.addEventListener("plot-data", (e) => {
+    const d = (e as CustomEvent<DataDetail>).detail;
+    dropped += d.dropped;
+    late += d.late;
+    const x = el.view["x"] as { follow?: boolean } | undefined;
+    status.textContent = `simulated: ${d.rows} rows held, ${dropped} dropped by retain.rows, ${late} late, data version ${d.version}; follow ${x?.follow ? "on" : "off"}`;
+  });
+  let timer: ReturnType<typeof setInterval> | undefined;
+  $("#live-line-start").addEventListener("click", () => {
+    timer ??= setInterval(() => el.append({ t: new Date(), price: feed.sample() }), 20);
+  });
+  $("#live-line-stop").addEventListener("click", () => {
+    clearInterval(timer);
+    timer = undefined;
+  });
+}
+
+/** Case 32: `paused`, Space and `announce` on a simulated stream, beside a chart without `announce`. */
+function pauseAnnounce(): void {
+  const els = [plot("announce-chart"), plot("silent-chart")];
+  const status = $("#announce-status");
+  const feed = new Feed(32, 100);
+  const start = Date.now() - 300 * 100;
+  const t: Date[] = [];
+  const value: number[] = [];
+  for (let i = 0; i < 300; i++) {
+    t.push(new Date(start + i * 100));
+    value.push(feed.sample());
+  }
+  for (const el of els) el.data = { t, value };
+  const show = (): void => {
+    const a = els[0] as GlyphPlot;
+    const live = a.querySelector("[aria-live]");
+    status.textContent = `simulated; ${a.paused ? "paused" : "live"}; live region: ${live ? `"${live.textContent ?? ""}"` : "none"}; the chart without announce has ${els[1]?.querySelector("[aria-live]") ? "a" : "no"} live region`;
+  };
+  for (const el of els) {
+    el.addEventListener("plot-data", show);
+    new MutationObserver(show).observe(el, { attributes: true, attributeFilter: ["paused"] });
+  }
+  let timer: ReturnType<typeof setInterval> | undefined;
+  $("#announce-start").addEventListener("click", () => {
+    timer ??= setInterval(() => {
+      const row = { t: new Date(), value: feed.sample() };
+      for (const el of els) el.append(row);
+    }, 100);
+  });
+  $("#announce-stop").addEventListener("click", () => {
+    clearInterval(timer);
+    timer = undefined;
+  });
+  const pause = $("#announce-pause");
+  pause.addEventListener("click", () => {
+    const on = !(els[0] as GlyphPlot).paused;
+    for (const el of els) el.paused = on;
+    pause.setAttribute("aria-pressed", String(on));
+    pause.textContent = on ? "Resume" : "Pause";
+  });
+}
+
 // ------------------------------------------------------------ start
 
 showEnv();
@@ -779,6 +864,8 @@ candles();
 candleModes();
 bars();
 sparklines();
+liveLine();
+pauseAnnounce();
 void backs().catch((e: unknown) => console.error(`test.html: back colours case: ${String(e)}`));
 void mounts().catch((e: unknown) => console.error(`test.html: mount cases: ${String(e)}`));
 void panic().catch((e: unknown) => console.error(`test.html: panic case: ${String(e)}`));

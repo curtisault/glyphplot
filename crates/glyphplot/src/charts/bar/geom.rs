@@ -323,7 +323,7 @@ fn stack_up(base: i64, ends: &[(usize, i64)]) -> Vec<(usize, i64, i64)> {
 pub(super) fn extent(data: &Prepared, shown: &[usize], range: Range<usize>, stack: bool, baseline: f64) -> Option<[f64; 2]> {
     let (mut lo, mut hi) = (f64::INFINITY, f64::NEG_INFINITY);
     let mut any = false;
-    let columns: Vec<(&[f64], &crate::format::Display)> = shown.iter().map(|&s| (data.values(s), &data.series[s].display)).collect();
+    let columns: Vec<(crate::ring::Seq<f64>, &crate::format::Display)> = shown.iter().map(|&s| (data.values(s), &data.series[s].display)).collect();
     for i in range {
         let (mut up, mut down) = (baseline, baseline);
         for &(values, display) in &columns {
@@ -617,7 +617,7 @@ pub(super) fn make(input: &GeomInput, data: &Prepared, ext: &dyn Fn(Range<usize>
         super::Signed::Off => false,
         // One series in the data, not one shown: hiding series leaves the
         // rest drawn as their legend keys say (rule 11).
-        super::Signed::Auto => data.series.len() == 1 && m == 1 && data.series[shown[0]].least < cfg.baseline,
+        super::Signed::Auto => data.series.len() == 1 && m == 1 && data.least(shown[0]) < cfg.baseline,
     };
     let segs = cats.as_ref().map(|c| bars(data, c, &value, shown, cfg)).unwrap_or_default();
     Geom { layout, plot, horizontal: cfg.horizontal, cats, value, shown: shown.clone(), segs, legend: spans, title, signed }

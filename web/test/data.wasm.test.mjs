@@ -8,7 +8,7 @@
 // and `ns` columns keep their origin (REQ-DATA-020).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { BUILD, manifest, types, moduleFor, instantiate, shell, series, median, fixtureIndex, fixtureData, commitColumns } from "./support/wasm.mjs";
+import { BUILD, manifest, types, moduleFor, instantiate, shell, series, median, retimed, fixtureIndex, fixtureData, commitColumns } from "./support/wasm.mjs";
 
 const TYPE = types[0];
 const N = 1_000_000;
@@ -125,18 +125,21 @@ test(`${BUILD}: replacing two 1,000,000-row columns takes at most 10 ms (median 
   ch.data = a;
   ch.frame(0);
   const limit = 1.1 * (a.x.byteLength + a.y.byteLength);
-  const times = [];
-  for (let k = 0; k < 5; k++) {
-    const w = bytes();
-    const t0 = performance.now();
-    ch.data = k % 2 ? a : b;
-    times.push(performance.now() - t0);
-    const grown = bytes() - w;
-    assert.ok(grown <= limit, `replace ${k} grew ${grown} B, over ${limit}`);
-    ch.frame(0);
-  }
-  const m = median(times);
-  console.log(`# REQ-DATA-070 ${BUILD}: replace of 2 × 1M f64 through chart.data: median ${m.toFixed(2)} ms of [${times.map((t) => t.toFixed(2)).join(", ")}] (Node ${process.versions.node}, load ${(await import("node:os")).loadavg()[0].toFixed(2)})`);
+  const play = () => {
+    const times = [];
+    for (let k = 0; k < 5; k++) {
+      const w = bytes();
+      const t0 = performance.now();
+      ch.data = k % 2 ? a : b;
+      times.push(performance.now() - t0);
+      const grown = bytes() - w;
+      assert.ok(grown <= limit, `replace ${k} grew ${grown} B, over ${limit}`);
+      ch.frame(0);
+    }
+    return median(times);
+  };
+  const { best: m, runs } = await retimed(play, 10);
+  console.log(`# REQ-DATA-070 ${BUILD}: replace of 2 × 1M f64 through chart.data: median ${m.toFixed(2)} ms, best of [${runs.map((t) => t.toFixed(2)).join(", ")}] (Node ${process.versions.node}, load ${(await import("node:os")).loadavg()[0].toFixed(2)})`);
   assert.ok(m <= 10, `median ${m.toFixed(2)} ms`);
   ch.free();
 });
@@ -268,17 +271,22 @@ test(`${BUILD}: M4 over 1,000,000 rows in view at 640 dot columns takes at most 
   const xs = columns[0];
   const [x0, x1] = [xs[0], xs[xs.length - 1]];
   const span = x1 - x0;
-  const times = [];
-  for (let k = 1; k <= 8; k++) {
-    c.set_view(JSON.stringify({ x: { domain: [x0 - k * span * 1e-9, x1 + k * span * 1e-9] } }));
-    const t0 = performance.now();
-    c.frame(0, false);
-    times.push(performance.now() - t0);
-  }
-  assert.match(c.summary(), /1,000,000 points in view/);
-  times.shift(); // the first frame at this width draws the axes' text for the first time
-  const m = median(times);
-  console.log(`# REQ-SAMPLE-030 ${BUILD}: frame of 1M rows in view, new x range each, ${at.cols}×12 (${at.plot * 2} dot columns): median ${m.toFixed(2)} ms of [${times.map((t) => t.toFixed(2)).join(", ")}] (Node ${process.versions.node}, load ${(await import("node:os")).loadavg()[0].toFixed(2)})`);
+  let k = 0;
+  const play = () => {
+    const times = [];
+    for (let i = 0; i < 8; i++) {
+      k++;
+      c.set_view(JSON.stringify({ x: { domain: [x0 - k * span * 1e-9, x1 + k * span * 1e-9] } }));
+      const t0 = performance.now();
+      c.frame(0, false);
+      times.push(performance.now() - t0);
+    }
+    assert.match(c.summary(), /1,000,000 points in view/);
+    times.shift(); // the first frame of a run is not counted: the first at this width also draws the axes' text
+    return median(times);
+  };
+  const { best: m, runs } = await retimed(play, 8);
+  console.log(`# REQ-SAMPLE-030 ${BUILD}: frame of 1M rows in view, new x range each, ${at.cols}×12 (${at.plot * 2} dot columns): median of 7 ${m.toFixed(2)} ms, best of [${runs.map((t) => t.toFixed(2)).join(", ")}] (Node ${process.versions.node}, load ${(await import("node:os")).loadavg()[0].toFixed(2)})`);
   assert.ok(m <= 8, `median ${m.toFixed(2)} ms`);
   c.free();
 });
