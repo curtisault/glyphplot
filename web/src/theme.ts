@@ -4,7 +4,9 @@
 // ground (REQ-THEME-020). The module's `resolve_palette(theme_json)` turns
 // the result into the 255 entries (REQ-COLOR-030); the element re-resolves
 // and repaints, drawing no new frame, when the colour scheme, `<html>`'s
-// class, style or data-theme, or `theme` change (REQ-THEME-030).
+// class, style or data-theme, or `theme` change (REQ-THEME-030). Under
+// `forced-colors: active` a chart draws in one ink, CanvasText on Canvas, the
+// accent in Highlight; under `@media print` it draws on paper (REQ-THEME-100).
 
 import { PALETTE_LEN, Token } from "./api.ts";
 
@@ -248,19 +250,122 @@ export function lowContrastSeries(theme: Theme, palette: Uint8Array): string[] {
   return out;
 }
 
+/** The media queries that change how a chart is themed: forced colours and print (REQ-THEME-100). */
+export interface MediaState {
+  /** `(forced-colors: active)`. */
+  forced: boolean;
+  /** `print`. */
+  print: boolean;
+}
+
+/** Between beforeprint and afterprint: the print media query may not match yet when beforeprint fires. */
+let printing = false;
+
+/** What the media queries say now; both false where there is no `matchMedia`. */
+export function mediaState(): MediaState {
+  if (typeof matchMedia !== "function") return { forced: false, print: printing };
+  return { forced: matchMedia("(forced-colors: active)").matches, print: printing || matchMedia("print").matches };
+}
+
+/** The system colours a forced-colours theme is made of, as #rrggbb. */
+export interface SystemColors {
+  canvas: string;
+  canvasText: string;
+  highlight: string;
+}
+
+/**
+ * The system colours `Canvas`, `CanvasText` and `Highlight` as the browser
+ * resolves them now, read from a hidden probe in `parent` (in forced colours
+ * they are the reader's high-contrast colours); black on white with a blue
+ * highlight for any it cannot read.
+ */
+export function systemColors(parent: Element): SystemColors {
+  const doc = parent.ownerDocument;
+  const probe = doc.createElement("span");
+  probe.setAttribute("aria-hidden", "true");
+  probe.style.cssText = "position:absolute;visibility:hidden;forced-color-adjust:none;color:CanvasText;background-color:Canvas;border:1px solid Highlight";
+  parent.append(probe);
+  try {
+    const cs = getComputedStyle(probe);
+    const hex = (css: string, fallback: string): string => {
+      const c = parseColor(css);
+      return c && c[3] > 0 ? toHex(c) : fallback;
+    };
+    return { canvas: hex(cs.backgroundColor, "#ffffff"), canvasText: hex(cs.color, "#000000"), highlight: hex(cs.borderTopColor, "#0000ff") };
+  } finally {
+    probe.remove();
+  }
+}
+
+/**
+ * The theme of forced colours (REQ-THEME-100): every token in `CanvasText`
+ * on a `Canvas` ground, but the accent and the selection in `Highlight`. The
+ * element draws it in one ink (mono), so series differ by dashes and fills,
+ * not colour (REQ-MONO-010).
+ */
+export function forcedTheme(sys: SystemColors): Theme {
+  const ink = sys.canvasText;
+  return {
+    ground: sys.canvas,
+    ink,
+    muted: ink,
+    rule: ink,
+    accent: sys.highlight,
+    selection: sys.highlight,
+    up: ink,
+    down: ink,
+    series: Array.from({ length: 8 }, () => ink),
+    scale: [ink, ink],
+    diverging: [ink, ink, ink],
+  };
+}
+
+/**
+ * The choice the media queries impose, or null to theme as usual
+ * (REQ-THEME-100): forced colours draw {@link forcedTheme} with its ground
+ * painted; print draws the default paper set (dark ink on a light ground,
+ * painted), whatever the page's tokens, `theme` attribute or object say.
+ */
+export function mediaChoice(media: MediaState, sys: () => SystemColors): ThemeChoice | null {
+  if (media.forced) return { theme: forcedTheme(sys()), paintGround: true, paper: false };
+  if (media.print) return { theme: { paper: true }, paintGround: true, paper: true };
+  return null;
+}
+
 /**
  * Calls `onChange` when the theme may have changed (REQ-THEME-030): a
- * `prefers-color-scheme` change and a change of `<html>`'s class, style or
- * data-theme. Returns the function that stops watching.
+ * `prefers-color-scheme` change, a change of `<html>`'s class, style or
+ * data-theme, and forced colours or print turning on or off
+ * (REQ-THEME-100). Returns the function that stops watching.
  */
 export function watchTheme(onChange: () => void): () => void {
   if (typeof document === "undefined") return () => {};
   const stops: (() => void)[] = [];
   if (typeof matchMedia === "function") {
-    const mq = matchMedia("(prefers-color-scheme: dark)");
-    const f = (): void => onChange();
-    mq.addEventListener("change", f);
-    stops.push(() => mq.removeEventListener("change", f));
+    for (const q of ["(prefers-color-scheme: dark)", "(forced-colors: active)", "print"]) {
+      const mq = matchMedia(q);
+      const f = (): void => onChange();
+      mq.addEventListener("change", f);
+      stops.push(() => mq.removeEventListener("change", f));
+    }
+  }
+  if (typeof addEventListener === "function") {
+    // A printout is laid out right after beforeprint: theme now, not on the media query's later change.
+    const before = (): void => {
+      printing = true;
+      onChange();
+    };
+    const after = (): void => {
+      printing = false;
+      onChange();
+    };
+    addEventListener("beforeprint", before);
+    addEventListener("afterprint", after);
+    stops.push(() => {
+      removeEventListener("beforeprint", before);
+      removeEventListener("afterprint", after);
+    });
   }
   if (typeof MutationObserver === "function") {
     const mo = new MutationObserver(() => onChange());

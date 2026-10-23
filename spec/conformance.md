@@ -469,7 +469,7 @@ Several checks may be listed for one requirement, separated by commas.
 | REQ-THEME-070 | v0.3.0 | `crates/glyphplot/src/theme.rs tests::low_contrast_series_warn`, `web/test/theme.test.mjs` | partial |
 | REQ-THEME-080 | v0.9.0 | `crates/glyphplot/src/theme.rs tests::default_scales_are_monotonic_and_separate` | — |
 | REQ-THEME-090 | v0.8.0 | `crates/cli/tests/cli.rs::theme_file_is_read`, `web/test/exports.test.mjs`, `crates/glyphplot/src/export.rs tests::exports_take_a_theme` | — |
-| REQ-THEME-100 | v0.7.0 | `site/e2e/theme.spec.ts` (forced colours, print), manual (Windows high contrast) | — |
+| REQ-THEME-100 | v0.7.0 | `site/e2e/theme.spec.ts` (forced colours and print, emulated in Chromium), manual (Windows high contrast) | partial |
 
 ### 10.2 One ink (MONO)
 
@@ -495,7 +495,7 @@ Several checks may be listed for one requirement, separated by commas.
 | REQ-A11Y-080 | v0.6.0 | `site/e2e/streaming.spec.ts`, `web/test/stream.wasm.test.mjs` | partial |
 | REQ-A11Y-090 | v0.6.0 | `site/e2e/streaming.spec.ts` | yes |
 | REQ-A11Y-100 | v0.6.0 | `site/e2e/streaming.spec.ts`, `web/test/a11y.test.mjs`, manual (screen readers: test.html case 32) | partial |
-| REQ-A11Y-110 | v0.7.0 | `site/e2e/a11y.spec.ts` | — |
+| REQ-A11Y-110 | v0.7.0 | `site/e2e/show-data.spec.ts` | yes |
 | REQ-A11Y-120 | v0.8.0 | `crates/cli/tests/cli.rs::table_prints_the_data` | — |
 
 ## 12. Budgets
@@ -600,9 +600,9 @@ Several checks may be listed for one requirement, separated by commas.
 | REQ-SITE-100 | v0.8.0 | `mise run examples:check` (on each milestone's branch) | — |
 | REQ-SITE-110 | v0.7.0 | `mise run examples:check` (generated data labelled with its seed), `site/e2e/site.spec.ts` | — |
 | REQ-SITE-120 | v0.7.0 | `site/e2e/site.spec.ts` (no wasm fetched before a scroll; one fetch a family) | — |
-| REQ-DATASET-010 | v0.7.0 | `mise run datasets:check` | — |
-| REQ-DATASET-020 | v0.7.0 | `mise run datasets:check` | — |
-| REQ-DATASET-030 | v0.7.0 | `mise run datasets:check`, `web/test/package.test.mjs` | — |
+| REQ-DATASET-010 | v0.7.0 | `mise run datasets:check` (its failures tested in scripts/datasets.test.mjs) | yes |
+| REQ-DATASET-020 | v0.7.0 | `mise run datasets:check` (its failures tested in scripts/datasets.test.mjs) | yes |
+| REQ-DATASET-030 | v0.7.0 | `mise run datasets:check`, `web/test/package.test.mjs` | yes |
 
 ## 17. Domain packs
 
@@ -685,6 +685,6 @@ kind of the first check listed.
 
 | Status | Requirements |
 |---|---|
-| yes | 184 |
-| partial | 61 |
-| — | 95 |
+| yes | 188 |
+| partial | 62 |
+| — | 90 |

@@ -575,6 +575,7 @@ Node it reads the file instead.
 | `type`, `options`, `view`, `theme` | as the attributes, as objects; `theme` takes a theme object ([theme.schema.json](../spec/schemas/theme.schema.json)) |
 | `data` | set: replace all; get: the descriptor and lengths (REQ-EL-070) |
 | `paused` | boolean |
+| `showData` | boolean: the data table shown over the drawing, as the control row's "Show data" toggle and T set it (v0.7.0, REQ-A11Y-110) |
 | `chart` | the JS `Chart` once made, else `null` |
 | `ready` | a promise resolved after the first frame |
 | `cols`, `rows`, `currentTime` | read-only |
@@ -615,6 +616,7 @@ keyboard or screen-reader user reads values one at a time (ADR-116).
 | Space | pause or resume a stream |
 | 1–9 | toggle the nth series |
 | ? | show the keys |
+| T | show or hide the data table over the drawing; Escape in it hides it (v0.7.0, REQ-A11Y-110) |
 | CLI only: h j k l, f, q | ← ↓ ↑ →, follow the live end, quit |
 
 Pointer and touch defaults (REQ-INPUT-040, REQ-TOUCH-010): a drag pans,
@@ -808,8 +810,12 @@ From a11y-theming.md (ADR-122, ADR-123, ADR-132):
   focus and hover gives click alternatives to dragging (WCAG 2.5.7); `paused`
   and Space pause a stream (WCAG 2.2.2); an opt-in `announce` live region,
   at least 5 s apart (REQ-A11Y-010 to 100).
-- **Deferred**: forced colours and print (v0.7.0), the visible table
-  (v0.7.0), RTL reordering (v0.9.0), Arabic joining and a navigation tree for
+- **v0.7.0**: under `forced-colors: active` one ink, `CanvasText` on
+  `Canvas` with the accent in `Highlight`; under print the paper set with
+  no control row (REQ-THEME-100); a "Show data" toggle in the control row,
+  T on the cursor and `showData` show the table over the drawing
+  (REQ-A11Y-110).
+- **Deferred**: RTL reordering (v0.9.0), Arabic joining and a navigation tree for
   multi-pane charts (later), sonification (not planned).
 
 <a id="the-cli"></a>

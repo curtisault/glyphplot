@@ -112,6 +112,15 @@ run = "uv run --no-project --with 'fonttools[woff]==4.60.1' --with 'brotli==1.2.
 description = "Capture the pinned d3 packages' output into crates/glyphplot/tests/fixtures (REQ-REF-010)"
 run = ["npm ci --ignore-scripts --prefix scripts/fixtures", "node scripts/fixtures.mjs"]
 
+[tasks."datasets:check"]
+description = "The dataset manifest (datasets/manifest.json) against the files: every file under datasets/, site/public/data/ and crates/glyphplot/tests/data/ has an entry with its size and SHA-256, no committed dataset over 1 MB or off the licence allow-list, no ShareAlike data committed or in a published crate or the npm package (cargo package --list, npm pack --dry-run), the test datasets' README agreeing; the check's own tests first (REQ-DATASET-010, 020, 030)"
+depends = ["install:web"]
+run = ["node --test scripts/datasets.test.mjs", "node scripts/datasets.mjs check"]
+
+[tasks."datasets:fetch"]
+description = "The build-time datasets: HYG v4.4 from Codeberg into target/datasets/ and its naked-eye subset into site/public/data/hyg/ (gitignored), each SHA-256 checked against datasets/manifest.json; skipped when present and matching (ADR-137)"
+run = "node scripts/datasets.mjs fetch"
+
 [tasks.snap]
 description = "Rewrite the snapshots of every chart, or of the types given (REQ-SNAP-030)"
 usage = 'arg "[type]..." help="chart types; every chart when none"'
