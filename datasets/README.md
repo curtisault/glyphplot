@@ -30,7 +30,7 @@ Every file in the first four folders is a dataset with an entry, except
 | `licence` | The licence's name, read against the allow-list (below) |
 | `licenceUrl` | The licence or the publisher's terms |
 | `attribution` | Optional: the credit line a page shows |
-| `retrieved` | `YYYY-MM-DD` the bytes were fetched |
+| `retrieved` | `YYYY-MM-DD` the bytes were fetched; for `live` and `generated`, the date the URL and terms were recorded |
 | `storage` | `committed` (in git), `build` (fetched or derived at build time into a gitignored path), `live` (the reader's browser fetches it from the publisher; no file), `generated` (made by code from a seed; no file) |
 | `paths` | `committed` and `build`: every path from the repository root holding these exact bytes |
 | `size`, `sha256` | `committed` and `build`: the bytes' length and SHA-256; null or absent for `live` and `generated` |

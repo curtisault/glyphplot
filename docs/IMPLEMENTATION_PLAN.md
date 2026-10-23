@@ -1532,6 +1532,48 @@ Acceptance:
 - Owner: the site in both themes on a desktop and a phone; each live example
   against its feed.
 
+Integration notes (2026-10-23), after the Elm site, the gallery's examples
+and the dataset manifest were built apart and merged:
+- **The full-size flag:** an example's page sets the `full` attribute on
+  `<gp-example>` (site/examples/element.ts reads it), not a class.
+- **Dataset names:** the examples name `datasets/manifest.json`'s ids
+  (`wti-daily`, not `eia-wti-daily`). The manifest gained `live` entries for
+  the four feeds the reader's browser fetches (`usgs-earthquakes-month`,
+  `wikimedia-recentchange`, `noaa-swpc-kp`, `noaa-coops-8518750`; Wikimedia
+  states no licence for its stream, so its entry has a note) and a
+  `generated` entry, `synthetic`. `examples:check` and the cards read that
+  file; `site/examples/support/datasets.ts` is gone.
+- **The first page moves no focus:** Elm focused `<main>` and scrolled on
+  the first page too, which fired a `scroll` that `<gp-example>` takes for
+  the reader's act, so the gallery fetched two modules before any scroll.
+  The first page is now entered as already shown; a navigation inside the
+  site still moves focus to `<main>`.
+- **Tasks:** `examples:stills`, `examples:check`, `examples:browser`;
+  `build:site` makes the stills and fetches HYG's subset first; `check` runs
+  `examples:check` and `datasets:check`; `lint` runs tsc on
+  `site/examples`.
+- **Tests:** `site/e2e/charts.spec.ts` (every type's page, doc page and
+  example's page draws a first frame with no console error; each live feed,
+  refused, shows its message) and `site/e2e/site.spec.ts` (axe on four
+  pages in both themes, the theme button, the gallery's loading, the
+  filters, the provenance lines, the source copied). Measured with `time`
+  on this repository's Mac (Darwin 25.5.0, warm, 9 Playwright workers): `charts.spec.ts` 71 tests
+  in 5.1 s, `site.spec.ts` 15 in 8.5 s, all of `test:site` 163 in 24.6 s;
+  `mise run check` 29.5 s, its smoke set 18 tests in 12.1 s. The line page,
+  `live-market`'s page and its axe scans, the theme button, the gallery's
+  loading and a filter are in the smoke set.
+- **Provenance:** an example with both generated data and a feed
+  (`tide-gauge`, `k-index`) now says "simulated" with its seed beside the
+  feed on its card and page; the Elm line showed only the feed. Each card
+  still has two lines, the Elm page's and `<gp-example>`'s (which names a
+  checked-in dataset's publisher and licence); merging them is left open.
+- **Deployment (Phase 10):** the site's base is `/` and its routes are paths
+  (`/line`, `/docs/<page>`, `/examples/<slug>`), so a static host must answer
+  any path that is not a file with `index.html` (a single-page-app
+  fallback), or a deep link or a reload answers 404. `vite preview` does
+  this already. A site served from a folder is built with
+  `GLYPHPLOT_BASE=/folder/` and needs the same fallback under that folder.
+
 <a id="phase-7"></a>
 ### Phase 7 · The CLI (v0.8.0)
 

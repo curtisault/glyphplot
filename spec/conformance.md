@@ -553,7 +553,7 @@ Several checks may be listed for one requirement, separated by commas.
 | REQ-E2E-030 | v0.3.0 | `site/e2e/element.spec.ts` (itself) | yes |
 | REQ-E2E-040 | v0.3.0 | `site/e2e/resize.spec.ts` (itself) | yes |
 | REQ-E2E-050 | v0.6.0 | `site/e2e/streaming.spec.ts` (itself) | yes |
-| REQ-E2E-060 | v0.7.0 | `site/e2e/charts.spec.ts` | — |
+| REQ-E2E-060 | v0.7.0 | `site/e2e/charts.spec.ts` (every type's page, every doc page and every example's page: a first frame, no console error) | yes |
 | REQ-E2E-070 | v0.3.0 | `mise run check`, `mise run signoff` | partial |
 
 ## 14. The CLI
@@ -588,18 +588,18 @@ Several checks may be listed for one requirement, separated by commas.
 
 | Requirement | Milestone | Planned check | Status |
 |---|---|---|---|
-| REQ-SITE-010 | v0.7.0 | `mise run build:site`, `site/e2e/charts.spec.ts` | — |
-| REQ-SITE-020 | v0.7.0 | `site/e2e/charts.spec.ts` | — |
-| REQ-SITE-030 | v0.7.0 | `site/e2e/site.spec.ts` | — |
-| REQ-SITE-040 | v0.7.0 | `site/e2e/site.spec.ts` | — |
-| REQ-SITE-050 | v0.7.0 | `site/e2e/site.spec.ts` (feed down), review (source and licence named) | — |
-| REQ-SITE-060 | v0.7.0 | `site/e2e/site.spec.ts` | — |
-| REQ-SITE-070 | v0.7.0 | `site/e2e/a11y.spec.ts` | — |
-| REQ-SITE-080 | v0.7.0 | `mise run examples:check`, `site/e2e/charts.spec.ts` (every example's page) | — |
-| REQ-SITE-090 | v0.7.0 | `mise run examples:check` (the example count) | — |
+| REQ-SITE-010 | v0.7.0 | `mise run build:site`, `site/e2e/site.spec.ts` (the index's heading shown before any wasm request), `site/e2e/charts.spec.ts` | yes |
+| REQ-SITE-020 | v0.7.0 | `site/e2e/charts.spec.ts` (each type's page draws); the option controls, attributes, event log and snippets are not tested in a browser | partial |
+| REQ-SITE-030 | v0.7.0 | `site/e2e/charts.spec.ts` (each doc page draws a live chart), `site/e2e/site.spec.ts` (the sidebar lists every doc page) | yes |
+| REQ-SITE-040 | v0.7.0 | `site/e2e/site.spec.ts` (cards, each filter, a card's link to its full-size page, the source copied), `mise run examples:check` (the first two examples), `mise run examples:browser` | yes |
+| REQ-SITE-050 | v0.7.0 | `site/e2e/charts.spec.ts` (each live-feed example names its source and licence and, with third-party requests refused, shows its message and no console error), `site/e2e/site.spec.ts` (the source on the card) | yes |
+| REQ-SITE-060 | v0.7.0 | `site/e2e/site.spec.ts` (no `data-theme` until a choice; the button sets it and `localStorage`; the chart's ground follows; a reload keeps it; Follow system clears it) | yes |
+| REQ-SITE-070 | v0.7.0 | `site/e2e/site.spec.ts` (axe on the index, the `candles` page, the gallery and `live-market`, light and dark) | yes |
+| REQ-SITE-080 | v0.7.0 | `mise run examples:check` (against `datasets/manifest.json`), `site/e2e/charts.spec.ts` (every example's page) | yes |
+| REQ-SITE-090 | v0.7.0 | `mise run examples:check` (the example count), `site/e2e/site.spec.ts` (at least 50 cards) | yes |
 | REQ-SITE-100 | v0.8.0 | `mise run examples:check` (on each milestone's branch) | — |
-| REQ-SITE-110 | v0.7.0 | `mise run examples:check` (generated data labelled with its seed), `site/e2e/site.spec.ts` | — |
-| REQ-SITE-120 | v0.7.0 | `site/e2e/site.spec.ts` (no wasm fetched before a scroll; one fetch a family) | — |
+| REQ-SITE-110 | v0.7.0 | `mise run examples:check` (generated data has a seed), `site/e2e/site.spec.ts` ("simulated · seed" on each such card and on a page) | yes |
+| REQ-SITE-120 | v0.7.0 | `site/e2e/site.spec.ts` (the cards' stills; no wasm fetched before a scroll; one fetch a family after), `mise run examples:stills`, `mise run examples:browser` | yes |
 | REQ-DATASET-010 | v0.7.0 | `mise run datasets:check` (its failures tested in scripts/datasets.test.mjs) | yes |
 | REQ-DATASET-020 | v0.7.0 | `mise run datasets:check` (its failures tested in scripts/datasets.test.mjs) | yes |
 | REQ-DATASET-030 | v0.7.0 | `mise run datasets:check`, `web/test/package.test.mjs` | yes |

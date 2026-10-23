@@ -75,10 +75,13 @@ init flags url key =
             , problem = problem
             }
 
-        ( routed, cmd ) =
-            enter (Route.fromUrl site.base url) model
+        route =
+            Route.fromUrl site.base url
     in
-    ( routed, cmd )
+    -- The first page is entered as the page already shown: no scroll and no
+    -- focus move, which would count as the reader's act and wake the
+    -- gallery's cards before the reader does anything (REQ-SITE-120).
+    enter route { model | route = route }
 
 
 {-| Moves to a route: a type page's controls start at their defaults, an example's source is asked for.

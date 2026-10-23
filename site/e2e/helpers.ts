@@ -157,3 +157,6 @@ export class Touch {
     await frames(page, 2);
   }
 }
+
+/** The site's doc pages, as site/src/Route.elm's docPages lists them (REQ-SITE-030); site.spec.ts checks the sidebar holds the same. */
+export const DOCS = ["getting-started", "data", "view-and-events", "theming", "accessibility", "performance", "cli"];

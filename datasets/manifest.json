@@ -90,6 +90,65 @@
       "retrieved": "2026-10-23",
       "storage": "generated",
       "note": "Written by site/vite.config.ts from web/test/support/arrow.mjs's walk(50) into the build; no file in the repository."
+    },
+    {
+      "id": "usgs-earthquakes-month",
+      "title": "Earthquakes of the past 30 days (live feed)",
+      "publisher": "U.S. Geological Survey, Earthquake Hazards Program",
+      "url": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_month.csv",
+      "licence": "Public domain",
+      "licenceUrl": "https://www.usgs.gov/information-policies-and-instructions/copyrights-and-credits",
+      "attribution": "Source: U.S. Geological Survey",
+      "retrieved": "2026-10-23",
+      "storage": "live",
+      "note": "Fetched by the reader's browser from the publisher when the example runs, never at build time and never in a test (REQ-SITE-050); no file. retrieved is the date the URL and terms were recorded."
+    },
+    {
+      "id": "wikimedia-recentchange",
+      "title": "EventStreams recentchange: edits across Wikimedia projects (live feed)",
+      "publisher": "Wikimedia Foundation",
+      "url": "https://stream.wikimedia.org/v2/stream/recentchange",
+      "licence": "Not stated",
+      "licenceUrl": "https://wikitech.wikimedia.org/wiki/Event_Platform/EventStreams_HTTP_Service",
+      "attribution": "Source: Wikimedia EventStreams",
+      "retrieved": "2026-10-23",
+      "storage": "live",
+      "note": "Wikimedia states no licence for the stream's event data. The example shows only counts of edits a second, which are facts, names the source on its page, and stores nothing. Fetched by the reader's browser from the publisher when the example runs, never at build time and never in a test (REQ-SITE-050); no file. retrieved is the date the URL and terms were recorded."
+    },
+    {
+      "id": "noaa-swpc-kp",
+      "title": "Planetary K-index, 3-hourly, the past week (live feed)",
+      "publisher": "NOAA Space Weather Prediction Center",
+      "url": "https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json",
+      "licence": "Public domain",
+      "licenceUrl": "https://www.swpc.noaa.gov/disclaimers",
+      "attribution": "Source: NOAA Space Weather Prediction Center",
+      "retrieved": "2026-10-23",
+      "storage": "live",
+      "note": "Fetched by the reader's browser from the publisher when the example runs, never at build time and never in a test (REQ-SITE-050); no file. retrieved is the date the URL and terms were recorded."
+    },
+    {
+      "id": "noaa-coops-8518750",
+      "title": "Water level and tide predictions, The Battery, NY (station 8518750), the past 48 hours (live feed)",
+      "publisher": "NOAA Center for Operational Oceanographic Products and Services (CO-OPS)",
+      "url": "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?station=8518750",
+      "licence": "Public domain",
+      "licenceUrl": "https://tidesandcurrents.noaa.gov/disclaimers.html",
+      "attribution": "Source: NOAA CO-OPS",
+      "retrieved": "2026-10-23",
+      "storage": "live",
+      "note": "Fetched by the reader's browser from the publisher when the example runs, never at build time and never in a test (REQ-SITE-050); no file. retrieved is the date the URL and terms were recorded."
+    },
+    {
+      "id": "synthetic",
+      "title": "Simulated data: the gallery's seeded generators (site/src/data/)",
+      "publisher": "glyphplot",
+      "url": "https://github.com/curtisault/glyphplot",
+      "licence": "MIT",
+      "licenceUrl": "https://github.com/curtisault/glyphplot/blob/main/LICENSE",
+      "retrieved": "2026-10-23",
+      "storage": "generated",
+      "note": "Made in the reader's browser (and by mise run examples:stills at build time) from each example's seed by site/src/data/; no file. Each example says \"simulated\" and its seed (REQ-SITE-110)."
     }
   ]
 }

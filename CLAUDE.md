@@ -67,6 +67,10 @@ mise is the only entry point (`mise tasks` lists them all).
   phone), `mise run bench:render`.
 - `mise run bench` (native, exits 1 over budget), `bench:web`, `bench:load`,
   `test:budgets`, `size --charts`.
+- `mise run examples:check` (the gallery's coverage), `examples:stills` (the
+  cards' build-time first frames), `examples:browser` (every example in
+  headless Chromium), `datasets:check`, `datasets:fetch` (HYG, once, into
+  target/).
 - `mise run signoff` checks every open PR's head and posts a `signoff`
   status (`-- <rev>` checks a local revision and posts nothing).
 

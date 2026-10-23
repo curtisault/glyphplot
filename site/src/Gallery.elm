@@ -153,29 +153,6 @@ labelOf key =
             "Milestone"
 
 
-{-| Where the data comes from: "simulated" with the seed (REQ-SITE-110), or the live feed's source and licence (REQ-SITE-050).
--}
-provenance : Example -> Html msg
-provenance e =
-    case ( e.feed, e.seed ) of
-        ( Just feed, _ ) ->
-            Html.p [ A.class "provenance" ]
-                [ Html.text "Live feed: "
-                , Html.a [ A.href feed.url ] [ Html.text feed.source ]
-                , Html.text (", " ++ feed.licence)
-                ]
-
-        ( Nothing, Just seed ) ->
-            Html.p [ A.class "provenance" ] [ Ui.simulated seed ]
-
-        ( Nothing, Nothing ) ->
-            if List.isEmpty e.datasets then
-                Html.text ""
-
-            else
-                Html.p [ A.class "provenance" ] [ Html.text ("Data: " ++ String.join ", " e.datasets) ]
-
-
 tags : Example -> Html msg
 tags e =
     Html.dl [ A.class "tags" ]
@@ -202,7 +179,6 @@ card model e =
         [ Plot.example e.slug []
         , Html.h2 [] [ Html.a [ Ui.href model (Route.Example e.slug) ] [ Html.text e.title ] ]
         , Html.p [] [ Html.text e.what ]
-        , provenance e
         , tags e
         ]
 
@@ -218,8 +194,7 @@ examplePage model e =
     [ Html.p [ A.class "crumbs" ] [ Html.a [ Ui.href model (Route.Gallery Route.noFilters) ] [ Html.text "Examples" ], Html.text " / " ]
     , Html.h1 [] [ Html.text e.title ]
     , Html.p [ A.class "lede" ] [ Html.text e.what ]
-    , provenance e
-    , Plot.example e.slug [ A.class "full" ]
+    , Plot.example e.slug [ A.attribute "full" "" ]
     , tags e
     , Html.section [ A.attribute "aria-labelledby" "source-h" ]
         [ Html.h2 [ A.id "source-h" ] [ Html.text "The source it runs" ]
