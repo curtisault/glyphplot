@@ -4,11 +4,21 @@
 // queued before it (REQ-LOAD-030). Data crosses as typed columns through
 // reserve_column and commit, a typed array copied once (REQ-MEM-020,
 // REQ-DATA-050); label text is NFC-normalised first (REQ-I18N-050).
+//
+// Appends (REQ-STREAM-010) go into the shell's tail of the first table at
+// once and are written to wasm once an animation frame: through the
+// module's `staging(n)` and `append(n)` when it has them, else by committing
+// the tail whole (the fallback until v0.6.0's modules). Each commit is
+// reported as a `DataCommit`, `plot-data`'s detail (REQ-STREAM-070).
+// `paused` keeps appends in the tail without writing them (REQ-A11Y-080).
 
 import type { InputKindName, Meta, TableJson, WasmEvent } from "./api.ts";
-import { appendTo, describe, descriptorJson, nfcDeep, prepare, type AppendInput, type DataInput, type DataObject, type Prepared } from "./data.ts";
+import { arrowRows } from "./arrow.ts";
+import { describe, descriptorJson, isColumnar, nfcDeep, prepare, type AppendInput, type DataInput, type DataObject, type Prepared, type Row } from "./data.ts";
 import { encode, type Encoded, type InputEvent } from "./input.ts";
 import { localePack, type LocalePack } from "./locale.ts";
+import { encodeOf } from "./shape.ts";
+import { readAppended, retainOf, Tail, type DataCommit } from "./stream.ts";
 import { Guarded, loadFor, messageOf, type GridViews } from "./wasm.ts";
 import type { ZoneTable } from "./zone.ts";
 
@@ -27,14 +37,29 @@ export interface ChartInit {
   rows?: number;
 }
 
-/** What changed, for whoever draws the chart. */
-export type Change = "data" | "options" | "view" | "locale" | "zone" | "mono" | "size";
+/** What changed, for whoever draws the chart; `append` is rows waiting for the next frame's write. */
+export type Change = "data" | "append" | "options" | "view" | "locale" | "zone" | "mono" | "size";
+
+/** Arrow IPC bytes, as `data` takes them from v0.6.0 (REQ-DATA-150). */
+export type ArrowBytes = ArrayBuffer | Uint8Array;
+
+/** What `data` takes: {@link DataInput}, or Arrow IPC bytes. */
+export type ChartData = DataInput | ArrowBytes;
+
+const isArrow = (v: unknown): v is ArrowBytes => v instanceof ArrayBuffer || v instanceof Uint8Array;
+
+/** Calls `f` on the next animation frame, or the next task where there are none (Node). */
+function nextFrame(f: () => void): void {
+  if (typeof requestAnimationFrame === "function") requestAnimationFrame(() => f());
+  else setTimeout(f, 0);
+}
 
 /** The patch that returns every part of the view to its default. */
 export const VIEW_RESET: View = { x: null, y: null, axes: null, cursor: null, selection: null, hidden: null, time: null, motion: null };
 
 type Op =
   | { k: "data"; v: DataInput }
+  | { k: "arrow"; v: Uint8Array }
   | { k: "prepared"; v: Prepared }
   | { k: "append"; v: AppendInput }
   | { k: "options"; v: Record<string, unknown> }
@@ -72,7 +97,15 @@ export class Chart {
   #options: Record<string, unknown>;
   #pendingView: View = {};
   #prepared: Prepared | null = null;
-  #appends: AppendInput[] = [];
+  /** The first table as appends left it; null until the first append after a replace. */
+  #tail: Tail | null = null;
+  /** Rows in the tail not yet written to wasm. */
+  #pending = false;
+  /** Appends are kept, not written (REQ-A11Y-080). */
+  #held = false;
+  /** The Arrow bytes the data came as, or null. */
+  #arrow: Uint8Array | null = null;
+  #lastCommit: DataCommit | null = null;
   #flushQueued = false;
   #version = 0;
   #meta: Meta | null = null;
@@ -112,6 +145,11 @@ export class Chart {
           console.error(`glyphplot: ${op.k} for a ${this.type} chart failed: ${messageOf(e)}`);
         }
       }
+      try {
+        this.#flush();
+      } catch (e) {
+        console.error(`glyphplot: append for a ${this.type} chart failed: ${messageOf(e)}`);
+      }
       return this;
     } catch (e) {
       this.#error = e instanceof Error ? e : new Error(messageOf(e));
@@ -125,16 +163,24 @@ export class Chart {
       case "data":
         this.#commit(prepare(op.v));
         break;
+      case "arrow":
+        this.#setArrow(op.v);
+        break;
       case "prepared":
         this.#commit(op.v);
         break;
       case "append":
-        this.#appends.push(op.v);
-        this.#flush();
+        this.#push(op.v);
         break;
       case "options":
         g.call((c) => c.set_options(JSON.stringify(op.v)));
         this.#drain();
+        if (this.#tail) {
+          // New `retain` or `encode`: the tail again under them, written whole at the next frame.
+          this.#tail = Tail.from(this.#tail.prepared(), retainOf(op.v), encodeOf(op.v));
+          this.#tail.markWhole();
+          this.#pending = true;
+        }
         this.#notify("options");
         break;
       case "view":
@@ -186,8 +232,8 @@ export class Chart {
     for (const f of this.#listeners) f(c);
   }
 
-  /** Writes every reserved column, each right after its reservation, then commits (REQ-DATA-060). */
-  #commit(p: Prepared): void {
+  /** Writes every reserved column, each right after its reservation, then commits (REQ-DATA-060); returns the version. */
+  #write(p: Prepared): number {
     const g = this.#g as Guarded;
     p.sources.forEach((s, i) => {
       if (!s) return;
@@ -195,30 +241,221 @@ export class Chart {
       s.write(view);
     });
     const json = descriptorJson(p);
-    this.#version = g.call((c) => {
+    const version = g.call((c) => {
       try {
         return c.commit(json);
       } catch (e) {
         throw new Error(messageOf(e));
       }
     });
-    this.#prepared = p;
+    this.#version = version;
     this.#drain();
+    return version;
+  }
+
+  /** Replaces the data with `p` (REQ-DATA-130): appends not yet written are dropped with the data they extended. */
+  #commit(p: Prepared): void {
+    const version = this.#write(p);
+    this.#prepared = p;
+    this.#tail = null;
+    this.#pending = false;
+    this.#arrow = null;
+    const first = Object.values(p.descriptor.tables)[0];
+    this.#lastCommit = { rows: first?.length ?? 0, dropped: 0, late: 0, version };
     this.#notify("data");
   }
 
+  /** Arrow IPC bytes as the new data, through the module's `set_arrow` (REQ-DATA-150). */
+  #setArrow(bytes: Uint8Array): void {
+    const g = this.#g as Guarded;
+    if (typeof g.raw.set_arrow !== "function") {
+      throw new Error(`Arrow data needs a module with set_arrow (v0.6.0); this build's \`${g.loaded.name}\` module has none`);
+    }
+    const rows = arrowRows(bytes);
+    const version = g.call((c) => {
+      try {
+        return (c.set_arrow as (b: Uint8Array) => number)(bytes);
+      } catch (e) {
+        throw new Error(messageOf(e));
+      }
+    });
+    this.#version = version;
+    this.#drain();
+    this.#prepared = null;
+    this.#tail = null;
+    this.#pending = false;
+    this.#arrow = bytes;
+    this.#lastCommit = { rows, dropped: 0, late: 0, version };
+    this.#notify("data");
+  }
+
+  /** Takes an append into the tail (REQ-STREAM-010); the write waits for the frame. Throws on a batch the table cannot take. */
+  #push(rows: AppendInput): void {
+    if (!this.#tail) {
+      if (this.#arrow) throw new Error("append: the data came as Arrow bytes, which the shell cannot extend; set it as columns or rows to stream");
+      const base = this.#prepared;
+      if (base) {
+        this.#tail = Tail.from(base, retainOf(this.#options), encodeOf(this.#options));
+        this.#tail.push(rows);
+      } else {
+        // No data yet: the first append is the data.
+        const first = Array.isArray(rows) || isColumnar(rows as Row) ? rows : [rows as Row];
+        this.#tail = Tail.from(prepare(first as DataInput), retainOf(this.#options), encodeOf(this.#options));
+        this.#tail.markWhole();
+      }
+    } else this.#tail.push(rows);
+    this.#pending = true;
+    if (this.#held) return;
+    this.#notify("append");
+    if (!this.#flushQueued) {
+      this.#flushQueued = true;
+      nextFrame(() => {
+        this.#flushQueued = false;
+        try {
+          this.#flush();
+        } catch (e) {
+          console.error(`glyphplot: append failed: ${messageOf(e)}`);
+        }
+      });
+    }
+  }
+
+  /** Whether the module writes appends through `staging(n)` and `append(n)` (v0.6.0). */
+  #stages(): boolean {
+    const raw = this.#g?.raw;
+    return !!raw && typeof raw.staging === "function" && typeof raw.append === "function";
+  }
+
+  /**
+   * Writes the appends waiting in the tail: the rows staged since the last
+   * write through `staging(n)` and `append(n)`, or the tail whole by `commit`
+   * (the fallback, and whenever a batch brought a new category label).
+   */
   #flush(): void {
-    if (!this.#g || this.#appends.length === 0) return;
-    const batches = this.#appends;
-    this.#appends = [];
-    let p = this.#prepared;
-    for (const b of batches) p = p ? appendTo(p, b) : prepare(Array.isArray(b) ? b : [b as Record<string, never>]);
-    if (p) this.#commit(p);
+    if (!this.#g || this.#held || !this.#pending || !this.#tail) return;
+    const g = this.#g;
+    const tail = this.#tail;
+    this.#pending = false;
+    let commit: DataCommit;
+    if (this.#stages() && !tail.whole && tail.staged > 0) {
+      const n = tail.staged;
+      const k = tail.width;
+      const ptr = g.call((c) => (c.staging as (n: number) => number)(n));
+      tail.takeStaged(new Float64Array(g.loaded.memory.buffer, ptr, n * k)); // made after the call (REQ-DATA-060)
+      const r = g.call((c) => {
+        try {
+          return (c.append as (n: number) => unknown)(n);
+        } catch (e) {
+          throw new Error(messageOf(e));
+        }
+      });
+      const counts = tail.takeCounts();
+      commit = readAppended(r, { rows: tail.length, ...counts, version: this.#version + 1 });
+      this.#version = commit.version;
+      this.#drain();
+    } else {
+      const counts = tail.takeCounts();
+      const version = this.#write(tail.prepared());
+      tail.committedWhole();
+      commit = { rows: tail.length, ...counts, version };
+      if (!this.#stages()) this.#follow();
+    }
+    this.#lastCommit = commit;
+    this.#notify("data");
+  }
+
+  /**
+   * The fallback's `x.follow` (REQ-VIEW-060): with follow set and a domain,
+   * the domain keeps its span and ends at the newest x. A module with
+   * `staging` does this itself.
+   */
+  #follow(): void {
+    const g = this.#g;
+    const newest = this.#tail?.newestX ?? NaN;
+    if (!g || !Number.isFinite(newest)) return;
+    const x = (JSON.parse(g.call((c) => c.view_json())) as View)["x"] as { domain?: unknown; follow?: unknown } | undefined;
+    if (!x || x.follow !== true || !Array.isArray(x.domain)) return;
+    const [a, b] = x.domain as [number, number];
+    if (b === newest) return;
+    g.call((c) => c.set_view(JSON.stringify({ x: { domain: [newest - (b - a), newest], follow: true } })));
+    this.#drain();
+  }
+
+  /** Writes the appends waiting now, not at the next frame; returns the last commit (null before any). Nothing is written while paused. */
+  flush(): DataCommit | null {
+    this.#flush();
+    return this.lastCommit;
+  }
+
+  /** What the last commit of data did: `plot-data`'s detail (REQ-STREAM-070); null before any. */
+  get lastCommit(): DataCommit | null {
+    return this.#lastCommit ? { ...this.#lastCommit } : null;
+  }
+
+  /** Whether the module reads Arrow IPC bytes (`set_arrow`, v0.6.0); null before load. */
+  get readsArrow(): boolean | null {
+    return this.#g ? typeof this.#g.raw.set_arrow === "function" : null;
+  }
+
+  /** How appends reach wasm: `staging` (v0.6.0's modules), `commit` (the fallback), or null before load. */
+  get streaming(): "staging" | "commit" | null {
+    return this.#g ? (this.#stages() ? "staging" : "commit") : null;
+  }
+
+  /**
+   * Whether appends are kept without being written or drawn (REQ-A11Y-080).
+   * On resume they are written and, when the view has a domain of its own,
+   * follow is set so the view shows the live end.
+   */
+  get paused(): boolean {
+    return this.#held;
+  }
+  set paused(on: boolean) {
+    if (on === this.#held) return;
+    this.#held = on;
+    if (on || !this.#g || this.#freed) return;
+    try {
+      if (this.#tail) {
+        const g = this.#g;
+        const x = (JSON.parse(g.call((c) => c.view_json())) as View)["x"] as { domain?: unknown; follow?: unknown } | undefined;
+        if (x && Array.isArray(x.domain) && x.follow !== true) {
+          g.call((c) => c.set_view(JSON.stringify({ x: { follow: true } })));
+          this.#drain();
+          this.#notify("view");
+        }
+      }
+      if (this.#pending) this.#flush();
+      else if (!this.#stages()) this.#follow();
+    } catch (e) {
+      console.error(`glyphplot: resume failed: ${messageOf(e)}`);
+    }
+  }
+
+  /** The newest row, by column name (timestamps in epoch ms, labels as text), appends held while paused included; null without data. */
+  latest(): Record<string, number | string | null> | null {
+    if (this.#tail) return this.#tail.latest();
+    const p = this.#prepared;
+    if (!p) return null;
+    try {
+      return Tail.from(p).latest();
+    } catch {
+      return null;
+    }
+  }
+
+  /** The data's x span when streaming over a timestamp x, from the tail without a scan; undefined when the caller must read the data. */
+  streamSpan(): [number, number] | null | undefined {
+    return this.#tail ? this.#tail.timeSpan() : undefined;
+  }
+
+  /** The Arrow bytes the data came as, or null. */
+  get arrow(): Uint8Array | null {
+    return this.#arrow;
   }
 
   /** The data held, appends included, ready to commit to another chart (a type change, a reconnect). */
   prepared(): Prepared | null {
-    this.#flush();
+    if (this.#tail) return this.#tail.prepared();
     if (this.#prepared) return this.#prepared;
     const queued = [...this.#queue].reverse().find((o) => o.k === "data" || o.k === "prepared");
     if (!queued) return null;
@@ -228,11 +465,10 @@ export class Chart {
   /** Replaces all data with data prepared before (see {@link Chart.prepared}). */
   setPrepared(p: Prepared): void {
     if (!this.#g) {
-      this.#queue = this.#queue.filter((o) => o.k !== "append" && o.k !== "data" && o.k !== "prepared");
+      this.#queue = this.#queue.filter((o) => o.k !== "append" && o.k !== "data" && o.k !== "prepared" && o.k !== "arrow");
       this.#queue.push({ k: "prepared", v: p });
       return;
     }
-    this.#appends = [];
     this.#commit(p);
   }
 
@@ -262,10 +498,9 @@ export class Chart {
     return () => this.#listeners.delete(f);
   }
 
-  /** The descriptor and lengths of the data held, without values (REQ-EL-070); null before any data. */
+  /** The descriptor and lengths of the data held, appends included, without values (REQ-EL-070); null before any data or for Arrow data. */
   get data(): DataObject | null {
     this.#flush();
-    if (this.#prepared) return describe(this.#prepared);
     try {
       const p = this.prepared();
       return p ? describe(p) : null;
@@ -274,39 +509,31 @@ export class Chart {
     }
   }
 
-  /** Replaces all data (REQ-DATA-130): the data object, either shorthand, the binary form, or JSON text. */
-  set data(v: DataInput) {
+  /** Replaces all data (REQ-DATA-130): the data object, either shorthand, the binary form, JSON text, or Arrow IPC bytes (REQ-DATA-150). */
+  set data(v: ChartData) {
+    const op: Op = isArrow(v) ? { k: "arrow", v: v instanceof Uint8Array ? v : new Uint8Array(v) } : { k: "data", v };
     if (!this.#g) {
-      this.#queue = this.#queue.filter((o) => o.k !== "append" && o.k !== "data" && o.k !== "prepared");
-      this.#queue.push({ k: "data", v });
+      this.#queue = this.#queue.filter((o) => o.k !== "append" && o.k !== "data" && o.k !== "prepared" && o.k !== "arrow");
+      this.#queue.push(op);
       return;
     }
-    this.#appends = [];
-    this.#commit(prepare(v));
+    if (op.k === "arrow") this.#setArrow(op.v);
+    else this.#commit(prepare(op.v));
   }
 
   /**
-   * Appends rows (a row, rows, or typed columns by name) to the first table.
-   * Appends made in one task are committed together. Until the module's
-   * staging buffer (v0.6.0) they are committed as a replace.
+   * Appends rows (a row, rows, or typed columns by name) to the first table
+   * (REQ-STREAM-010): taken at once, typed as its columns (a bad batch
+   * throws), and written to wasm once an animation frame, every append of
+   * the frame together. An x equal to the last row's replaces it; a lesser x
+   * is dropped and counted as late (REQ-STREAM-040).
    */
   append(rows: AppendInput): void {
     if (!this.#g) {
       this.#run({ k: "append", v: rows });
       return;
     }
-    this.#appends.push(rows);
-    if (!this.#flushQueued) {
-      this.#flushQueued = true;
-      queueMicrotask(() => {
-        this.#flushQueued = false;
-        try {
-          this.#flush();
-        } catch (e) {
-          console.error(`glyphplot: append failed: ${messageOf(e)}`);
-        }
-      });
-    }
+    this.#push(rows);
   }
 
   /** The options given (not the defaults under them). */
@@ -426,7 +653,8 @@ export class Chart {
     if (this.#freed) return;
     this.#freed = true;
     this.#queue = [];
-    this.#appends = [];
+    this.#tail = null;
+    this.#pending = false;
     this.#listeners.clear();
     this.#g?.free();
   }

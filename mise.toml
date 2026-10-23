@@ -86,7 +86,7 @@ raw = true
 run = "node bench/run.mjs"
 
 [tasks."bench:web"]
-description = "Frames and pointer moves in headless Chromium over the release build: every chart, 300 frames panning a 1M-point fixture at 80 × 24 and 320 × 120 against 8 / 16 ms, 300 moves against 0.5 / 2 ms; prints the load average and exits 1 over budget (REQ-PERF-050, 060, REQ-BENCH-020); `-- <type>…` for some charts"
+description = "Frames and pointer moves in headless Chromium over the release build: every chart, 300 frames panning a 1M-point fixture at 80 × 24 and 320 × 120 against 8 / 16 ms, 300 moves against 0.5 / 2 ms; the streaming row, 1 sample/ms appended to a full 1M ring drawn at 60 Hz for 10 simulated s, against 500 ms of CPU a second; prints the load average and exits 1 over budget (REQ-PERF-050, 060, 070, REQ-BENCH-020); `-- <type>…` for some charts, `-- stream` for the streaming row alone"
 depends = ["build:site", "install:chromium"]
 dir = "site"
 run = "node bench/web.mjs"

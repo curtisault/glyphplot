@@ -13,8 +13,15 @@
 // then 300 pointer moves left to right across the plot at mid height
 // (REQ-PERF-050). Each step is one display frame: the page sets the view or
 // sends the move, and reads the timing after mount's animation frame.
+//
+// The streaming row (REQ-PERF-070): a chart holding a 1,000,000-point
+// fixture (a full ring at the default `retain.rows`) takes one sample a
+// simulated millisecond, each its own `append()`, and draws at 60 Hz, for 10
+// simulated seconds: 600 frames run back to back, each the frame's appends,
+// the write to wasm (`flush`), `chart.frame` and the canvas draw, each timed
+// with performance.now(). Their sum over 10 is the CPU it costs a second.
 
-import { chart, chooseTheme, mount, manifest, type Chart, type FrameTiming, type Mount } from "glyphplot";
+import { chart, chooseTheme, makeRenderer, mount, manifest, type Chart, type FrameTiming, type Mount } from "glyphplot";
 import { InputKind, type Meta } from "glyphplot/src/api.ts";
 
 /** A fixture as `target/fixtures/index.json` lists it. */
@@ -206,12 +213,89 @@ async function run(type: string, fixture: string, cols: number, rows: number): P
   }
 }
 
+/** What the streaming row reports: ms summed over the run, by part. */
+export interface StreamResult {
+  type: string;
+  fixture: string;
+  cols: number;
+  rows: number;
+  /** Simulated seconds and samples appended. */
+  seconds: number;
+  samples: number;
+  frames: number;
+  /** The appends' own time (the shell's tail), the writes to wasm, and the frames (wasm and canvas). */
+  append: number;
+  write: number;
+  frame: number;
+  /** Rows held at the end, and how appends reached wasm (`staging`, or the `commit` fallback). */
+  held: number;
+  streaming: string | null;
+  isolated: boolean;
+}
+
+/** REQ-PERF-070: one sample a simulated ms into a full ring, drawn at 60 Hz, for `seconds` simulated seconds. */
+async function stream(type: string, fixture: string, cols: number, rows: number, seconds = 10): Promise<StreamResult> {
+  const { data, x, rows: points } = await load(fixture);
+  const fx = (await index()).find((f) => f.name === fixture);
+  const names = fx?.tables[0]?.columns.map((c) => ({ name: c.name, role: c.role })) ?? [];
+  const xName = names.find((c) => c.role === "x")?.name ?? "x";
+  const others = names.filter((c) => c.name !== xName).map((c) => c.name);
+  stage ??= document.getElementById("stage");
+  if (!stage) throw new Error("no #stage");
+  const canvas = document.createElement("canvas");
+  canvas.style.cssText = "display:block;width:640px;height:auto";
+  stage.replaceChildren(canvas);
+  let c: Chart | null = null;
+  try {
+    c = chart(type, { data: data as never });
+    await c.ready;
+    const choice = chooseTheme({}, null, "dark", null);
+    const r = makeRenderer("text", canvas);
+    r.setPalette(c.palette(choice.theme), choice.paintGround);
+    c.resize(cols, rows);
+    r.resize(cols, rows, 8);
+    r.draw(c.frame(0));
+    const step = (x[x.length - 1]! - x[0]!) / Math.max(1, points - 1) || 1;
+    let at = x[x.length - 1]!;
+    let walk = 0;
+    const FRAMES = seconds * 60;
+    let sent = 0;
+    let append = 0;
+    let write = 0;
+    let frame = 0;
+    for (let f = 0; f < FRAMES; f++) {
+      const due = Math.floor(((f + 1) * 1000) / 60);
+      const t0 = performance.now();
+      for (; sent < due; sent++) {
+        at += step;
+        walk += Math.sin(sent * 12.9898) * 0.5;
+        const row: Record<string, number> = { [xName]: at };
+        for (const k of others) row[k] = walk;
+        c.append(row);
+      }
+      const t1 = performance.now();
+      c.flush();
+      const t2 = performance.now();
+      r.draw(c.frame(0));
+      const t3 = performance.now();
+      append += t1 - t0;
+      write += t2 - t1;
+      frame += t3 - t2;
+      if (f % 60 === 59) await nextFrame(); // let the page breathe between simulated seconds, untimed
+    }
+    return { type, fixture, cols, rows, seconds, samples: sent, frames: FRAMES, append, write, frame, held: c.lastCommit?.rows ?? 0, streaming: c.streaming, isolated: self.crossOriginIsolated };
+  } finally {
+    c?.free();
+    canvas.remove();
+  }
+}
+
 declare global {
   interface Window {
-    bench: { charts: typeof charts; fixturesFor: typeof fixturesFor; run: typeof run };
+    bench: { charts: typeof charts; fixturesFor: typeof fixturesFor; run: typeof run; stream: typeof stream };
     benchReady: true;
   }
 }
 
-window.bench = { charts, fixturesFor, run };
+window.bench = { charts, fixturesFor, run, stream };
 window.benchReady = true;

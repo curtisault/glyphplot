@@ -45,6 +45,9 @@ export const shell = {
   chart: await import(pathToFileURL(join(DIST, "chart.js")).href),
   data: await import(pathToFileURL(join(DIST, "data.js")).href),
   input: await import(pathToFileURL(join(DIST, "input.js")).href),
+  stream: await import(pathToFileURL(join(DIST, "stream.js")).href),
+  source: await import(pathToFileURL(join(DIST, "source.js")).href),
+  arrow: await import(pathToFileURL(join(DIST, "arrow.js")).href),
 };
 
 /** The chart types of the build: the manifest's, the debug charts left out. */

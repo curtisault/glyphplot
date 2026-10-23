@@ -107,6 +107,40 @@ export interface WasmChart {
   table_json(max_rows: number): string;
   /** This chart type's meta, as JSON ({@link Meta}). */
   meta_json(): string;
+  /**
+   * v0.6.0, streaming (REQ-STREAM-010, ADR-107); optional until the module
+   * has it, the shell committing the whole table instead. A staging buffer for
+   * `n` appended rows of the first table, returned as a byte address the
+   * shell fills through a Float64Array made after the call (REQ-DATA-060):
+   * `n × k` f64, k the first table's column count, column-major in the
+   * table's column order (column j's `n` values from byte `8 × j × n`). Values
+   * are as `reserve_column` takes them: numbers, bools 1 and 0, timestamps
+   * and durations in the column's `time_unit` (a `us` or `ns` column's as
+   * offsets from the `origin` last committed), category codes into the
+   * column's `categories` as committed, missing NaN (a category's missing
+   * code 4294967295). Rows come as appended, before the ring's rules. The
+   * shell never stages a string column or a new category label: it commits
+   * the table whole instead.
+   */
+  staging?(n: number): number;
+  /**
+   * v0.6.0: applies the `n` staged rows to the ring: an x equal to the last
+   * row's replaces it, a lesser x is dropped as late (REQ-STREAM-040), rows
+   * past `retain.rows` or older than `retain.age` are trimmed
+   * (REQ-STREAM-020, 030), and with `x.follow` the domain moves to end at the
+   * newest x (REQ-VIEW-060). Returns `[rows, dropped, late, version]` as a
+   * Float64Array: rows held after, rows trimmed by this append, late rows
+   * dropped by it, and the data version, which commit and append increase
+   * together (`plot-data`'s detail, REQ-STREAM-070). Throws the data error's
+   * message.
+   */
+  append?(n: number): Float64Array;
+  /**
+   * v0.6.0: an Arrow IPC stream or file as the new data (REQ-DATA-140,
+   * REQ-DATA-150, ADR-105), as `commit` replaces it; returns the data
+   * version. Throws `arrow: …`.
+   */
+  set_arrow?(bytes: Uint8Array): number;
   /** Releases the chart (REQ-WASM-050). */
   free(): void;
 }

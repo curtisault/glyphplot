@@ -8,9 +8,15 @@
 //
 // Under `vite` (mise run dev), a change under web/pkg (a debug rebuild
 // swapped in by scripts/dev.sh's watcher) reloads every open page
-// (REQ-BUILD-080).
+// (REQ-BUILD-080). The checklist's live candlestick has a page of its own,
+// live.html, so its network panel shows the one module it plays.
+//
+// `src`'s sample files (REQ-DATA-150) are written by the build from the
+// tests' walk: data/walk.csv, .json, .ndjson and .arrows (an Arrow IPC
+// stream from web/test/support/arrow.mjs), served by `vite` and in site/dist.
 
 import { defineConfig, type Plugin, type ViteDevServer } from "vite";
+import { arrowStream, walk } from "../web/test/support/arrow.mjs";
 
 const dir = (rel: string): string => decodeURIComponent(new URL(rel, import.meta.url).pathname).replace(/\/$/, "");
 const site = dir(".");
@@ -34,6 +40,36 @@ function reloadOnWasm(): Plugin {
           server.ws.send({ type: "full-reload", path: "*" });
           server.config.logger.info("glyphplot: web/pkg changed, pages reloaded", { timestamp: true });
         }, 300);
+      });
+    },
+  };
+}
+
+/** The sample files `src` reads in the browser tests and the checklist, by path under the site. */
+function sampleFiles(): Record<string, string | Uint8Array> {
+  const w = walk(50);
+  const iso = w.t.map((t) => new Date(t).toISOString());
+  return {
+    "data/walk.csv": `t,y\n${iso.map((t, i) => `${t},${w.y[i]}`).join("\n")}\n`,
+    "data/walk.json": JSON.stringify({ t: iso, y: w.y }),
+    "data/walk.ndjson": `${iso.map((t, i) => JSON.stringify({ t, y: w.y[i] })).join("\n")}\n`,
+    "data/walk.arrows": arrowStream({ t: { type: "timestamp", values: w.t }, y: { type: "f64", values: w.y } }),
+  };
+}
+
+/** Emits the sample files into the build and serves them under `vite`. */
+function sampleData(): Plugin {
+  return {
+    name: "glyphplot:sample-data",
+    generateBundle() {
+      for (const [fileName, source] of Object.entries(sampleFiles())) this.emitFile({ type: "asset", fileName, source });
+    },
+    configureServer(server: ViteDevServer) {
+      server.middlewares.use((req, res, next) => {
+        const path = ((req as { url?: string }).url ?? "").split("?")[0]?.replace(/^\//, "") ?? "";
+        const body = sampleFiles()[path];
+        if (body === undefined) return next();
+        res.end(body);
       });
     },
   };
@@ -65,6 +101,7 @@ export default defineConfig({
       input: {
         index: `${site}/index.html`,
         test: `${site}/test.html`,
+        live: `${site}/live.html`,
         blank: `${site}/blank.html`,
         render: `${site}/bench/render.html`,
         "bench-web": `${site}/bench/web.html`,
@@ -72,5 +109,5 @@ export default defineConfig({
       },
     },
   },
-  plugins: [reloadOnWasm()],
+  plugins: [reloadOnWasm(), sampleData()],
 });

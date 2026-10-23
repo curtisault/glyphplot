@@ -149,7 +149,7 @@ Several checks may be listed for one requirement, separated by commas.
 | REQ-DATA-120 | v0.3.0 | `web/test/data.test.mjs`, `site/e2e/element.spec.ts` | yes |
 | REQ-DATA-130 | v0.2.0 | `contract::replace_is_whole` (rule 15) | yes |
 | REQ-DATA-140 | v0.6.0 | `crates/glyphplot/src/arrow.rs tests::reads_every_column_type`, `web/test/data.test.mjs`, `mise run size --charts` | — |
-| REQ-DATA-150 | v0.6.0 | `site/e2e/element.spec.ts` | — |
+| REQ-DATA-150 | v0.6.0 | `site/e2e/streaming.spec.ts` (CSV, JSON, NDJSON served by the site; Arrow drawn through `set_arrow` fixme until the module has it), `web/test/stream.test.mjs`, `web/test/stream.wasm.test.mjs` (Arrow through `set_arrow` todo until the module has it) | partial |
 | REQ-DATA-160 | v0.9.0 | `crates/glyphplot/src/data.rs tests::graph_edges_resolve_and_drop_unknowns` | — |
 | REQ-DATA-170 | v0.12.0 | `crates/glyphplot/src/data.rs tests::julian_epoch_offsets`, `contract::every_chart_matches_its_snapshots` (TESS fixture) | — |
 
@@ -157,13 +157,13 @@ Several checks may be listed for one requirement, separated by commas.
 
 | Requirement | Milestone | Planned check | Status |
 |---|---|---|---|
-| REQ-STREAM-010 | v0.6.0 | `web/test/data.test.mjs` | — |
+| REQ-STREAM-010 | v0.6.0 | `web/test/stream.wasm.test.mjs`, `web/test/stream.test.mjs`, `site/e2e/streaming.spec.ts` | yes |
 | REQ-STREAM-020 | v0.6.0 | `web/test/memory.test.mjs` | — |
 | REQ-STREAM-030 | v0.6.0 | `crates/glyphplot/src/ring.rs tests::retain_age_keeps_the_newest_span` | — |
 | REQ-STREAM-040 | v0.6.0 | `crates/glyphplot/src/ring.rs tests::equal_x_replaces_and_less_is_late`, `web/test/data.test.mjs` | — |
-| REQ-STREAM-050 | v0.6.0 | `web/test/data.test.mjs` | — |
+| REQ-STREAM-050 | v0.6.0 | `web/test/stream.wasm.test.mjs` (todo until the module has `staging` and `append`) | — |
 | REQ-STREAM-060 | v0.3.0 | `contract::replace_is_whole` (rule 15) | yes |
-| REQ-STREAM-070 | v0.6.0 | `web/test/events.test.mjs`, `site/e2e/streaming.spec.ts` | — |
+| REQ-STREAM-070 | v0.6.0 | `web/test/stream.wasm.test.mjs`, `site/e2e/streaming.spec.ts` | yes |
 
 ### 3.3 Downsampling (SAMPLE)
 
@@ -259,7 +259,7 @@ Several checks may be listed for one requirement, separated by commas.
 | REQ-VIEW-030 | v0.3.0 | `web/test/view.test.mjs`, `site/e2e/element.spec.ts` | yes |
 | REQ-VIEW-040 | v0.3.0 | `site/e2e/element.spec.ts` | yes |
 | REQ-VIEW-050 | v0.3.0 | `crates/glyphplot/src/view.rs tests::motion_frames_depend_only_on_t`, `site/e2e/a11y.spec.ts` (reduced motion) | yes |
-| REQ-VIEW-060 | v0.6.0 | `crates/glyphplot/src/view.rs tests::follow_keeps_the_span`, `site/e2e/streaming.spec.ts` | — |
+| REQ-VIEW-060 | v0.6.0 | `crates/glyphplot/src/view.rs tests::follow_keeps_the_span` (the core's follow on append), `web/test/stream.wasm.test.mjs` (End, the round trip, the shell's fallback; the module's follow todo until it has `append`), `site/e2e/streaming.spec.ts` | partial |
 
 ### 5.2 Input (INPUT)
 
@@ -492,9 +492,9 @@ Several checks may be listed for one requirement, separated by commas.
 | REQ-A11Y-050 | v0.3.0 | `site/e2e/a11y.spec.ts` (under reduced motion a view change jumps) | yes |
 | REQ-A11Y-060 | v0.3.0 | `site/e2e/a11y.spec.ts`, manual (focus outline) | yes |
 | REQ-A11Y-070 | v0.3.0 | `site/e2e/a11y.spec.ts` | yes |
-| REQ-A11Y-080 | v0.6.0 | `site/e2e/streaming.spec.ts` | — |
-| REQ-A11Y-090 | v0.6.0 | `site/e2e/streaming.spec.ts` | — |
-| REQ-A11Y-100 | v0.6.0 | `site/e2e/streaming.spec.ts`, manual (screen readers) | — |
+| REQ-A11Y-080 | v0.6.0 | `site/e2e/streaming.spec.ts`, `web/test/stream.wasm.test.mjs` | yes |
+| REQ-A11Y-090 | v0.6.0 | `site/e2e/streaming.spec.ts` | yes |
+| REQ-A11Y-100 | v0.6.0 | `site/e2e/streaming.spec.ts`, `web/test/a11y.test.mjs`, manual (screen readers: test.html case 32) | partial |
 | REQ-A11Y-110 | v0.7.0 | `site/e2e/a11y.spec.ts` | — |
 | REQ-A11Y-120 | v0.8.0 | `crates/cli/tests/cli.rs::table_prints_the_data` | — |
 
@@ -522,7 +522,7 @@ Several checks may be listed for one requirement, separated by commas.
 | REQ-PERF-040 | v0.4.0 | `budgets::every_chart_keeps_its_time_budgets` | yes |
 | REQ-PERF-050 | v0.4.0 | `budgets::every_chart_keeps_its_time_budgets`, `mise run bench:web` | yes |
 | REQ-PERF-060 | v0.4.0 | `mise run bench:web` | yes |
-| REQ-PERF-070 | v0.6.0 | `mise run bench:web` | — |
+| REQ-PERF-070 | v0.6.0 | `mise run bench:web` (the streaming row) | yes |
 | REQ-PERF-080 | v0.4.0 | `mise run bench:load` | yes |
 
 ### 12.3 Memory (MEM)
@@ -552,7 +552,7 @@ Several checks may be listed for one requirement, separated by commas.
 | REQ-E2E-020 | v0.3.0 | `site/e2e/interaction.spec.ts` (itself) | yes |
 | REQ-E2E-030 | v0.3.0 | `site/e2e/element.spec.ts` (itself) | yes |
 | REQ-E2E-040 | v0.3.0 | `site/e2e/resize.spec.ts` (itself) | yes |
-| REQ-E2E-050 | v0.6.0 | `site/e2e/streaming.spec.ts` (itself) | — |
+| REQ-E2E-050 | v0.6.0 | `site/e2e/streaming.spec.ts` (itself) | yes |
 | REQ-E2E-060 | v0.7.0 | `site/e2e/charts.spec.ts` | — |
 | REQ-E2E-070 | v0.3.0 | `mise run check`, `mise run signoff` | partial |
 
@@ -675,8 +675,8 @@ kind of the first check listed.
 | Kind | Any check | First check |
 |---|---|---|
 | Rust | 183 | 176 |
-| Node | 63 | 43 |
-| browser | 75 | 60 |
+| Node | 67 | 43 |
+| browser | 76 | 60 |
 | task/lint | 64 | 52 |
 | manual/review | 33 | 9 |
 | **Total** | — | **340** |
@@ -685,6 +685,6 @@ kind of the first check listed.
 
 | Status | Requirements |
 |---|---|
-| yes | 170 |
-| partial | 59 |
-| — | 111 |
+| yes | 176 |
+| partial | 62 |
+| — | 102 |

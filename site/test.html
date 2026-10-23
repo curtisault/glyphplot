@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>glyphplot checklist</title>
-<meta name="description" content="The owner's manual checklist for glyphplot v0.5.0: one chart per rendering and interaction case, in Chrome and Safari, desktop and phone.">
+<meta name="description" content="The owner's manual checklist for glyphplot v0.6.0: one chart per rendering and interaction case, in Chrome and Safari, desktop and phone.">
 <style>
   :root {
     color-scheme: light dark;
@@ -52,13 +52,14 @@
   .resizable { resize: horizontal; overflow: hidden; width: 70%; min-width: 80px; max-width: 100%; border: 1px dashed var(--line); padding: 4px; }
   .fold { height: 200vh; display: flex; align-items: flex-end; justify-content: center; color: var(--muted); }
   #markdown { width: 100%; min-height: 10rem; font: 0.85rem/1.4 ui-monospace, monospace; background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-radius: 6px; padding: 8px; }
+  .simulated { display: inline-block; padding: 0 6px; border-radius: 4px; border: 1px solid var(--fg); font-size: 0.8rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; vertical-align: middle; }
   .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 </style>
 </head>
 <body>
 <main>
 <header>
-  <h1>glyphplot v0.5.0 checklist</h1>
+  <h1>glyphplot v0.6.0 checklist</h1>
   <p>The owner's manual pass (REQ-TEST-030, REQ-TEST-040): run each case in Chrome and Safari, on a desktop and on a phone, mark it, then copy the pass as Markdown into the plan or the pull request. The headless browser tests cover what they can; everything here is what only a real screen, finger, font or screen reader can show.</p>
   <dl class="env" id="env"></dl>
   <div class="bar">
@@ -470,6 +471,52 @@
   <glyph-plot id="spark-area" type="sparkline" rows="2" options='{"mode":"area"}' label="Sparkline, area"></glyph-plot>
   <glyph-plot id="spark-column" type="sparkline" rows="2" options='{"mode":"column"}' label="Sparkline, column"></glyph-plot>
   <output id="spark-status">not started</output>
+</section>
+
+<section class="case" id="live-candles" data-title="Live candles on a phone (simulated)">
+  <h2>30. Live candles on a phone: the one-line test <span class="simulated">simulated</span></h2>
+  <ul class="what">
+    <li>Open <a href="./live.html">live.html</a> on a phone, with the browser's network throttled (Fast 4G or slower). It holds one live candlestick on a seeded synthetic feed, labelled "simulated": 5-second candles, a tick every 250 ms appended with <code>element.append</code>.</li>
+    <li>The network panel shows one wasm module fetched: <code>candles</code> (its <code>glyphplot_bg.wasm</code> and <code>glyphplot.js</code>), and no other module.</li>
+    <li>The forming candle grows in place each tick (its close, high and low move; no new candle per tick), and a new candle starts every 5 seconds at the right edge: the view follows the live end.</li>
+    <li>Scrub with one finger: the cursor follows candle by candle with no lag while the feed runs, and the page does not scroll sideways. Panning with two fingers away from the end stops the following; "Follow the live end" (or End on a keyboard) starts it again.</li>
+    <li>"Pause" holds the drawing still while ticks keep arriving (the status counts them); "Resume" jumps to the live end with every tick drawn.</li>
+  </ul>
+</section>
+
+<section class="case" id="live-line" data-title="A live line that follows">
+  <h2>31. A live line that follows the newest value <span class="simulated">simulated</span></h2>
+  <ul class="what">
+    <li>"Start" appends a sample of the simulated walk every 20 ms (50 a second; the shell writes each frame's appends together); the view keeps its 30-second span and ends at the newest sample (<code>x.follow</code>).</li>
+    <li>Drag the chart (or Shift+← on the cursor) away from the end: it stops following and stays where you left it while samples arrive (the status says follow off). Press End on the focused chart: it follows again.</li>
+    <li>The status line shows each <code>plot-data</code>: rows held, rows dropped by <code>retain.rows</code> (3,000 here, so the oldest rows drop once the feed has run a minute), late rows, the data version.</li>
+  </ul>
+  <div class="bar" role="group" aria-label="Live line">
+    <button type="button" id="live-line-start">Start</button>
+    <button type="button" id="live-line-stop">Stop</button>
+  </div>
+  <glyph-plot id="live-line-chart" type="line" rows="10" options='{"retain":{"rows":3000}}' label="Live line, simulated"></glyph-plot>
+  <output id="live-line-status" role="status">not started</output>
+</section>
+
+<section class="case" id="pause-announce" data-title="paused, Space and announce">
+  <h2>32. <code>paused</code>, Space and <code>announce</code> (a screen reader) <span class="simulated">simulated</span></h2>
+  <ul class="what">
+    <li>"Start" streams a sample every 100 ms. With a screen reader on, the newest value is read (politely, not interrupting) at most once every 5 seconds (<code>announce="5"</code>), as "Latest: " the time and the value.</li>
+    <li>Tab to the chart: while its cursor has focus nothing is announced. Press Space: the chart pauses (the drawing holds still, the "paused" attribute appears in the status) and nothing is announced; Space again resumes and shows the live view.</li>
+    <li>While streaming, the hidden table (read it with the screen reader's table commands) changes at most once a second, and not while the reader is inside it.</li>
+    <li>The chart on the right has no <code>announce</code>: nothing is ever read on its own, and it has no live region.</li>
+  </ul>
+  <div class="bar" role="group" aria-label="Paused and announce">
+    <button type="button" id="announce-start">Start</button>
+    <button type="button" id="announce-stop">Stop</button>
+    <button type="button" id="announce-pause" aria-pressed="false">Pause</button>
+  </div>
+  <div class="charts">
+    <figure><glyph-plot id="announce-chart" type="line" rows="10" announce="5" label="Announced, simulated"></glyph-plot><figcaption>announce="5"</figcaption></figure>
+    <figure><glyph-plot id="silent-chart" type="line" rows="10" label="Not announced, simulated"></glyph-plot><figcaption>no announce</figcaption></figure>
+  </div>
+  <output id="announce-status" role="status">not started</output>
 </section>
 </main>
 <script type="module" src="./test.ts"></script>
