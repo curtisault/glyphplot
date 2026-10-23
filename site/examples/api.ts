@@ -5,6 +5,8 @@
 // lists them in gallery order, and site/examples/manifest.json holds their
 // metadata for the Elm site's flags and the checks.
 
+import type { GlyphPlot } from "glyphplot/element";
+
 /** What an example draws first: the JS API's `chart(type, init)` arguments, pure and seeded, so Node can render its first frame at build time. */
 export interface Start {
   /** The chart type (a manifest slug: line, sparkline, candles, bar, …). */
@@ -13,6 +15,12 @@ export interface Start {
   data: unknown;
   options?: Record<string, unknown>;
   view?: Record<string, unknown>;
+  /**
+   * Optional: attributes of the `<glyph-plot>` beyond `type` (`mono`, `theme`, `locale`, `timezone`,
+   * `rows`, `label`, `link`, `motion`, …; a present-or-absent attribute as ""). The build-time still
+   * applies those the JS API has (`mono`, `locale`, `timezone`, `rows`, `theme="paper"`).
+   */
+  attrs?: Record<string, string>;
 }
 
 /** A running example's handle: what `live` returns, stopped when the card leaves or the page closes. */
@@ -29,7 +37,7 @@ export interface Example {
    * `<glyph-plot>` element the card or page made from `start()`; `host` is the element around it, for
    * examples that add more (a second linked chart, a control row). Returns a function that stops it.
    */
-  live?(el: HTMLElement, host: HTMLElement): Stop;
+  live?(el: GlyphPlot, host: HTMLElement): Stop;
   /** "simulated" examples name their seed (REQ-SITE-110); null for real data. */
   seed: number | null;
 }
